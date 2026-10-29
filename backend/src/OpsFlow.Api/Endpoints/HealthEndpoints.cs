@@ -7,7 +7,8 @@ internal static class HealthEndpoints
         app.MapGroup("/api/v1/health")
             .WithTags("Health")
             .MapGet("/", () => TypedResults.Ok(new HealthResponse("Healthy", DateTimeOffset.UtcNow)))
-            .WithName("GetHealth");
+            .WithName("GetHealth")
+            .AllowAnonymous(); // UPDATED: fallback policy ke baad health endpoint public rehna chahiye
         return app;
     }
 

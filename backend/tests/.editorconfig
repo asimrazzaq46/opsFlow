@@ -1,0 +1,4 @@
+[*.cs]
+# Descriptive snake_case test names are intentional
+dotnet_diagnostic.CA1707.severity = none
+dotnet_diagnostic.CA1822.severity = none

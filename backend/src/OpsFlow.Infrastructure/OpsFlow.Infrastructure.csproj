@@ -1,11 +1,13 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\OpsFlow.Application\OpsFlow.Application.csproj" />
     <ProjectReference Include="..\OpsFlow.Domain\OpsFlow.Domain.csproj" />
   </ItemGroup>
-
-  <PropertyGroup>
-  </PropertyGroup>
 
 </Project>
