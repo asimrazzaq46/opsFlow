@@ -28,8 +28,9 @@ public sealed partial class OrganizationService(IOpsFlowDbContext db, ITenantCon
         {
             await db.SaveChangesAsync(ct);
         }
-        catch (DbUpdateException)
+        catch (DbUpdateException ex) when (db.IsUniqueViolation(ex, UniqueConstraintKind.TenantSlug))
         {
+            // UPDATED: sirf slug race 409 hai; doosri DB failures ab 500 ke tor par propagate hoti hain
             throw AppException.Conflict("The organization could not be created.", "Please try again.");
         }
 

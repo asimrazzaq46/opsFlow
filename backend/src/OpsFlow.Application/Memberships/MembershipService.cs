@@ -8,7 +8,7 @@ namespace OpsFlow.Application.Memberships;
 
 public sealed record MemberDto(Guid Id, Guid UserId, string Email, string DisplayName, TenantRole Role, bool IsActive, DateTime CreatedAtUtc);
 
-public sealed partial class MembershipService(IOpsFlowDbContext db, IUserDirectory users, TimeProvider clock, ILogger<MembershipService> logger)
+public sealed partial class MembershipService(IOpsFlowDbContext db, ITenantContext tenantContext, IUserDirectory users, TimeProvider clock, ILogger<MembershipService> logger)
 {
     private const int MaxAttempts = 3;
     private const int MaxPageSize = 100;
@@ -53,6 +53,10 @@ public sealed partial class MembershipService(IOpsFlowDbContext db, IUserDirecto
     {
         for (var attempt = 0; attempt < MaxAttempts; attempt++)
         {
+            // UPDATED: har attempt par (retry par bhi) stamp PEHLE read hota hai, phir actor ki Owner authorization dobara verify hoti hai
+            var tenant = await db.Tenants.SingleAsync(ct);
+            await EnsureActorIsActiveOwnerAsync(ct);
+
             var member = await db.Memberships.SingleOrDefaultAsync(m => m.Id == membershipId, ct)
                 ?? throw AppException.NotFound("Member not found.");
             if (!member.Role.IsStaff())
@@ -65,8 +69,6 @@ public sealed partial class MembershipService(IOpsFlowDbContext db, IUserDirecto
 
             if (wasActiveOwner && !member.IsActiveOwner)
             {
-                // UPDATED: stamp owners count se PEHLE read hota hai; warna beech mein commit hone wali doosri demotion stamp ke saath dikh jati aur dono pass ho jatin
-                var tenant = await db.Tenants.SingleAsync(ct);
                 var otherOwners = await db.Memberships.CountAsync(m => m.Id != member.Id && m.Role == TenantRole.TenantOwner && m.Status == MembershipStatus.Active, ct);
                 if (otherOwners == 0)
                 {
@@ -89,6 +91,15 @@ public sealed partial class MembershipService(IOpsFlowDbContext db, IUserDirecto
         }
 
         throw AppException.Conflict("The membership was changed concurrently.", "Please retry.");
+    }
+
+    private async Task EnsureActorIsActiveOwnerAsync(CancellationToken ct)
+    {
+        var actorId = tenantContext.MembershipId;
+        if (actorId is null || !await db.Memberships.AnyAsync(m => m.Id == actorId && m.Role == TenantRole.TenantOwner && m.Status == MembershipStatus.Active, ct))
+        {
+            throw AppException.Forbidden("Only an active Owner can change memberships.");
+        }
     }
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Membership {MembershipId} in tenant {TenantId} is now {Role}/{Status}")]

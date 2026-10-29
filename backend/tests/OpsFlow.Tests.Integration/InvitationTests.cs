@@ -91,6 +91,39 @@ public class InvitationTests(ApiFactory factory) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task Managers_can_only_revoke_agent_invitations()
+    {
+        var (owner, org) = await NewTenantAsync();
+        var manager = await ApiClient.AddMemberAsync(factory, owner, org.Id, "Manager");
+        var agentInvite = await InviteAsync(owner, org.Id, $"a-{Guid.NewGuid():N}@example.com", "Agent");
+        var managerInvite = await InviteAsync(owner, org.Id, $"m-{Guid.NewGuid():N}@example.com", "Manager");
+        var ownerInvite = await InviteAsync(owner, org.Id, $"o-{Guid.NewGuid():N}@example.com", "TenantOwner");
+        string Url(Invite i) => $"/api/v1/tenants/{org.Id}/invitations/{i.Id}";
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await manager.DeleteAsync(Url(managerInvite))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await manager.DeleteAsync(Url(ownerInvite))).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await manager.DeleteAsync(Url(agentInvite))).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await owner.DeleteAsync(Url(managerInvite))).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await owner.DeleteAsync(Url(ownerInvite))).StatusCode);
+    }
+
+    [Fact]
+    public async Task Accepting_as_an_existing_member_keeps_the_role_and_consumes_the_invitation()
+    {
+        var (owner, org) = await NewTenantAsync();
+        var agent = await ApiClient.AddMemberAsync(factory, owner, org.Id, "Agent");
+        await InviteAsync(owner, org.Id, agent.Email, "Manager");
+        var token = ApiClient.InvitationTokenFrom(factory, agent.Email);
+
+        var accepted = await agent.ReadAsync<OrgDto>(await agent.PostAsync("/api/v1/invitations/accept", new { token }));
+
+        Assert.Equal("Agent", accepted.Role);
+        Assert.Equal("Agent", (await owner.MembersAsync(org.Id)).Single(m => m.UserId == agent.UserId).Role);
+        Assert.Empty(await owner.ReadAsync<List<Invite>>(await owner.GetAsync($"/api/v1/tenants/{org.Id}/invitations")));
+        Assert.Equal(HttpStatusCode.BadRequest, (await agent.PostAsync("/api/v1/invitations/accept", new { token })).StatusCode);
+    }
+
+    [Fact]
     public async Task Another_users_account_cannot_accept_the_invitation()
     {
         var (owner, org) = await NewTenantAsync();

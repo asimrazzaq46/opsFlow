@@ -70,6 +70,12 @@ public sealed partial class InvitationService(
     {
         var invitation = await db.Invitations.SingleOrDefaultAsync(i => i.Id == invitationId, ct)
             ?? throw AppException.NotFound("Invitation not found.");
+        // UPDATED: Manager sirf Agent invitations revoke kar sakta hai (create ke rules ke mutabiq)
+        if (tenantContext.Role != TenantRole.TenantOwner && invitation.Role != TenantRole.Agent)
+        {
+            throw AppException.Forbidden("You can only revoke Agent invitations.");
+        }
+
         if (invitation.AcceptedAtUtc is not null)
         {
             throw AppException.Conflict("The invitation was already accepted.");
@@ -111,9 +117,12 @@ public sealed partial class InvitationService(
         {
             if (await db.Memberships.AnyAsync(m => m.UserId == userId, ct))
             {
-                // Same user already joined (e.g. a racing request won): return that membership instead of failing.
-                return await ExistingAsync(invitation.TenantId, userId, ct)
+                // UPDATED: pehle se member ho to existing membership (role unchanged) milti hai aur invitation consume ho jati hai
+                var existing = await ExistingAsync(invitation.TenantId, userId, ct)
                     ?? throw AppException.Conflict("You are already a member of this organization.");
+                await db.Invitations.Where(i => i.Id == invitation.Id && i.AcceptedAtUtc == null && i.RevokedAtUtc == null)
+                    .ExecuteUpdateAsync(s => s.SetProperty(i => i.RevokedAtUtc, now), ct);
+                return existing;
             }
 
             invitation.Accept(userId, now);
@@ -122,7 +131,7 @@ public sealed partial class InvitationService(
             {
                 await db.SaveChangesAsync(ct);
             }
-            catch (DbUpdateException)
+            catch (DbUpdateException ex) when (db.IsUniqueViolation(ex, UniqueConstraintKind.MembershipUser))
             {
                 // A concurrent accept by the same user wins the unique (TenantId, UserId) index; treat as success.
                 db.ChangeTracker.Clear();

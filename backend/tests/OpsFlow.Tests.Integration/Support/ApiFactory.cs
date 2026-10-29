@@ -1,8 +1,10 @@
 using System.Collections.Concurrent;
+using System.Data.Common;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -71,6 +73,61 @@ public static class TestDatabase
     }
 }
 
+/// <summary>
+/// Test-only concurrency gate (PostgreSQL tests): pauses ONE chosen DbContext right after its next COUNT query so a test can
+/// let a competing transaction commit at that exact point (deterministic interleaving, bounded waits).
+/// </summary>
+public sealed class QueryGate : DbCommandInterceptor, IDisposable
+{
+    public static readonly TimeSpan Timeout = TimeSpan.FromSeconds(20);
+
+    private readonly SemaphoreSlim _paused = new(0);
+    private readonly SemaphoreSlim _resume = new(0);
+    private volatile DbContext? _target;
+
+    public void PauseAfterNextCount(DbContext target) => _target = target;
+
+    public Task<bool> WaitUntilPausedAsync() => _paused.WaitAsync(Timeout);
+
+    public void Resume() => _resume.Release();
+
+    public void Dispose()
+    {
+        _paused.Dispose();
+        _resume.Dispose();
+    }
+
+    // EF runs COUNT through a reader; the count value is already fixed at execution time, so pausing here
+    // freezes the request with a "stale" owner count. (PostgreSQL only: an open reader would block SQLite writers.)
+    public override async ValueTask<DbDataReader> ReaderExecutedAsync(DbCommand command, CommandExecutedEventData eventData, DbDataReader result, CancellationToken cancellationToken = default)
+    {
+        if (ReferenceEquals(eventData.Context, _target) && command.CommandText.Contains("COUNT(", StringComparison.OrdinalIgnoreCase))
+        {
+            _target = null;
+            _paused.Release();
+            if (!await _resume.WaitAsync(Timeout, cancellationToken))
+            {
+                throw new TimeoutException("QueryGate was never resumed.");
+            }
+        }
+
+        return result;
+    }
+}
+
+/// <summary>Test-only fault injection: makes the next SaveChanges fail with a non-unique persistence error.</summary>
+public sealed class SaveFaultInjector : SaveChangesInterceptor
+{
+    private int _armed;
+
+    public void FailNextSave() => Interlocked.Exchange(ref _armed, 1);
+
+    public override ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default) =>
+        Interlocked.Exchange(ref _armed, 0) == 1
+            ? throw new DbUpdateException("Injected persistence failure", new InvalidOperationException("injected-secret-detail"))
+            : base.SavingChangesAsync(eventData, result, cancellationToken);
+}
+
 /// <summary>Xunit fact that only runs when the suite targets PostgreSQL.</summary>
 public sealed class PostgresOnlyFactAttribute : FactAttribute
 {
@@ -91,6 +148,8 @@ public class ApiFactory : WebApplicationFactory<Program>
     private readonly string? _postgresConnectionString = TestDatabase.UsePostgres ? TestDatabase.CreatePostgresDatabase($"opsflow_test_{Guid.NewGuid():N}") : null;
 
     public FakeEmailService Emails { get; } = new();
+    public QueryGate Gate { get; } = new();
+    public SaveFaultInjector Faults { get; } = new();
 
     protected virtual int SensitivePermitLimit => 100_000;
 
@@ -108,6 +167,7 @@ public class ApiFactory : WebApplicationFactory<Program>
             services.RemoveAll<IDbContextOptionsConfiguration<OpsFlowDbContext>>();
             services.AddDbContext<OpsFlowDbContext>(o =>
             {
+                o.AddInterceptors(Gate, Faults);
                 if (_postgresConnectionString is not null)
                 {
                     o.UseNpgsql(_postgresConnectionString);
@@ -137,6 +197,7 @@ public class ApiFactory : WebApplicationFactory<Program>
         base.Dispose(disposing);
         if (disposing)
         {
+            Gate.Dispose();
             if (_postgresConnectionString is not null)
             {
                 TestDatabase.DropPostgresDatabase(new NpgsqlConnectionStringBuilder(_postgresConnectionString).Database!);

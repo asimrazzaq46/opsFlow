@@ -12,4 +12,7 @@ public interface IOpsFlowDbContext
     DbSet<Invitation> Invitations { get; }
     ChangeTracker ChangeTracker { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>True only when the exception is a unique-constraint violation of exactly this constraint (PostgreSQL SQLSTATE 23505).</summary>
+    bool IsUniqueViolation(DbUpdateException exception, UniqueConstraintKind constraint);
 }

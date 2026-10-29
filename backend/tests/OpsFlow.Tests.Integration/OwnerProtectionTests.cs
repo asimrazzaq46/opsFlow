@@ -2,6 +2,8 @@ using System.Net;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OpsFlow.Application.Abstractions;
+using OpsFlow.Application.Common;
+using OpsFlow.Application.Memberships;
 using OpsFlow.Domain.Tenants;
 using OpsFlow.Infrastructure.Persistence;
 using OpsFlow.Tests.Integration.Support;
@@ -65,6 +67,94 @@ public class OwnerProtectionTests(ApiFactory factory) : IClassFixture<ApiFactory
             var owners = await ActiveOwnersAsync(org.Id);
             var statuses = string.Join(",", results.Select(r => (int)r.StatusCode));
             Assert.True(owners == 1 && results.Count(r => r.StatusCode == HttpStatusCode.NoContent) == 1, $"round {round}: statuses [{statuses}], active owners {owners}");
+        }
+    }
+
+    private async Task<(OrgDto Org, Guid FirstOwner, Guid SecondOwner)> TwoOwnersAsync(string name)
+    {
+        var first = await ApiClient.RegisterAsync(factory);
+        var org = await first.CreateOrganizationAsync(name);
+        var second = await ApiClient.AddMemberAsync(factory, first, org.Id, "TenantOwner");
+        var members = await first.MembersAsync(org.Id);
+        return (org, members.Single(m => m.UserId == first.UserId).Id, members.Single(m => m.UserId == second.UserId).Id);
+    }
+
+    private (MembershipService Service, OpsFlowDbContext Db, IServiceScope Scope) ServiceAs(Guid tenantId, Guid actorMembershipId)
+    {
+        var scope = factory.Services.CreateScope();
+        scope.ServiceProvider.GetRequiredService<TenantContext>().Set(tenantId, actorMembershipId, TenantRole.TenantOwner);
+        return (scope.ServiceProvider.GetRequiredService<MembershipService>(), scope.ServiceProvider.GetRequiredService<OpsFlowDbContext>(), scope);
+    }
+
+    private async Task<(Guid Stamp, TenantRole Role)> StateAsync(Guid tenantId, Guid membershipId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpsFlowDbContext>();
+        var stamp = await db.Tenants.IgnoreQueryFilters().Where(t => t.Id == tenantId).Select(t => t.OwnerChangeStamp).SingleAsync();
+        var role = await db.Memberships.IgnoreQueryFilters().Where(m => m.Id == membershipId).Select(m => m.Role).SingleAsync();
+        return (stamp, role);
+    }
+
+    [PostgresOnlyFact]
+    public async Task Stale_demotion_is_rolled_back_and_its_retry_rechecks_the_actors_authorization()
+    {
+        var (org, owner1, owner2) = await TwoOwnersAsync("Interleave authz");
+        var (winner, _, winnerScope) = ServiceAs(org.Id, owner1);
+        var (loser, loserDb, loserScope) = ServiceAs(org.Id, owner2);
+        using (winnerScope)
+        using (loserScope)
+        {
+            var before = await StateAsync(org.Id, owner1);
+
+            // owner2 starts demoting owner1 and is frozen after reading stamp + owner count (both still look fine)
+            factory.Gate.PauseAfterNextCount(loserDb);
+            var losing = Task.Run(() => loser.ChangeRoleAsync(owner1, TenantRole.Agent, CancellationToken.None));
+            Assert.True(await factory.Gate.WaitUntilPausedAsync());
+
+            // meanwhile owner1 demotes owner2 and commits: membership change + stamp rotation in ONE transaction
+            await winner.ChangeRoleAsync(owner2, TenantRole.Agent, CancellationToken.None);
+            var afterWinner = await StateAsync(org.Id, owner2);
+            Assert.Equal(TenantRole.Agent, afterWinner.Role);
+            Assert.NotEqual(before.Stamp, afterWinner.Stamp);
+
+            factory.Gate.Resume();
+            var failure = await Assert.ThrowsAsync<AppException>(() => losing.WaitAsync(QueryGate.Timeout));
+
+            // the stale save hit the stamp, rolled back completely, and the retry saw owner2 is no longer an Owner
+            Assert.Equal(403, failure.StatusCode);
+            var after = await StateAsync(org.Id, owner1);
+            Assert.Equal(TenantRole.TenantOwner, after.Role);
+            Assert.Equal(afterWinner.Stamp, after.Stamp);
+            Assert.Equal(1, await ActiveOwnersAsync(org.Id));
+        }
+    }
+
+    [PostgresOnlyFact]
+    public async Task Stale_demotion_retry_rechecks_the_current_owner_count()
+    {
+        var (org, owner1, owner2) = await TwoOwnersAsync("Interleave count");
+        var (winner, _, winnerScope) = ServiceAs(org.Id, owner1);
+        var (loser, loserDb, loserScope) = ServiceAs(org.Id, owner1);
+        using (winnerScope)
+        using (loserScope)
+        {
+            // owner1 starts stepping down (owner2 still counts as the other Owner) and is frozen
+            factory.Gate.PauseAfterNextCount(loserDb);
+            var stepDown = Task.Run(() => loser.ChangeRoleAsync(owner1, TenantRole.Manager, CancellationToken.None));
+            Assert.True(await factory.Gate.WaitUntilPausedAsync());
+
+            // owner1 (another request) demotes owner2 first: owner1 becomes the last Owner
+            await winner.ChangeRoleAsync(owner2, TenantRole.Agent, CancellationToken.None);
+            var afterWinner = await StateAsync(org.Id, owner2);
+
+            factory.Gate.Resume();
+            var failure = await Assert.ThrowsAsync<AppException>(() => stepDown.WaitAsync(QueryGate.Timeout));
+
+            Assert.Equal(409, failure.StatusCode);
+            var after = await StateAsync(org.Id, owner1);
+            Assert.Equal(TenantRole.TenantOwner, after.Role);
+            Assert.Equal(afterWinner.Stamp, after.Stamp);
+            Assert.Equal(1, await ActiveOwnersAsync(org.Id));
         }
     }
 

@@ -162,6 +162,81 @@ public class AuthTests(ApiFactory factory) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task Unrelated_persistence_failures_during_registration_are_not_reported_as_accepted()
+    {
+        var email = $"fault-{Guid.NewGuid():N}@example.com";
+        var client = factory.CreateApiClient();
+        await client.RefreshCsrfAsync();
+        factory.Faults.FailNextSave();
+
+        var response = await client.PostAsync("/api/v1/auth/register", new { email, password = ApiClient.Password, displayName = "Faulty" });
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        Assert.DoesNotContain("injected", await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        using var scope = factory.Services.CreateScope();
+        Assert.False(await scope.ServiceProvider.GetRequiredService<OpsFlowDbContext>().Users.AnyAsync(u => u.Email == email));
+    }
+
+    [Fact]
+    public async Task Unrelated_persistence_failures_creating_an_organization_are_not_reported_as_conflicts()
+    {
+        var user = await ApiClient.RegisterAsync(factory);
+        factory.Faults.FailNextSave();
+
+        var response = await user.PostAsync("/api/v1/organizations", new { name = "Faulty Org" });
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Only_the_expected_unique_constraint_is_recognised_as_a_duplicate()
+    {
+        var owner = await ApiClient.RegisterAsync(factory);
+        var org = await owner.CreateOrganizationAsync($"Unique {Guid.NewGuid():N}");
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpsFlowDbContext>();
+        var tenantContext = scope.ServiceProvider.GetRequiredService<OpsFlow.Application.Abstractions.ITenantContext>();
+        var email = $"dup-{Guid.NewGuid():N}@example.com";
+
+        async Task<DbUpdateException> FailAsync()
+        {
+            var ex = await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+            db.ChangeTracker.Clear();
+            return ex;
+        }
+
+        ApplicationUser NewUser(string normalized) => new() { Id = Guid.NewGuid(), UserName = email, NormalizedUserName = normalized, Email = email, NormalizedEmail = normalized, DisplayName = "x" };
+
+        db.Users.Add(NewUser(email.ToUpperInvariant()));
+        await db.SaveChangesAsync();
+        db.Users.Add(NewUser(email.ToUpperInvariant()));
+        var duplicateUser = await FailAsync();
+
+        using (tenantContext.Begin(org.Id))
+        {
+            db.Memberships.Add(OpsFlow.Domain.Tenants.Membership.Create(org.Id, owner.UserId, OpsFlow.Domain.Tenants.TenantRole.Agent, DateTime.UtcNow));
+            var duplicateMembership = await FailAsync();
+            db.Memberships.Add(OpsFlow.Domain.Tenants.Membership.Create(org.Id, Guid.NewGuid(), OpsFlow.Domain.Tenants.TenantRole.Agent, DateTime.UtcNow));
+            var foreignKeyFailure = await FailAsync();
+
+            Assert.True(db.IsUniqueViolation(duplicateMembership, OpsFlow.Application.Abstractions.UniqueConstraintKind.MembershipUser));
+            Assert.False(db.IsUniqueViolation(duplicateMembership, OpsFlow.Application.Abstractions.UniqueConstraintKind.UserName));
+            Assert.False(db.IsUniqueViolation(foreignKeyFailure, OpsFlow.Application.Abstractions.UniqueConstraintKind.MembershipUser));
+        }
+
+        var duplicateSlugTenant = Guid.NewGuid();
+        using (tenantContext.Begin(duplicateSlugTenant))
+        {
+            db.Tenants.Add(OpsFlow.Domain.Tenants.Tenant.Create(duplicateSlugTenant, "Dup", org.Slug, DateTime.UtcNow));
+            var duplicateSlug = await FailAsync();
+            Assert.True(db.IsUniqueViolation(duplicateSlug, OpsFlow.Application.Abstractions.UniqueConstraintKind.TenantSlug));
+        }
+
+        Assert.True(db.IsUniqueViolation(duplicateUser, OpsFlow.Application.Abstractions.UniqueConstraintKind.UserName));
+        Assert.False(db.IsUniqueViolation(duplicateUser, OpsFlow.Application.Abstractions.UniqueConstraintKind.TenantSlug));
+    }
+
+    [Fact]
     public async Task Health_stays_public()
     {
         var response = await factory.CreateApiClient().GetAsync("/api/v1/health");

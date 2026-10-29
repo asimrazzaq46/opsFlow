@@ -46,7 +46,7 @@ internal static class AuthEndpoints
     }
 
     private static async Task<Results<Accepted, ValidationProblem>> Register(
-        RegisterRequest request, UserManager<ApplicationUser> users, IEmailService email, IOptions<AppOptions> app, TimeProvider clock, CancellationToken ct)
+        RegisterRequest request, UserManager<ApplicationUser> users, IOpsFlowDbContext db, IEmailService email, IOptions<AppOptions> app, TimeProvider clock, CancellationToken ct)
     {
         var user = new ApplicationUser
         {
@@ -56,13 +56,13 @@ internal static class AuthEndpoints
             CreatedAtUtc = clock.GetUtcNow().UtcDateTime,
         };
 
-        // UPDATED: concurrent duplicate registration par unique index DbUpdateException deta hai - isay duplicate samjho
+        // UPDATED: sirf username unique-index violation (concurrent duplicate) 202 banta hai; baaqi DB failures propagate + log hoti hain
         IdentityResult result;
         try
         {
             result = await users.CreateAsync(user, request.Password);
         }
-        catch (DbUpdateException)
+        catch (DbUpdateException ex) when (db.IsUniqueViolation(ex, UniqueConstraintKind.UserName))
         {
             return TypedResults.Accepted((string?)null);
         }

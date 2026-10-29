@@ -5,6 +5,7 @@ using OpsFlow.Application.Common;
 using OpsFlow.Domain.Common;
 using OpsFlow.Domain.Invitations;
 using OpsFlow.Domain.Tenants;
+using Npgsql;
 using OpsFlow.Infrastructure.Identity;
 
 namespace OpsFlow.Infrastructure.Persistence;
@@ -27,6 +28,27 @@ public sealed class OpsFlowDbContext(DbContextOptions<OpsFlowDbContext> options,
         builder.Entity<Tenant>().HasQueryFilter(t => t.Id == CurrentTenantId);
         builder.Entity<Membership>().HasQueryFilter(m => m.TenantId == CurrentTenantId);
         builder.Entity<Invitation>().HasQueryFilter(i => i.TenantId == CurrentTenantId);
+    }
+
+    // UPDATED: broad DbUpdateException catch ki jagah sirf expected unique constraint pehchani jati hai
+    public bool IsUniqueViolation(DbUpdateException exception, UniqueConstraintKind constraint)
+    {
+        var (postgresIndex, sqliteColumn) = constraint switch
+        {
+            UniqueConstraintKind.UserName => ("UserNameIndex", "AspNetUsers.NormalizedUserName"),
+            UniqueConstraintKind.TenantSlug => ("IX_Tenants_Slug", "Tenants.Slug"),
+            UniqueConstraintKind.MembershipUser => ("IX_Memberships_TenantId_UserId", "Memberships.UserId"),
+            _ => throw new ArgumentOutOfRangeException(nameof(constraint)),
+        };
+
+        return exception.InnerException switch
+        {
+            PostgresException pg => pg.SqlState == PostgresErrorCodes.UniqueViolation && pg.ConstraintName == postgresIndex,
+            // shortcut: SQLite only backs the fast test suite and reports columns, not index names; production is PostgreSQL.
+            { } inner when Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite" =>
+                inner.Message.Contains("UNIQUE constraint failed", StringComparison.Ordinal) && inner.Message.Contains(sqliteColumn, StringComparison.Ordinal),
+            _ => false,
+        };
     }
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
