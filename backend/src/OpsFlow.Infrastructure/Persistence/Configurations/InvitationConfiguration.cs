@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using OpsFlow.Domain.Invitations;
 using OpsFlow.Domain.Tenants;
-using OpsFlow.Infrastructure.Identity;
+using OpsFlow.Domain.Users;
 
 namespace OpsFlow.Infrastructure.Persistence.Configurations;
 
@@ -22,7 +22,7 @@ internal sealed class InvitationConfiguration : IEntityTypeConfiguration<Invitat
         // Composite FK: the inviter must be a membership of the SAME tenant (enforced by the database).
         b.HasOne<Membership>().WithMany().HasForeignKey(i => new { i.TenantId, i.InvitedByMembershipId })
             .HasPrincipalKey(m => new { m.TenantId, m.Id }).OnDelete(DeleteBehavior.Restrict);
-        b.HasOne<ApplicationUser>().WithMany().HasForeignKey(i => i.AcceptedByUserId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<User>().WithMany().HasForeignKey(i => i.AcceptedByUserId).OnDelete(DeleteBehavior.Restrict);
 
         b.HasIndex(i => i.TokenHash).IsUnique();
         // At most one open invitation per tenant and email.

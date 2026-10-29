@@ -7,13 +7,16 @@ import { filter, map } from 'rxjs/operators';
 import { StrictHttpResponse } from '../../strict-http-response';
 import { RequestBuilder } from '../../request-builder';
 
+import { LogoutRequest } from '../../models/logout-request';
 
 export interface Logout$Params {
+      body: LogoutRequest
 }
 
-export function logout(http: HttpClient, rootUrl: string, params?: Logout$Params, context?: HttpContext): Observable<StrictHttpResponse<void>> {
+export function logout(http: HttpClient, rootUrl: string, params: Logout$Params, context?: HttpContext): Observable<StrictHttpResponse<void>> {
   const rb = new RequestBuilder(rootUrl, logout.PATH, 'post');
   if (params) {
+    rb.body(params.body, 'application/json');
   }
 
   return http.request(

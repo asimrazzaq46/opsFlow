@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using OpsFlow.Application.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using OpsFlow.Application.Abstractions;
@@ -20,7 +21,7 @@ internal sealed class TenantRoleHandler(IOpsFlowDbContext db, TenantContext tena
     protected override async Task HandleRequirementAsync(AuthorizationHandlerContext context, TenantRoleRequirement requirement, HttpContext http)
     {
         if (!Guid.TryParse(http.Request.RouteValues["tenantId"]?.ToString(), out var tenantId)
-            || !Guid.TryParse(context.User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+            || !Guid.TryParse(context.User.FindFirstValue(AuthClaims.Subject), out var userId)) // UPDATED: JWT "sub" claim
         {
             return;
         }

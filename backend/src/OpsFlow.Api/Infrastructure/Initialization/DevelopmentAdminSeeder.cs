@@ -1,8 +1,8 @@
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using OpsFlow.Application.Auth;
 using OpsFlow.Application.Organizations;
-using OpsFlow.Infrastructure.Identity;
+using OpsFlow.Domain.Common;
 using OpsFlow.Infrastructure.Persistence;
 
 namespace OpsFlow.Api.Infrastructure.Initialization;
@@ -13,16 +13,15 @@ public interface IDevelopmentSeeder
 }
 
 /// <summary>
-/// Seeds the demo organization and its first TenantOwner through the normal Identity + provisioning paths.
-/// Idempotent: it only acts when neither the user nor the organization exists, so an existing account (seeded or
-/// unrelated) is never modified, re-passworded or granted access.
+/// Seeds the demo organization and its first TenantOwner through the normal account + provisioning paths (password policy
+/// and hashing included). Idempotent: it only acts when neither the user nor the organization exists, so an existing
+/// account (seeded or unrelated) is never modified, re-passworded or granted access.
 /// </summary>
 public sealed partial class DevelopmentAdminSeeder(
-    UserManager<ApplicationUser> users,
+    AccountService accounts,
     OrganizationService organizations,
     OpsFlowDbContext db,
     IOptions<DevelopmentSeedOptions> options,
-    TimeProvider clock,
     ILogger<DevelopmentAdminSeeder> logger) : IDevelopmentSeeder
 {
     public async Task SeedAsync(CancellationToken cancellationToken)
@@ -34,7 +33,9 @@ public sealed partial class DevelopmentAdminSeeder(
             return;
         }
 
-        var existing = await users.FindByEmailAsync(seed.AdminEmail);
+        // UPDATED: Identity UserManager ki jagah domain User table
+        var normalized = EmailAddress.Normalize(seed.AdminEmail);
+        var existing = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.NormalizedEmail == normalized, cancellationToken);
         if (existing is not null)
         {
             var hasMembership = await db.Memberships.IgnoreQueryFilters().AnyAsync(m => m.UserId == existing.Id, cancellationToken);
@@ -50,20 +51,8 @@ public sealed partial class DevelopmentAdminSeeder(
 
         // User and organization are created in ONE transaction: a failure leaves nothing half-seeded.
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-        var user = new ApplicationUser
-        {
-            UserName = seed.AdminEmail,
-            Email = seed.AdminEmail,
-            EmailConfirmed = true, // development convenience; sign-in requires a confirmed email
-            DisplayName = seed.AdminDisplayName,
-            CreatedAtUtc = clock.GetUtcNow().UtcDateTime,
-        };
-
-        var result = await users.CreateAsync(user, seed.AdminPassword); // full Identity password validation applies
-        if (!result.Succeeded)
-        {
-            throw new InvalidOperationException($"Seeding the development admin failed: {string.Join(", ", result.Errors.Select(e => e.Code))}");
-        }
+        var user = await accounts.CreateAsync(seed.AdminEmail, seed.AdminDisplayName, seed.AdminPassword, emailVerified: true, cancellationToken)
+            ?? throw new InvalidOperationException("Seeding the development admin failed: the email is already registered.");
 
         var organization = await organizations.CreateAsync(user.Id, seed.OrganizationName, cancellationToken);
         await transaction.CommitAsync(cancellationToken);

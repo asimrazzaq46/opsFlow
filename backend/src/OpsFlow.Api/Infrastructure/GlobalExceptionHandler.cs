@@ -13,7 +13,9 @@ internal sealed partial class GlobalExceptionHandler(ILogger<GlobalExceptionHand
         if (exception is AppException app)
         {
             LogHandled(logger, app.StatusCode, app.Title);
-            problem = new ProblemDetails { Status = app.StatusCode, Title = app.Title, Detail = app.Detail };
+            problem = app.Errors is null
+                ? new ProblemDetails { Status = app.StatusCode, Title = app.Title, Detail = app.Detail }
+                : new ValidationProblemDetails(app.Errors.ToDictionary(e => e.Key, e => e.Value)) { Status = app.StatusCode, Title = app.Title };
         }
         else
         {

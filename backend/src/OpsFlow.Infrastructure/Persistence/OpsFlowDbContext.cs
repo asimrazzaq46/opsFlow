@@ -1,18 +1,23 @@
-using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using Npgsql;
 using OpsFlow.Application.Abstractions;
 using OpsFlow.Application.Common;
 using OpsFlow.Domain.Common;
 using OpsFlow.Domain.Invitations;
 using OpsFlow.Domain.Tenants;
-using Npgsql;
-using OpsFlow.Infrastructure.Identity;
+using OpsFlow.Domain.Users;
 
 namespace OpsFlow.Infrastructure.Persistence;
 
+// UPDATED: IdentityUserContext hata diya; ab plain DbContext + domain-owned User/session/token entities
 public sealed class OpsFlowDbContext(DbContextOptions<OpsFlowDbContext> options, ITenantContext tenantContext)
-    : IdentityUserContext<ApplicationUser, Guid>(options), IOpsFlowDbContext
+    : DbContext(options), IOpsFlowDbContext
 {
+    public DbSet<User> Users => Set<User>();
+    public DbSet<UserToken> UserTokens => Set<UserToken>();
+    public DbSet<UserSession> UserSessions => Set<UserSession>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<Membership> Memberships => Set<Membership>();
     public DbSet<Invitation> Invitations => Set<Invitation>();
@@ -20,24 +25,25 @@ public sealed class OpsFlowDbContext(DbContextOptions<OpsFlowDbContext> options,
     // Evaluated per query by EF; null (no tenant resolved) matches nothing, so tenant data fails closed.
     private Guid? CurrentTenantId => tenantContext.TenantId;
 
-    protected override void OnModelCreating(ModelBuilder builder)
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        base.OnModelCreating(builder);
-        builder.ApplyConfigurationsFromAssembly(typeof(OpsFlowDbContext).Assembly);
+        base.OnModelCreating(modelBuilder);
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(OpsFlowDbContext).Assembly);
 
-        builder.Entity<Tenant>().HasQueryFilter(t => t.Id == CurrentTenantId);
-        builder.Entity<Membership>().HasQueryFilter(m => m.TenantId == CurrentTenantId);
-        builder.Entity<Invitation>().HasQueryFilter(i => i.TenantId == CurrentTenantId);
+        modelBuilder.Entity<Tenant>().HasQueryFilter(t => t.Id == CurrentTenantId);
+        modelBuilder.Entity<Membership>().HasQueryFilter(m => m.TenantId == CurrentTenantId);
+        modelBuilder.Entity<Invitation>().HasQueryFilter(i => i.TenantId == CurrentTenantId);
     }
 
-    // UPDATED: broad DbUpdateException catch ki jagah sirf expected unique constraint pehchani jati hai
+    // Only the expected unique constraint is recognised; every other DbUpdateException must propagate.
     public bool IsUniqueViolation(DbUpdateException exception, UniqueConstraintKind constraint)
     {
         var (postgresIndex, sqliteColumn) = constraint switch
         {
-            UniqueConstraintKind.UserName => ("UserNameIndex", "AspNetUsers.NormalizedUserName"),
+            UniqueConstraintKind.UserEmail => ("IX_Users_NormalizedEmail", "Users.NormalizedEmail"),
             UniqueConstraintKind.TenantSlug => ("IX_Tenants_Slug", "Tenants.Slug"),
             UniqueConstraintKind.MembershipUser => ("IX_Memberships_TenantId_UserId", "Memberships.UserId"),
+            UniqueConstraintKind.OpenInvitation => ("IX_Invitations_TenantId_NormalizedEmail", "Invitations.NormalizedEmail"),
             _ => throw new ArgumentOutOfRangeException(nameof(constraint)),
         };
 
@@ -50,6 +56,8 @@ public sealed class OpsFlowDbContext(DbContextOptions<OpsFlowDbContext> options,
             _ => false,
         };
     }
+
+    public Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default) => Database.BeginTransactionAsync(cancellationToken);
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {

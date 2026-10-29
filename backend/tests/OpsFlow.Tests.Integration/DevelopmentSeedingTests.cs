@@ -92,7 +92,7 @@ public class DevelopmentSeedingTests(ApiFactory factory) : IClassFixture<ApiFact
     {
         var options = NewOptions("weak");
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => RunAsync(options));
+        await Assert.ThrowsAsync<OpsFlow.Application.Common.AppException>(() => RunAsync(options)); // password policy rejects it
 
         Assert.Equal((0, 0, 0), await CountsAsync(options));
     }

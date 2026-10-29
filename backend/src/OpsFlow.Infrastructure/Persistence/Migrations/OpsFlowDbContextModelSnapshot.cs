@@ -22,70 +22,6 @@ namespace OpsFlow.Infrastructure.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserClaim<System.Guid>", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("ClaimType")
-                        .HasColumnType("text");
-
-                    b.Property<string>("ClaimValue")
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("AspNetUserClaims", (string)null);
-                });
-
-            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserLogin<System.Guid>", b =>
-                {
-                    b.Property<string>("LoginProvider")
-                        .HasColumnType("text");
-
-                    b.Property<string>("ProviderKey")
-                        .HasColumnType("text");
-
-                    b.Property<string>("ProviderDisplayName")
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("LoginProvider", "ProviderKey");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("AspNetUserLogins", (string)null);
-                });
-
-            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserToken<System.Guid>", b =>
-                {
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("LoginProvider")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Name")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Value")
-                        .HasColumnType("text");
-
-                    b.HasKey("UserId", "LoginProvider", "Name");
-
-                    b.ToTable("AspNetUserTokens", (string)null);
-                });
-
             modelBuilder.Entity("OpsFlow.Domain.Invitations.Invitation", b =>
                 {
                     b.Property<Guid>("Id")
@@ -225,108 +161,185 @@ namespace OpsFlow.Infrastructure.Persistence.Migrations
                     b.ToTable("Tenants", (string)null);
                 });
 
-            modelBuilder.Entity("OpsFlow.Infrastructure.Identity.ApplicationUser", b =>
+            modelBuilder.Entity("OpsFlow.Domain.Users.RefreshToken", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
-
-                    b.Property<int>("AccessFailedCount")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .HasColumnType("text");
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("UsedAtUtc")
+                        .IsConcurrencyToken()
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SessionId");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.ToTable("RefreshTokens", (string)null);
+                });
+
+            modelBuilder.Entity("OpsFlow.Domain.Users.User", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("AuthVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DeactivatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("DisplayName")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("Email")
+                        .IsRequired()
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
-                    b.Property<bool>("EmailConfirmed")
-                        .HasColumnType("boolean");
+                    b.Property<DateTime?>("EmailVerifiedAtUtc")
+                        .HasColumnType("timestamp with time zone");
 
-                    b.Property<bool>("LockoutEnabled")
-                        .HasColumnType("boolean");
+                    b.Property<int>("FailedLoginCount")
+                        .HasColumnType("integer");
 
-                    b.Property<DateTimeOffset?>("LockoutEnd")
+                    b.Property<DateTime?>("LastLoginAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("LockoutEndUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("NormalizedEmail")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<string>("NormalizedUserName")
+                        .IsRequired()
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
                     b.Property<string>("PasswordHash")
-                        .HasColumnType("text");
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
 
-                    b.Property<string>("PhoneNumber")
-                        .HasColumnType("text");
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
-                    b.Property<bool>("PhoneNumberConfirmed")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("SecurityStamp")
-                        .HasColumnType("text");
-
-                    b.Property<bool>("TwoFactorEnabled")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("UserName")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 
                     b.HasIndex("NormalizedEmail")
-                        .HasDatabaseName("EmailIndex");
+                        .IsUnique();
 
-                    b.HasIndex("NormalizedUserName")
-                        .IsUnique()
-                        .HasDatabaseName("UserNameIndex");
+                    b.ToTable("Users", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Users_FailedLoginCount", "\"FailedLoginCount\" >= 0");
 
-                    b.ToTable("AspNetUsers", (string)null);
+                            t.HasCheckConstraint("CK_Users_Status", "\"Status\" IN ('Active','Deactivated')");
+                        });
                 });
 
-            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserClaim<System.Guid>", b =>
+            modelBuilder.Entity("OpsFlow.Domain.Users.UserSession", b =>
                 {
-                    b.HasOne("OpsFlow.Infrastructure.Identity.ApplicationUser", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("LastUsedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RevocationReason")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime?>("RevokedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UserAgent")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("UserSessions", (string)null);
                 });
 
-            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserLogin<System.Guid>", b =>
+            modelBuilder.Entity("OpsFlow.Domain.Users.UserToken", b =>
                 {
-                    b.HasOne("OpsFlow.Infrastructure.Identity.ApplicationUser", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
 
-            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserToken<System.Guid>", b =>
-                {
-                    b.HasOne("OpsFlow.Infrastructure.Identity.ApplicationUser", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("UsedAtUtc")
+                        .IsConcurrencyToken()
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("UserId", "Purpose");
+
+                    b.ToTable("UserTokens", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_UserTokens_Purpose", "\"Purpose\" IN ('EmailVerification','PasswordReset')");
+                        });
                 });
 
             modelBuilder.Entity("OpsFlow.Domain.Invitations.Invitation", b =>
                 {
-                    b.HasOne("OpsFlow.Infrastructure.Identity.ApplicationUser", null)
+                    b.HasOne("OpsFlow.Domain.Users.User", null)
                         .WithMany()
                         .HasForeignKey("AcceptedByUserId")
                         .OnDelete(DeleteBehavior.Restrict);
@@ -353,10 +366,37 @@ namespace OpsFlow.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("OpsFlow.Infrastructure.Identity.ApplicationUser", null)
+                    b.HasOne("OpsFlow.Domain.Users.User", null)
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OpsFlow.Domain.Users.RefreshToken", b =>
+                {
+                    b.HasOne("OpsFlow.Domain.Users.UserSession", null)
+                        .WithMany()
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OpsFlow.Domain.Users.UserSession", b =>
+                {
+                    b.HasOne("OpsFlow.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OpsFlow.Domain.Users.UserToken", b =>
+                {
+                    b.HasOne("OpsFlow.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 #pragma warning restore 612, 618

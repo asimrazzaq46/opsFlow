@@ -84,8 +84,15 @@ public sealed class QueryGate : DbCommandInterceptor, IDisposable
     private readonly SemaphoreSlim _paused = new(0);
     private readonly SemaphoreSlim _resume = new(0);
     private volatile DbContext? _target;
+    private volatile string _fragment = "COUNT(";
 
-    public void PauseAfterNextCount(DbContext target) => _target = target;
+    public void PauseAfterNextCount(DbContext target) => PauseAfterNextQuery(target, "COUNT(");
+
+    public void PauseAfterNextQuery(DbContext target, string sqlFragment)
+    {
+        _fragment = sqlFragment;
+        _target = target;
+    }
 
     public Task<bool> WaitUntilPausedAsync() => _paused.WaitAsync(Timeout);
 
@@ -101,13 +108,48 @@ public sealed class QueryGate : DbCommandInterceptor, IDisposable
     // freezes the request with a "stale" owner count. (PostgreSQL only: an open reader would block SQLite writers.)
     public override async ValueTask<DbDataReader> ReaderExecutedAsync(DbCommand command, CommandExecutedEventData eventData, DbDataReader result, CancellationToken cancellationToken = default)
     {
-        if (ReferenceEquals(eventData.Context, _target) && command.CommandText.Contains("COUNT(", StringComparison.OrdinalIgnoreCase))
+        if (ReferenceEquals(eventData.Context, _target) && command.CommandText.Contains(_fragment, StringComparison.OrdinalIgnoreCase))
         {
             _target = null;
             _paused.Release();
             if (!await _resume.WaitAsync(Timeout, cancellationToken))
             {
                 throw new TimeoutException("QueryGate was never resumed.");
+            }
+        }
+
+        return result;
+    }
+}
+
+/// <summary>Test-only: freezes ONE chosen DbContext right before its next SaveChanges (after all its reads), so a competing request can commit first.</summary>
+public sealed class SaveGate : SaveChangesInterceptor, IDisposable
+{
+    private readonly SemaphoreSlim _paused = new(0);
+    private readonly SemaphoreSlim _resume = new(0);
+    private volatile DbContext? _target;
+
+    public void PauseNextSave(DbContext target) => _target = target;
+
+    public Task<bool> WaitUntilPausedAsync() => _paused.WaitAsync(QueryGate.Timeout);
+
+    public void Resume() => _resume.Release();
+
+    public void Dispose()
+    {
+        _paused.Dispose();
+        _resume.Dispose();
+    }
+
+    public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+    {
+        if (ReferenceEquals(eventData.Context, _target))
+        {
+            _target = null;
+            _paused.Release();
+            if (!await _resume.WaitAsync(QueryGate.Timeout, cancellationToken))
+            {
+                throw new TimeoutException("SaveGate was never resumed.");
             }
         }
 
@@ -126,6 +168,16 @@ public sealed class SaveFaultInjector : SaveChangesInterceptor
         Interlocked.Exchange(ref _armed, 0) == 1
             ? throw new DbUpdateException("Injected persistence failure", new InvalidOperationException("injected-secret-detail"))
             : base.SavingChangesAsync(eventData, result, cancellationToken);
+}
+
+/// <summary>Controllable clock: auth lifetimes (access/refresh expiry, lockout, one-time tokens) are tested by advancing it.</summary>
+public sealed class TestClock : TimeProvider
+{
+    private long _offsetTicks;
+
+    public void Advance(TimeSpan by) => Interlocked.Add(ref _offsetTicks, by.Ticks);
+
+    public override DateTimeOffset GetUtcNow() => DateTimeOffset.UtcNow.AddTicks(Interlocked.Read(ref _offsetTicks));
 }
 
 /// <summary>Xunit fact that only runs when the suite targets PostgreSQL.</summary>
@@ -149,6 +201,8 @@ public class ApiFactory : WebApplicationFactory<Program>
 
     public FakeEmailService Emails { get; } = new();
     public QueryGate Gate { get; } = new();
+    public TestClock Clock { get; } = new();
+    public SaveGate SaveGate { get; } = new();
     public SaveFaultInjector Faults { get; } = new();
 
     protected virtual int SensitivePermitLimit => 100_000;
@@ -160,6 +214,8 @@ public class ApiFactory : WebApplicationFactory<Program>
         {
             ["RateLimiting:GlobalPermitLimit"] = "100000",
             ["RateLimiting:SensitivePermitLimit"] = SensitivePermitLimit.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["Auth:Jwt:SigningKey"] = "integration-test-signing-key-0123456789-abcdefghij",
+            ["Auth:Password:Iterations"] = "1000", // fast hashing for tests only; production enforces >= 210000
         }));
         builder.ConfigureServices(services =>
         {
@@ -167,7 +223,7 @@ public class ApiFactory : WebApplicationFactory<Program>
             services.RemoveAll<IDbContextOptionsConfiguration<OpsFlowDbContext>>();
             services.AddDbContext<OpsFlowDbContext>(o =>
             {
-                o.AddInterceptors(Gate, Faults);
+                o.AddInterceptors(Gate, Faults, SaveGate);
                 if (_postgresConnectionString is not null)
                 {
                     o.UseNpgsql(_postgresConnectionString);
@@ -177,6 +233,8 @@ public class ApiFactory : WebApplicationFactory<Program>
                     o.UseSqlite($"Data Source={DbPath}");
                 }
             });
+            services.RemoveAll<TimeProvider>();
+            services.AddSingleton<TimeProvider>(Clock);
             services.RemoveAll<IEmailService>();
             services.AddSingleton<IEmailService>(Emails);
         });
@@ -190,7 +248,7 @@ public class ApiFactory : WebApplicationFactory<Program>
         return host;
     }
 
-    public ApiClient CreateApiClient() => new(CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = true }));
+    public ApiClient CreateApiClient() => new(CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = false }));
 
     protected override void Dispose(bool disposing)
     {
@@ -198,6 +256,7 @@ public class ApiFactory : WebApplicationFactory<Program>
         if (disposing)
         {
             Gate.Dispose();
+            SaveGate.Dispose();
             if (_postgresConnectionString is not null)
             {
                 TestDatabase.DropPostgresDatabase(new NpgsqlConnectionStringBuilder(_postgresConnectionString).Database!);

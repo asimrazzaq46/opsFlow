@@ -1,20 +1,25 @@
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Web;
 
 namespace OpsFlow.Tests.Integration.Support;
 
 public sealed record UserDto(Guid Id, string Email, string DisplayName);
+public sealed record AuthDto(string AccessToken, string TokenType, DateTime ExpiresAtUtc, string RefreshToken, DateTime RefreshTokenExpiresAtUtc, UserDto User);
+public sealed record SessionDto(Guid Id, string? UserAgent, DateTime CreatedAtUtc, DateTime LastUsedAtUtc, bool IsCurrent);
 public sealed record OrgDto(Guid Id, string Name, string Slug, string Role);
 public sealed record MemberDto(Guid Id, Guid UserId, string Email, string DisplayName, string Role, bool IsActive);
 public sealed record PagedDto<T>(List<T> Items, int Page, int PageSize, int TotalCount);
 
-/// <summary>HttpClient with a cookie jar that echoes the CSRF token like the Angular client does.</summary>
+/// <summary>Bearer-only client: keeps access and refresh token in memory exactly like the Angular client is meant to (no cookies).</summary>
 public sealed class ApiClient(HttpClient http)
 {
     public const string Password = "Str0ng!Passw0rd#1";
 
     public string Email { get; private set; } = string.Empty;
     public Guid UserId { get; private set; }
+    public string AccessToken { get; private set; } = string.Empty;
+    public string RefreshToken { get; private set; } = string.Empty;
 
     public Task<HttpResponseMessage> GetAsync(string url) => http.GetAsync(url);
 
@@ -30,28 +35,49 @@ public sealed class ApiClient(HttpClient http)
         return (await response.Content.ReadFromJsonAsync<T>())!;
     }
 
-    public async Task RefreshCsrfAsync()
-    {
-        var response = await http.GetAsync("/api/v1/auth/csrf");
-        response.EnsureSuccessStatusCode();
-        var cookie = response.Headers.GetValues("Set-Cookie").First(c => c.StartsWith("XSRF-TOKEN=", StringComparison.Ordinal));
-        var value = Uri.UnescapeDataString(cookie["XSRF-TOKEN=".Length..].Split(';')[0]);
-        http.DefaultRequestHeaders.Remove("X-XSRF-TOKEN");
-        http.DefaultRequestHeaders.Add("X-XSRF-TOKEN", value);
-    }
-
     public async Task<HttpResponseMessage> LoginAsync(string email, string password)
     {
-        await RefreshCsrfAsync();
         var response = await PostAsync("/api/v1/auth/login", new { email, password });
         if (response.IsSuccessStatusCode)
         {
             Email = email;
-            UserId = (await response.Content.ReadFromJsonAsync<UserDto>())!.Id;
-            await RefreshCsrfAsync(); // the antiforgery token is bound to the signed-in identity
+            await UseAsync(response);
         }
 
         return response;
+    }
+
+    /// <summary>POST /auth/refresh with the refresh token held in memory; adopts the rotated tokens on success.</summary>
+    public async Task<HttpResponseMessage> RefreshAsync()
+    {
+        var response = await PostAsync("/api/v1/auth/refresh", new { refreshToken = RefreshToken });
+        if (response.IsSuccessStatusCode)
+        {
+            await UseAsync(response);
+        }
+
+        return response;
+    }
+
+    /// <summary>POST /auth/change-password; adopts the fresh session the API returns.</summary>
+    public async Task<HttpResponseMessage> ChangePasswordAsync(string currentPassword, string newPassword)
+    {
+        var response = await PostAsync("/api/v1/auth/change-password", new { currentPassword, newPassword });
+        if (response.IsSuccessStatusCode)
+        {
+            await UseAsync(response);
+        }
+
+        return response;
+    }
+
+    private async Task UseAsync(HttpResponseMessage authResponse)
+    {
+        var auth = (await authResponse.Content.ReadFromJsonAsync<AuthDto>())!;
+        AccessToken = auth.AccessToken;
+        RefreshToken = auth.RefreshToken;
+        UserId = auth.User.Id;
+        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth.AccessToken);
     }
 
     public async Task<OrgDto> CreateOrganizationAsync(string name = "Acme Support") =>
@@ -72,7 +98,6 @@ public sealed class ApiClient(HttpClient http)
     {
         email ??= $"user-{Guid.NewGuid():N}@example.com";
         var client = factory.CreateApiClient();
-        await client.RefreshCsrfAsync();
         (await client.PostAsync("/api/v1/auth/register", new { email, password = Password, displayName = "Test User" })).EnsureSuccessStatusCode();
 
         var (userId, token) = ParseLink(factory.Emails.Last(email, "/auth/confirm-email").Body);
@@ -96,5 +121,44 @@ public sealed class ApiClient(HttpClient http)
     {
         var mail = factory.Emails.Last(email, "/invitations/accept");
         return HttpUtility.ParseQueryString(new Uri(mail.Body.Split(' ', '\n').First(p => p.Contains("/invitations/accept", StringComparison.Ordinal))).Query)["token"]!;
+    }
+}
+
+/// <summary>Stateless client for tests that must replay a specific (old) refresh token or race several requests with the same token.</summary>
+public sealed class RawAuth(ApiFactory factory)
+{
+    private readonly HttpClient _http = factory.CreateClient();
+
+    public async Task<(HttpResponseMessage Response, string? RefreshToken, string? AccessToken)> LoginAsync(string email, string password) =>
+        await Parse(await _http.PostAsJsonAsync("/api/v1/auth/login", new { email, password }));
+
+    public async Task<(HttpResponseMessage Response, string? RefreshToken, string? AccessToken)> RefreshAsync(string refreshToken) =>
+        await Parse(await _http.PostAsJsonAsync("/api/v1/auth/refresh", new { refreshToken }));
+
+    public Task<HttpResponseMessage> LogoutAsync(string refreshToken) => _http.PostAsJsonAsync("/api/v1/auth/logout", new { refreshToken });
+
+    public async Task<HttpResponseMessage> GetAsync(string url, string accessToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        return await _http.SendAsync(request);
+    }
+
+    public async Task<HttpResponseMessage> PostBearerAsync(string url, string accessToken, object? body = null)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = JsonContent.Create(body ?? new { }) };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        return await _http.SendAsync(request);
+    }
+
+    private static async Task<(HttpResponseMessage Response, string? RefreshToken, string? AccessToken)> Parse(HttpResponseMessage response)
+    {
+        if (!response.IsSuccessStatusCode)
+        {
+            return (response, null, null);
+        }
+
+        var auth = (await response.Content.ReadFromJsonAsync<AuthDto>())!;
+        return (response, auth.RefreshToken, auth.AccessToken);
     }
 }

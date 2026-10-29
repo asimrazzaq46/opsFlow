@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using OpsFlow.Domain.Tenants;
-using OpsFlow.Infrastructure.Identity;
+using OpsFlow.Domain.Users;
 
 namespace OpsFlow.Infrastructure.Persistence.Configurations;
 
@@ -21,7 +21,7 @@ internal sealed class MembershipConfiguration : IEntityTypeConfiguration<Members
         b.Property(m => m.Status).HasConversion<string>().HasMaxLength(20);
 
         b.HasOne<Tenant>().WithMany().HasForeignKey(m => m.TenantId).OnDelete(DeleteBehavior.Restrict);
-        b.HasOne<ApplicationUser>().WithMany().HasForeignKey(m => m.UserId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<User>().WithMany().HasForeignKey(m => m.UserId).OnDelete(DeleteBehavior.Restrict);
 
         b.HasIndex(m => new { m.TenantId, m.UserId }).IsUnique();
         b.HasIndex(m => m.UserId);

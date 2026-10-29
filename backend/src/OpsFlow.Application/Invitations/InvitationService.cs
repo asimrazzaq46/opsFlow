@@ -3,9 +3,11 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OpsFlow.Application.Abstractions;
 using OpsFlow.Application.Common;
+using OpsFlow.Application.Memberships;
 using OpsFlow.Application.Organizations;
 using OpsFlow.Domain.Invitations;
 using OpsFlow.Domain.Tenants;
+using OpsFlow.Domain.Users;
 
 namespace OpsFlow.Application.Invitations;
 
@@ -14,6 +16,7 @@ public sealed record InvitationDto(Guid Id, string Email, TenantRole Role, DateT
 public sealed partial class InvitationService(
     IOpsFlowDbContext db,
     ITenantContext tenantContext,
+    ActorAccess actor,
     ICurrentUser currentUser,
     IUserDirectory users,
     IEmailService email,
@@ -21,10 +24,19 @@ public sealed partial class InvitationService(
     TimeProvider clock,
     ILogger<InvitationService> logger)
 {
+    private const int MaxAttempts = 3;
+
     // UPDATED: invitation ki expiry approved requirement ke mutabiq 72 ghante
     private static readonly TimeSpan Lifetime = TimeSpan.FromHours(72);
 
-    /// <summary>Owners may invite any staff role; Managers may only invite Agents.</summary>
+    /// <summary>Permission matrix: Owners manage invitations of any staff role; Managers only Agent invitations.</summary>
+    private static bool CanManage(TenantRole actorRole, TenantRole invitedRole) =>
+        actorRole == TenantRole.TenantOwner || (actorRole == TenantRole.Manager && invitedRole == TenantRole.Agent);
+
+    /// <summary>
+    /// The inviter's role is read from the database NOW (membership + user must be active), the tenant stamp is read first and
+    /// rotated on commit, so an inviter who loses authorization during the request cannot commit the invitation.
+    /// </summary>
     public async Task<InvitationDto> CreateAsync(string address, TenantRole role, CancellationToken ct)
     {
         if (!role.IsStaff())
@@ -32,31 +44,51 @@ public sealed partial class InvitationService(
             throw AppException.BadRequest("Only staff roles can be invited.");
         }
 
-        if (tenantContext.Role != TenantRole.TenantOwner && role != TenantRole.Agent)
-        {
-            throw AppException.Forbidden("You can only invite Agents.");
-        }
-
         var tenantId = tenantContext.TenantId!.Value;
-        var now = clock.GetUtcNow().UtcDateTime;
         var normalized = Invitation.Normalize(address);
-
-        var open = await db.Invitations.Where(i => i.NormalizedEmail == normalized && i.AcceptedAtUtc == null && i.RevokedAtUtc == null).ToListAsync(ct);
-        if (open.Exists(i => i.IsPending(now)))
+        for (var attempt = 0; attempt < MaxAttempts; attempt++)
         {
-            throw AppException.Conflict("A pending invitation already exists for this email.");
+            // UPDATED: role snapshot ki jagah current DB authorization; stamp pehle read, commit par rotate
+            var tenant = await db.Tenants.SingleAsync(ct);
+            var actorRole = await actor.RequireActiveRoleAsync(ct);
+            if (!CanManage(actorRole, role))
+            {
+                throw AppException.Forbidden(actorRole == TenantRole.Manager ? "You can only invite Agents." : "You are not allowed to invite members.");
+            }
+
+            var now = clock.GetUtcNow().UtcDateTime;
+            var open = await db.Invitations.Where(i => i.NormalizedEmail == normalized && i.AcceptedAtUtc == null && i.RevokedAtUtc == null).ToListAsync(ct);
+            if (open.Exists(i => i.IsPending(now)))
+            {
+                throw AppException.Conflict("A pending invitation already exists for this email.");
+            }
+
+            open.ForEach(i => i.Revoke(now)); // expired leftovers must not block the unique pending index
+
+            var (token, hash) = SecureToken.Generate();
+            var invitation = Invitation.Create(tenantId, address, role, hash, tenantContext.MembershipId!.Value, now, Lifetime);
+            db.Invitations.Add(invitation);
+            tenant.RotateOwnerChangeStamp();
+            try
+            {
+                await db.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                db.ChangeTracker.Clear();
+                continue;
+            }
+            catch (DbUpdateException ex) when (db.IsUniqueViolation(ex, UniqueConstraintKind.OpenInvitation))
+            {
+                throw AppException.Conflict("A pending invitation already exists for this email.");
+            }
+
+            LogCreated(logger, invitation.Id, tenantId, role);
+            await SendAsync(invitation, token, ct);
+            return ToDto(invitation);
         }
 
-        open.ForEach(i => i.Revoke(now)); // expired leftovers must not block the unique pending index
-
-        var (token, hash) = InvitationToken.Generate();
-        var invitation = Invitation.Create(tenantId, address, role, hash, tenantContext.MembershipId!.Value, now, Lifetime);
-        db.Invitations.Add(invitation);
-        await db.SaveChangesAsync(ct);
-        LogCreated(logger, invitation.Id, tenantId, role);
-
-        await SendAsync(invitation, token, ct);
-        return ToDto(invitation);
+        throw AppException.Conflict("The organization changed concurrently.", "Please retry.");
     }
 
     public async Task<IReadOnlyList<InvitationDto>> ListPendingAsync(CancellationToken ct)
@@ -68,21 +100,37 @@ public sealed partial class InvitationService(
 
     public async Task RevokeAsync(Guid invitationId, CancellationToken ct)
     {
-        var invitation = await db.Invitations.SingleOrDefaultAsync(i => i.Id == invitationId, ct)
-            ?? throw AppException.NotFound("Invitation not found.");
-        // UPDATED: Manager sirf Agent invitations revoke kar sakta hai (create ke rules ke mutabiq)
-        if (tenantContext.Role != TenantRole.TenantOwner && invitation.Role != TenantRole.Agent)
+        for (var attempt = 0; attempt < MaxAttempts; attempt++)
         {
-            throw AppException.Forbidden("You can only revoke Agent invitations.");
+            // UPDATED: revoke bhi current authorization + stamp protocol par (Manager sirf Agent invitations)
+            var tenant = await db.Tenants.SingleAsync(ct);
+            var actorRole = await actor.RequireActiveRoleAsync(ct);
+            var invitation = await db.Invitations.SingleOrDefaultAsync(i => i.Id == invitationId, ct)
+                ?? throw AppException.NotFound("Invitation not found.");
+            if (!CanManage(actorRole, invitation.Role))
+            {
+                throw AppException.Forbidden("You can only revoke Agent invitations.");
+            }
+
+            if (invitation.AcceptedAtUtc is not null)
+            {
+                throw AppException.Conflict("The invitation was already accepted.");
+            }
+
+            invitation.Revoke(clock.GetUtcNow().UtcDateTime);
+            tenant.RotateOwnerChangeStamp();
+            try
+            {
+                await db.SaveChangesAsync(ct);
+                return;
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                db.ChangeTracker.Clear();
+            }
         }
 
-        if (invitation.AcceptedAtUtc is not null)
-        {
-            throw AppException.Conflict("The invitation was already accepted.");
-        }
-
-        invitation.Revoke(clock.GetUtcNow().UtcDateTime);
-        await db.SaveChangesAsync(ct);
+        throw AppException.Conflict("The organization changed concurrently.", "Please retry.");
     }
 
     /// <summary>
@@ -93,7 +141,7 @@ public sealed partial class InvitationService(
     {
         // UPDATED: accept ab idempotent hai - retry ya concurrent request par same user ko existing membership milti hai
         var now = clock.GetUtcNow().UtcDateTime;
-        var hash = InvitationToken.Hash(token);
+        var hash = SecureToken.Hash(token);
         var userId = currentUser.UserId;
         var invitation = await db.Invitations.IgnoreQueryFilters().SingleOrDefaultAsync(i => i.TokenHash == hash, ct);
 
@@ -111,6 +159,12 @@ public sealed partial class InvitationService(
         if (user is null || !user.EmailConfirmed || Invitation.Normalize(user.Email) != invitation.NormalizedEmail)
         {
             throw AppException.Forbidden("This invitation was issued to a different email address.");
+        }
+
+        // UPDATED: inviter ki authority abhi bhi valid honi chahiye (demote/suspend/deactivate ke baad purani invitation kaam nahi karti)
+        if (!await InviterStillAuthorizedAsync(invitation, ct))
+        {
+            throw InvalidInvitation();
         }
 
         using (tenantContext.Begin(invitation.TenantId))
@@ -142,6 +196,17 @@ public sealed partial class InvitationService(
 
         LogAccepted(logger, invitation.Id, invitation.TenantId, userId);
         return (await ExistingAsync(invitation.TenantId, userId, ct))!;
+    }
+
+    // The composite FK guarantees the inviter belongs to the same tenant; here we check the inviter is STILL entitled.
+    private async Task<bool> InviterStillAuthorizedAsync(Invitation invitation, CancellationToken ct)
+    {
+        var inviterRole = await db.Memberships.IgnoreQueryFilters().AsNoTracking()
+            .Where(m => m.Id == invitation.InvitedByMembershipId && m.TenantId == invitation.TenantId && m.Status == MembershipStatus.Active
+                && db.Users.Any(u => u.Id == m.UserId && u.Status == UserStatus.Active))
+            .Select(m => (TenantRole?)m.Role)
+            .SingleOrDefaultAsync(ct);
+        return inviterRole is { } role && CanManage(role, invitation.Role);
     }
 
     private async Task<OrganizationDto?> ExistingAsync(Guid tenantId, Guid userId, CancellationToken ct)

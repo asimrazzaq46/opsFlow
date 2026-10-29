@@ -7,13 +7,16 @@ import { filter, map } from 'rxjs/operators';
 import { StrictHttpResponse } from '../../strict-http-response';
 import { RequestBuilder } from '../../request-builder';
 
+import { DeactivateAccountRequest } from '../../models/deactivate-account-request';
 
-export interface GetCsrfToken$Params {
+export interface DeactivateAccount$Params {
+      body: DeactivateAccountRequest
 }
 
-export function getCsrfToken(http: HttpClient, rootUrl: string, params?: GetCsrfToken$Params, context?: HttpContext): Observable<StrictHttpResponse<void>> {
-  const rb = new RequestBuilder(rootUrl, getCsrfToken.PATH, 'get');
+export function deactivateAccount(http: HttpClient, rootUrl: string, params: DeactivateAccount$Params, context?: HttpContext): Observable<StrictHttpResponse<void>> {
+  const rb = new RequestBuilder(rootUrl, deactivateAccount.PATH, 'post');
   if (params) {
+    rb.body(params.body, 'application/json');
   }
 
   return http.request(
@@ -26,4 +29,4 @@ export function getCsrfToken(http: HttpClient, rootUrl: string, params?: GetCsrf
   );
 }
 
-getCsrfToken.PATH = '/api/v1/auth/csrf';
+deactivateAccount.PATH = '/api/v1/auth/deactivate';

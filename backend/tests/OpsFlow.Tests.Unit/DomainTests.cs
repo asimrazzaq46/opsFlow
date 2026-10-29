@@ -1,5 +1,5 @@
 using OpsFlow.Application.Abstractions;
-using OpsFlow.Application.Invitations;
+using OpsFlow.Application.Common;
 using OpsFlow.Domain.Invitations;
 using OpsFlow.Domain.Tenants;
 
@@ -66,11 +66,11 @@ public class DomainTests
     [Fact]
     public void Invitation_token_is_hashed_and_unique()
     {
-        var (token, hash) = InvitationToken.Generate();
-        var (other, _) = InvitationToken.Generate();
+        var (token, hash) = SecureToken.Generate();
+        var (other, _) = SecureToken.Generate();
 
         Assert.NotEqual(token, hash);
-        Assert.Equal(hash, InvitationToken.Hash(token));
+        Assert.Equal(hash, SecureToken.Hash(token));
         Assert.NotEqual(token, other);
         Assert.DoesNotContain('+', token);
         Assert.DoesNotContain('/', token);

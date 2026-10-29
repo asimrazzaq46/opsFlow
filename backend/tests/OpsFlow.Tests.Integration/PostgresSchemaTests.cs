@@ -74,6 +74,37 @@ public class PostgresSchemaTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(ForeignKeyViolation, await SqlStateAsync(InsertInvitation(orgA.Id, foreignInviter.Id, "fk@example.com", "fk-hash")));
     }
 
+    private static string InsertUser(string normalizedEmail, string status = "Active") =>
+        $"INSERT INTO \"Users\" (\"Id\",\"Email\",\"NormalizedEmail\",\"DisplayName\",\"PasswordHash\",\"Status\",\"FailedLoginCount\",\"AuthVersion\",\"CreatedAtUtc\",\"UpdatedAtUtc\") VALUES ('{Guid.NewGuid()}','{normalizedEmail}','{normalizedEmail}','x','hash','{status}',0,1,NOW(),NOW())";
+
+    [PostgresOnlyFact]
+    public async Task Users_enforce_unique_email_and_a_valid_status()
+    {
+        var email = $"pg-{Guid.NewGuid():N}@example.com";
+        using (var scope = factory.Services.CreateScope())
+        {
+            await scope.ServiceProvider.GetRequiredService<OpsFlowDbContext>().Database.ExecuteSqlRawAsync(InsertUser(email));
+        }
+
+        Assert.Equal(UniqueViolation, await SqlStateAsync(InsertUser(email)));
+        Assert.Equal(CheckViolation, await SqlStateAsync(InsertUser($"other-{email}", "Banned")));
+    }
+
+    [PostgresOnlyFact]
+    public async Task Refresh_tokens_are_unique_by_hash_and_die_with_their_session()
+    {
+        var user = await ApiClient.RegisterAsync(factory);
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpsFlowDbContext>();
+        var existing = await db.RefreshTokens.AsNoTracking().FirstAsync(t => db.UserSessions.Any(s => s.Id == t.SessionId && s.UserId == user.UserId));
+
+        var duplicate = $"INSERT INTO \"RefreshTokens\" (\"Id\",\"SessionId\",\"TokenHash\",\"CreatedAtUtc\",\"ExpiresAtUtc\") VALUES ('{Guid.NewGuid()}','{existing.SessionId}','{existing.TokenHash}',NOW(),NOW())";
+        var orphan = $"INSERT INTO \"RefreshTokens\" (\"Id\",\"SessionId\",\"TokenHash\",\"CreatedAtUtc\",\"ExpiresAtUtc\") VALUES ('{Guid.NewGuid()}','{Guid.NewGuid()}','{Guid.NewGuid():N}',NOW(),NOW())";
+
+        Assert.Equal(UniqueViolation, await SqlStateAsync(duplicate));
+        Assert.Equal(ForeignKeyViolation, await SqlStateAsync(orphan));
+    }
+
     [PostgresOnlyFact]
     public async Task Timestamps_are_stored_as_timestamptz()
     {

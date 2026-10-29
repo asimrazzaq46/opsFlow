@@ -84,6 +84,27 @@ public class TenantIsolationTests(ApiFactory factory) : IClassFixture<ApiFactory
     }
 
     [Fact]
+    public async Task One_user_can_hold_different_roles_in_several_organizations()
+    {
+        var ownerA = await ApiClient.RegisterAsync(factory);
+        var orgA = await ownerA.CreateOrganizationAsync($"Multi A {Guid.NewGuid():N}");
+        var ownerB = await ApiClient.RegisterAsync(factory);
+        var orgB = await ownerB.CreateOrganizationAsync($"Multi B {Guid.NewGuid():N}");
+        var user = await ApiClient.AddMemberAsync(factory, ownerA, orgA.Id, "Manager");
+        var email = user.Email;
+        (await ownerB.PostAsync($"/api/v1/tenants/{orgB.Id}/invitations", new { email, role = "Agent" })).EnsureSuccessStatusCode();
+        (await user.PostAsync("/api/v1/invitations/accept", new { token = ApiClient.InvitationTokenFrom(factory, email) })).EnsureSuccessStatusCode();
+
+        var mine = await user.ReadAsync<List<OrgDto>>(await user.GetAsync("/api/v1/organizations"));
+
+        // the SAME access token works in both tenants, but the role is decided per tenant by the database
+        Assert.Equal("Manager", mine.Single(o => o.Id == orgA.Id).Role);
+        Assert.Equal("Agent", mine.Single(o => o.Id == orgB.Id).Role);
+        Assert.Equal(HttpStatusCode.OK, (await user.GetAsync($"/api/v1/tenants/{orgA.Id}/invitations")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await user.GetAsync($"/api/v1/tenants/{orgB.Id}/invitations")).StatusCode);
+    }
+
+    [Fact]
     public async Task Deactivated_members_lose_access_immediately()
     {
         var owner = await ApiClient.RegisterAsync(factory);

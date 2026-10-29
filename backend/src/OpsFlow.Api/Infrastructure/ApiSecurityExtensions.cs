@@ -1,14 +1,15 @@
+using System.Reflection;
 using System.Security.Claims;
 using System.Threading.RateLimiting;
-using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Options;
+using OpsFlow.Api.Infrastructure.Authentication;
 using OpsFlow.Application.Abstractions;
+using OpsFlow.Application.Auth;
 using OpsFlow.Application.Common;
 using OpsFlow.Domain.Tenants;
-using OpsFlow.Infrastructure.Identity;
-using OpsFlow.Infrastructure.Persistence;
 
 namespace OpsFlow.Api.Infrastructure;
 
@@ -27,74 +28,51 @@ internal static class AuthPolicies
 
 internal sealed class CurrentUser(IHttpContextAccessor accessor) : ICurrentUser
 {
-    public Guid UserId => Guid.TryParse(accessor.HttpContext?.User.FindFirstValue(ClaimTypes.NameIdentifier), out var id)
+    public Guid UserId => Claim(AuthClaims.Subject);
+
+    public Guid SessionId => Claim(AuthClaims.SessionId);
+
+    private Guid Claim(string type) => Guid.TryParse(accessor.HttpContext?.User.FindFirstValue(type), out var id)
         ? id
         : throw AppException.Unauthorized("Authentication is required.");
 }
 
 internal static class ApiSecurityExtensions
 {
-    private const string AntiforgeryHeader = "X-XSRF-TOKEN";
+    public const string CorsPolicy = "Spa";
 
     public static IServiceCollection AddApiSecurity(this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
     {
-        var securePolicy = environment.IsProduction() ? CookieSecurePolicy.Always : CookieSecurePolicy.SameAsRequest;
-
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUser, CurrentUser>();
 
-        services.AddIdentityCore<ApplicationUser>(o =>
-            {
-                o.User.RequireUniqueEmail = true;
-                o.SignIn.RequireConfirmedEmail = true;
-                o.Password.RequiredLength = 10;
-                o.Lockout.MaxFailedAccessAttempts = 5;
-                o.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
-            })
-            .AddEntityFrameworkStores<OpsFlowDbContext>()
-            .AddSignInManager()
-            .AddDefaultTokenProviders();
-
-        // UPDATED: stamp har request par verify hota hai (default 30 minute ka gap sessions ko zinda rakhta tha)
-        services.Configure<SecurityStampValidatorOptions>(o => o.ValidationInterval = TimeSpan.Zero);
-        services.AddAuthentication(IdentityConstants.ApplicationScheme).AddIdentityCookies();
-        services.ConfigureApplicationCookie(o =>
+        // UPDATED: Identity cookies ki jagah JWT bearer + validated Auth options (fail-fast at host start, not at design time)
+        var authOptions = services.AddOptions<AuthOptions>().Bind(configuration.GetSection(AuthOptions.SectionName));
+        var corsOptions = services.AddOptions<CorsSettings>().Bind(configuration.GetSection(CorsSettings.SectionName));
+        if (!IsOpenApiDocumentGeneration)
         {
-            o.Cookie.Name = "opsflow.auth";
-            o.Cookie.HttpOnly = true;
-            o.Cookie.SameSite = SameSiteMode.Strict;
-            o.Cookie.SecurePolicy = securePolicy;
-            o.ExpireTimeSpan = TimeSpan.FromHours(12);
-            o.SlidingExpiration = true;
-            // UPDATED: har request par security stamp + lockout check, taake password reset/lockout par purani sessions foran band hon
-            o.Events.OnValidatePrincipal = async ctx =>
-            {
-                await SecurityStampValidator.ValidatePrincipalAsync(ctx);
-                if (ctx.Principal is null)
-                {
-                    return;
-                }
+            authOptions.ValidateOnStart();
+            corsOptions.ValidateOnStart();
+        }
 
-                var users = ctx.HttpContext.RequestServices.GetRequiredService<UserManager<ApplicationUser>>();
-                var user = await users.GetUserAsync(ctx.Principal);
-                if (user is null || await users.IsLockedOutAsync(user))
-                {
-                    ctx.RejectPrincipal();
-                    await ctx.HttpContext.SignOutAsync(IdentityConstants.ApplicationScheme);
-                }
-            };
-            // API clients get status codes, never login redirects.
-            o.Events.OnRedirectToLogin = ctx => { ctx.Response.StatusCode = StatusCodes.Status401Unauthorized; return Task.CompletedTask; };
-            o.Events.OnRedirectToAccessDenied = ctx => { ctx.Response.StatusCode = StatusCodes.Status403Forbidden; return Task.CompletedTask; };
-        });
+        services.AddSingleton<IValidateOptions<AuthOptions>>(new AuthOptionsValidator(environment));
+        services.AddSingleton<IValidateOptions<CorsSettings>>(new CorsSettingsValidator(environment));
 
-        services.AddAntiforgery(o =>
+        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
+        services.ConfigureOptions<ConfigureJwtBearerOptions>();
+
+        var origins = configuration.GetSection($"{CorsSettings.SectionName}:AllowedOrigins").Get<string[]>() ?? [];
+        services.AddCors(o => o.AddPolicy(CorsPolicy, p =>
         {
-            o.HeaderName = AntiforgeryHeader;
-            o.Cookie.Name = "opsflow.csrf";
-            o.Cookie.SameSite = SameSiteMode.Strict;
-            o.Cookie.SecurePolicy = securePolicy;
-        });
+            if (origins.Length == 0)
+            {
+                p.SetIsOriginAllowed(_ => false);
+                return;
+            }
+
+            // UPDATED: Bearer-only API hai - credentials/cookies allow nahi kiye jate
+            p.WithOrigins(origins).WithMethods("GET", "POST", "PUT", "DELETE").WithHeaders("Authorization", "Content-Type");
+        }));
 
         services.AddScoped<IAuthorizationHandler, TenantRoleHandler>();
         services.AddAuthorizationBuilder()
@@ -119,6 +97,10 @@ internal static class ApiSecurityExtensions
         });
         return services;
     }
+
+    // The build-time OpenAPI generator boots the host without any secrets; it must not trip the fail-fast validation.
+    // Every real run (and the lazy first-use validation) still enforces the rules.
+    private static bool IsOpenApiDocumentGeneration => Assembly.GetEntryAssembly()?.GetName().Name == "GetDocument.Insider";
 
     private static Action<AuthorizationPolicyBuilder> TenantPolicy(params TenantRole[] roles) =>
         p => p.RequireAuthenticatedUser().AddRequirements(new TenantRoleRequirement(roles));

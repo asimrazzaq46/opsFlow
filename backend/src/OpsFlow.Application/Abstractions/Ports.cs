@@ -4,6 +4,9 @@ public interface ICurrentUser
 {
     /// <summary>Id of the authenticated user; throws an unauthorized AppException otherwise.</summary>
     Guid UserId { get; }
+
+    /// <summary>Id of the session the current access token belongs to.</summary>
+    Guid SessionId { get; }
 }
 
 public sealed record UserSummary(Guid Id, string Email, string DisplayName, bool EmailConfirmed);

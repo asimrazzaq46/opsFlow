@@ -2,9 +2,11 @@ using System.Net;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OpsFlow.Application.Abstractions;
+using OpsFlow.Application.Auth;
 using OpsFlow.Application.Common;
 using OpsFlow.Application.Memberships;
 using OpsFlow.Domain.Tenants;
+using OpsFlow.Domain.Users;
 using OpsFlow.Infrastructure.Persistence;
 using OpsFlow.Tests.Integration.Support;
 
@@ -178,5 +180,172 @@ public class OwnerProtectionTests(ApiFactory factory) : IClassFixture<ApiFactory
 
         await dbA.SaveChangesAsync();
         await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => dbB.SaveChangesAsync());
+    }
+
+    // ---- usable-owner counting + actor authorization at the commit boundary ----
+
+    private sealed record Fixture(OrgDto Org, ApiClient Owner1, ApiClient Owner2, Guid Membership1, Guid Membership2);
+
+    private async Task<Fixture> OwnersFixtureAsync(string name)
+    {
+        var first = await ApiClient.RegisterAsync(factory);
+        var org = await first.CreateOrganizationAsync($"{name} {Guid.NewGuid():N}");
+        var second = await ApiClient.AddMemberAsync(factory, first, org.Id, "TenantOwner");
+        var members = await first.MembersAsync(org.Id);
+        return new Fixture(org, first, second, members.Single(m => m.UserId == first.UserId).Id, members.Single(m => m.UserId == second.UserId).Id);
+    }
+
+    private async Task<Guid> AgentAsync(Fixture f)
+    {
+        var agent = await ApiClient.AddMemberAsync(factory, f.Owner1, f.Org.Id, "Agent");
+        return (await f.Owner1.MembersAsync(f.Org.Id)).Single(m => m.UserId == agent.UserId).Id;
+    }
+
+    private async Task<int> UsableOwnersAsync(Guid tenantId)
+    {
+        using var scope = factory.Services.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<OpsFlowDbContext>().UsableOwners(allTenants: true).CountAsync(m => m.TenantId == tenantId);
+    }
+
+    private (AccountService Service, IServiceScope Scope, OpsFlowDbContext Db) AccountScope()
+    {
+        var scope = factory.Services.CreateScope();
+        return (scope.ServiceProvider.GetRequiredService<AccountService>(), scope, scope.ServiceProvider.GetRequiredService<OpsFlowDbContext>());
+    }
+
+    [Fact]
+    public async Task A_deactivated_owner_does_not_count_as_a_usable_owner()
+    {
+        var f = await OwnersFixtureAsync("Usable owners");
+
+        Assert.Equal(HttpStatusCode.NoContent, (await f.Owner2.PostAsync("/api/v1/auth/deactivate", new { password = ApiClient.Password })).StatusCode);
+
+        Assert.Equal(1, await UsableOwnersAsync(f.Org.Id));
+        Assert.Equal(HttpStatusCode.Conflict, (await f.Owner1.PutAsync(RoleUrl(f.Org.Id, f.Membership1), new { role = "Manager" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await f.Owner1.PutAsync(StatusUrl(f.Org.Id, f.Membership1), new { isActive = false })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await f.Owner1.PostAsync("/api/v1/auth/deactivate", new { password = ApiClient.Password })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await f.Owner1.GetAsync("/api/v1/auth/me")).StatusCode); // the rejected deactivation changed nothing
+    }
+
+    [PostgresOnlyFact]
+    public async Task Concurrent_deactivation_of_the_last_two_owners_leaves_exactly_one_usable_owner()
+    {
+        var f = await OwnersFixtureAsync("Concurrent deactivation");
+        var (accounts1, scope1, db1) = AccountScope();
+        var (accounts2, scope2, _) = AccountScope();
+        using (scope1)
+        using (scope2)
+        {
+            // owner1 passes the "another usable owner exists" check, then freezes
+            factory.Gate.PauseAfterNextQuery(db1, "SELECT EXISTS");
+            var first = Task.Run(() => accounts1.DeactivateAsync(f.Owner1.UserId, ApiClient.Password, CancellationToken.None));
+            Assert.True(await factory.Gate.WaitUntilPausedAsync());
+
+            await accounts2.DeactivateAsync(f.Owner2.UserId, ApiClient.Password, CancellationToken.None); // commits first
+            factory.Gate.Resume();
+            var failure = await Assert.ThrowsAsync<AppException>(() => first.WaitAsync(QueryGate.Timeout));
+
+            Assert.Equal(409, failure.StatusCode); // the retry re-counted and saw owner2 gone
+        }
+
+        using var check = factory.Services.CreateScope();
+        var db = check.ServiceProvider.GetRequiredService<OpsFlowDbContext>();
+        Assert.Equal(1, await UsableOwnersAsync(f.Org.Id));
+        Assert.True(await db.Users.AnyAsync(u => u.Id == f.Owner1.UserId && u.Status == UserStatus.Active)); // fully rolled back
+        Assert.False(await db.UserSessions.AnyAsync(s => s.UserId == f.Owner1.UserId && s.RevokedAtUtc != null));
+        Assert.True(await db.Users.AnyAsync(u => u.Id == f.Owner2.UserId && u.Status == UserStatus.Deactivated));
+    }
+
+    [Fact]
+    public async Task A_promotion_by_an_actor_who_was_demoted_meanwhile_is_rejected_and_rolled_back()
+    {
+        var f = await OwnersFixtureAsync("Stale promotion");
+        var agentId = await AgentAsync(f);
+        var (loser, loserDb, loserScope) = ServiceAs(f.Org.Id, f.Membership2);
+        var (winner, _, winnerScope) = ServiceAs(f.Org.Id, f.Membership1);
+        using (loserScope)
+        using (winnerScope)
+        {
+            factory.SaveGate.PauseNextSave(loserDb);
+            var losing = Task.Run(() => loser.ChangeRoleAsync(agentId, TenantRole.TenantOwner, CancellationToken.None));
+            Assert.True(await factory.SaveGate.WaitUntilPausedAsync());
+
+            await winner.ChangeRoleAsync(f.Membership2, TenantRole.Agent, CancellationToken.None); // the actor loses Owner
+            var stampAfterWinner = (await StateAsync(f.Org.Id, agentId)).Stamp;
+            factory.SaveGate.Resume();
+            var failure = await Assert.ThrowsAsync<AppException>(() => losing.WaitAsync(QueryGate.Timeout));
+
+            Assert.Equal(403, failure.StatusCode);
+            var after = await StateAsync(f.Org.Id, agentId);
+            Assert.Equal(TenantRole.Agent, after.Role); // the stale promotion did not commit
+            Assert.Equal(stampAfterWinner, after.Stamp);
+        }
+    }
+
+    [Fact]
+    public async Task A_reactivation_by_an_actor_who_was_suspended_meanwhile_is_rejected()
+    {
+        var f = await OwnersFixtureAsync("Stale reactivation");
+        var suspendedId = await AgentAsync(f);
+        (await f.Owner1.PutAsync(StatusUrl(f.Org.Id, suspendedId), new { isActive = false })).EnsureSuccessStatusCode();
+        var (loser, loserDb, loserScope) = ServiceAs(f.Org.Id, f.Membership2);
+        var (winner, _, winnerScope) = ServiceAs(f.Org.Id, f.Membership1);
+        using (loserScope)
+        using (winnerScope)
+        {
+            factory.SaveGate.PauseNextSave(loserDb);
+            var losing = Task.Run(() => loser.SetActiveAsync(suspendedId, true, CancellationToken.None));
+            Assert.True(await factory.SaveGate.WaitUntilPausedAsync());
+
+            await winner.SetActiveAsync(f.Membership2, false, CancellationToken.None); // the actor is suspended
+            factory.SaveGate.Resume();
+
+            Assert.Equal(403, (await Assert.ThrowsAsync<AppException>(() => losing.WaitAsync(QueryGate.Timeout))).StatusCode);
+            Assert.False((await f.Owner1.MembersAsync(f.Org.Id)).Single(m => m.Id == suspendedId).IsActive);
+        }
+    }
+
+    [Fact]
+    public async Task A_mutation_by_an_actor_whose_account_was_deactivated_meanwhile_is_rejected()
+    {
+        var f = await OwnersFixtureAsync("Deactivated actor");
+        var agentId = await AgentAsync(f);
+        var (loser, loserDb, loserScope) = ServiceAs(f.Org.Id, f.Membership2);
+        using (loserScope)
+        {
+            factory.SaveGate.PauseNextSave(loserDb);
+            var losing = Task.Run(() => loser.ChangeRoleAsync(agentId, TenantRole.Manager, CancellationToken.None));
+            Assert.True(await factory.SaveGate.WaitUntilPausedAsync());
+
+            Assert.Equal(HttpStatusCode.NoContent, (await f.Owner2.PostAsync("/api/v1/auth/deactivate", new { password = ApiClient.Password })).StatusCode);
+            factory.SaveGate.Resume();
+
+            Assert.Equal(403, (await Assert.ThrowsAsync<AppException>(() => losing.WaitAsync(QueryGate.Timeout))).StatusCode);
+            Assert.Equal(TenantRole.Agent, (await StateAsync(f.Org.Id, agentId)).Role);
+        }
+    }
+
+    [Fact]
+    public async Task Concurrent_mutations_by_the_same_still_authorized_actor_both_succeed_after_a_retry()
+    {
+        var f = await OwnersFixtureAsync("Both succeed");
+        var first = await AgentAsync(f);
+        var second = await AgentAsync(f);
+        var (loser, loserDb, loserScope) = ServiceAs(f.Org.Id, f.Membership1);
+        var (winner, _, winnerScope) = ServiceAs(f.Org.Id, f.Membership1);
+        using (loserScope)
+        using (winnerScope)
+        {
+            factory.SaveGate.PauseNextSave(loserDb);
+            var losing = Task.Run(() => loser.ChangeRoleAsync(first, TenantRole.Manager, CancellationToken.None));
+            Assert.True(await factory.SaveGate.WaitUntilPausedAsync());
+
+            await winner.ChangeRoleAsync(second, TenantRole.Manager, CancellationToken.None);
+            factory.SaveGate.Resume();
+            await losing.WaitAsync(QueryGate.Timeout); // conflicts on the stamp, retries, succeeds: no spurious failure
+
+            Assert.Equal(TenantRole.Manager, (await StateAsync(f.Org.Id, first)).Role);
+            Assert.Equal(TenantRole.Manager, (await StateAsync(f.Org.Id, second)).Role);
+        }
     }
 }

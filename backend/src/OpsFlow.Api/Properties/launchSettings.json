@@ -11,7 +11,7 @@
         "ASPNETCORE_ENVIRONMENT": "Development"
       }
     },
-    "https": {
+    "OpsFlow": {
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,

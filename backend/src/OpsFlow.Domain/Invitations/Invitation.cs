@@ -28,7 +28,8 @@ public sealed class Invitation : ITenantOwned
     public Guid? AcceptedByUserId { get; private set; }
     public DateTime? RevokedAtUtc { get; private set; }
 
-    public static string Normalize(string email) => email.Trim().ToLowerInvariant();
+    // UPDATED: normalization ab shared EmailAddress helper se (User ke saath consistent)
+    public static string Normalize(string email) => EmailAddress.Normalize(email);
 
     public static Invitation Create(Guid tenantId, string email, TenantRole role, string tokenHash, Guid invitedByMembershipId, DateTime nowUtc, TimeSpan lifetime)
     {

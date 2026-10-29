@@ -28,6 +28,13 @@ public sealed partial class DevelopmentInitializer(IServiceScopeFactory scopes, 
                 $"PostgreSQL is not reachable at {target.Host}:{target.Port}/{target.Database}. Start the local infrastructure with 'docker compose up -d' and check the user-secrets connection string.");
         }
 
+        // UPDATED: model aur migrations ke beech farq ho (naya migration abhi review/apply nahi hua) to existing schema ko chhua nahi jata
+        if (db.Database.HasPendingModelChanges())
+        {
+            LogModelChangesPending(logger);
+            return;
+        }
+
         var pending = (await db.Database.GetPendingMigrationsAsync(cancellationToken)).ToList();
         await db.Database.MigrateAsync(cancellationToken);
         LogMigrated(logger, target.Host, target.Port, target.Database, pending.Count);
@@ -39,6 +46,9 @@ public sealed partial class DevelopmentInitializer(IServiceScopeFactory scopes, 
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "The EF model has changes that no migration covers (e.g. Identity -> custom auth). Development initialization SKIPPED: nothing was migrated or seeded. Review and add the migration, then apply it: dotnet ef migrations add <Name> -p src/OpsFlow.Infrastructure -s src/OpsFlow.Api -o Persistence/Migrations ; dotnet ef database update -p src/OpsFlow.Infrastructure -s src/OpsFlow.Api")]
+    private static partial void LogModelChangesPending(ILogger logger);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Database {Host}:{Port}/{Database} is up to date ({PendingApplied} migration(s) applied).")]
     private static partial void LogMigrated(ILogger logger, string? host, int port, string? database, int pendingApplied);

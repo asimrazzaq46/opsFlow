@@ -3,8 +3,6 @@
 
 export type { GetHealth$Params as GetHealth$Params } from './fn/health/get-health';
 export { getHealth as getHealth } from './fn/health/get-health';
-export type { GetCsrfToken$Params as GetCsrfToken$Params } from './fn/auth/get-csrf-token';
-export { getCsrfToken as getCsrfToken } from './fn/auth/get-csrf-token';
 export type { Register$Params as Register$Params } from './fn/auth/register';
 export { register as register } from './fn/auth/register';
 export type { ConfirmEmail$Params as ConfirmEmail$Params } from './fn/auth/confirm-email';
@@ -13,14 +11,26 @@ export type { ResendConfirmation$Params as ResendConfirmation$Params } from './f
 export { resendConfirmation as resendConfirmation } from './fn/auth/resend-confirmation';
 export type { Login$Params as Login$Params } from './fn/auth/login';
 export { login as login } from './fn/auth/login';
+export type { RefreshSession$Params as RefreshSession$Params } from './fn/auth/refresh-session';
+export { refreshSession as refreshSession } from './fn/auth/refresh-session';
+export type { Logout$Params as Logout$Params } from './fn/auth/logout';
+export { logout as logout } from './fn/auth/logout';
 export type { ForgotPassword$Params as ForgotPassword$Params } from './fn/auth/forgot-password';
 export { forgotPassword as forgotPassword } from './fn/auth/forgot-password';
 export type { ResetPassword$Params as ResetPassword$Params } from './fn/auth/reset-password';
 export { resetPassword as resetPassword } from './fn/auth/reset-password';
-export type { Logout$Params as Logout$Params } from './fn/auth/logout';
-export { logout as logout } from './fn/auth/logout';
 export type { GetCurrentUser$Params as GetCurrentUser$Params } from './fn/auth/get-current-user';
 export { getCurrentUser as getCurrentUser } from './fn/auth/get-current-user';
+export type { LogoutAll$Params as LogoutAll$Params } from './fn/auth/logout-all';
+export { logoutAll as logoutAll } from './fn/auth/logout-all';
+export type { ListSessions$Params as ListSessions$Params } from './fn/auth/list-sessions';
+export { listSessions as listSessions } from './fn/auth/list-sessions';
+export type { RevokeSession$Params as RevokeSession$Params } from './fn/auth/revoke-session';
+export { revokeSession as revokeSession } from './fn/auth/revoke-session';
+export type { ChangePassword$Params as ChangePassword$Params } from './fn/auth/change-password';
+export { changePassword as changePassword } from './fn/auth/change-password';
+export type { DeactivateAccount$Params as DeactivateAccount$Params } from './fn/auth/deactivate-account';
+export { deactivateAccount as deactivateAccount } from './fn/auth/deactivate-account';
 export type { ListMyOrganizations$Params as ListMyOrganizations$Params } from './fn/organizations/list-my-organizations';
 export { listMyOrganizations as listMyOrganizations } from './fn/organizations/list-my-organizations';
 export type { CreateOrganization$Params as CreateOrganization$Params } from './fn/organizations/create-organization';

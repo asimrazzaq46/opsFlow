@@ -1,189 +1,131 @@
-using System.ComponentModel.DataAnnotations;
-using System.Security.Claims;
-using System.Text;
-using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Http.HttpResults;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.WebUtilities;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 using OpsFlow.Api.Infrastructure;
 using OpsFlow.Application.Abstractions;
-using OpsFlow.Infrastructure.Identity;
+using OpsFlow.Application.Auth;
+using OpsFlow.Domain.Users;
 
 namespace OpsFlow.Api.Endpoints;
 
+// UPDATED: final architecture - sirf JWT Bearer; access + refresh token JSON mein, koi cookie ya CSRF nahi
 internal static class AuthEndpoints
 {
-    private const string InvalidTokenTitle = "The link is invalid or has expired.";
-
     public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/v1/auth").WithTags("Auth").RequireRateLimiting(RateLimitPolicies.Sensitive);
 
-        group.MapGet("/csrf", IssueCsrfToken).WithName("GetCsrfToken").AllowAnonymous();
+        // Anonymous: identity comes from credentials, a one-time link token, or the refresh token in the JSON body.
         group.MapPost("/register", Register).WithName("Register").AllowAnonymous();
         group.MapPost("/confirm-email", ConfirmEmail).WithName("ConfirmEmail").AllowAnonymous();
         group.MapPost("/resend-confirmation", ResendConfirmation).WithName("ResendConfirmation").AllowAnonymous();
         group.MapPost("/login", Login).WithName("Login").AllowAnonymous();
+        group.MapPost("/refresh", Refresh).WithName("RefreshSession").AllowAnonymous();
+        group.MapPost("/logout", Logout).WithName("Logout").AllowAnonymous();
         group.MapPost("/forgot-password", ForgotPassword).WithName("ForgotPassword").AllowAnonymous();
         group.MapPost("/reset-password", ResetPassword).WithName("ResetPassword").AllowAnonymous();
-        group.MapPost("/logout", Logout).WithName("Logout");
+
+        // Bearer access token required.
         group.MapGet("/me", Me).WithName("GetCurrentUser");
+        group.MapPost("/logout-all", LogoutAll).WithName("LogoutAll");
+        group.MapGet("/sessions", ListSessions).WithName("ListSessions");
+        group.MapDelete("/sessions/{sessionId:guid}", RevokeSession).WithName("RevokeSession");
+        group.MapPost("/change-password", ChangePassword).WithName("ChangePassword");
+        group.MapPost("/deactivate", Deactivate).WithName("DeactivateAccount");
         return app;
     }
 
-    private static NoContent IssueCsrfToken(HttpContext http, IAntiforgery antiforgery)
+    // Always 202: new and existing emails are indistinguishable (validation errors depend only on the submitted password).
+    private static async Task<Accepted> Register(RegisterRequest request, AccountService accounts, CancellationToken ct)
     {
-        var tokens = antiforgery.GetAndStoreTokens(http);
-        http.Response.Cookies.Append("XSRF-TOKEN", tokens.RequestToken!, new CookieOptions
-        {
-            HttpOnly = false, // Angular must read it to echo it in X-XSRF-TOKEN
-            SameSite = SameSiteMode.Strict,
-            Secure = http.Request.IsHttps,
-        });
-        return TypedResults.NoContent();
-    }
-
-    private static async Task<Results<Accepted, ValidationProblem>> Register(
-        RegisterRequest request, UserManager<ApplicationUser> users, IOpsFlowDbContext db, IEmailService email, IOptions<AppOptions> app, TimeProvider clock, CancellationToken ct)
-    {
-        var user = new ApplicationUser
-        {
-            UserName = request.Email.Trim(),
-            Email = request.Email.Trim(),
-            DisplayName = request.DisplayName.Trim(),
-            CreatedAtUtc = clock.GetUtcNow().UtcDateTime,
-        };
-
-        // UPDATED: sirf username unique-index violation (concurrent duplicate) 202 banta hai; baaqi DB failures propagate + log hoti hain
-        IdentityResult result;
-        try
-        {
-            result = await users.CreateAsync(user, request.Password);
-        }
-        catch (DbUpdateException ex) when (db.IsUniqueViolation(ex, UniqueConstraintKind.UserName))
-        {
-            return TypedResults.Accepted((string?)null);
-        }
-
-        if (result.Succeeded)
-        {
-            await SendConfirmationAsync(users, email, app.Value, user, ct);
-        }
-        else if (!result.Errors.All(e => e.Code is nameof(IdentityErrorDescriber.DuplicateUserName) or nameof(IdentityErrorDescriber.DuplicateEmail)))
-        {
-            return TypedResults.ValidationProblem(ToErrors(result));
-        }
-
-        // Same answer for new and existing emails so registration cannot be used to enumerate accounts.
+        await accounts.RegisterAsync(request.Email, request.DisplayName, request.Password, ct);
         return TypedResults.Accepted((string?)null);
     }
 
-    private static async Task<Results<NoContent, ProblemHttpResult>> ConfirmEmail(ConfirmEmailRequest request, UserManager<ApplicationUser> users)
+    private static async Task<NoContent> ConfirmEmail(ConfirmEmailRequest request, AccountService accounts, CancellationToken ct)
     {
-        var user = await users.FindByIdAsync(request.UserId.ToString());
-        if (user is null || Decode(request.Token) is not { } token || !(await users.ConfirmEmailAsync(user, token)).Succeeded)
-        {
-            return TypedResults.Problem(title: InvalidTokenTitle, statusCode: StatusCodes.Status400BadRequest);
-        }
-
+        await accounts.ConfirmEmailAsync(request.UserId, request.Token, ct);
         return TypedResults.NoContent();
     }
 
-    private static async Task<Accepted> ResendConfirmation(
-        EmailRequest request, UserManager<ApplicationUser> users, IEmailService email, IOptions<AppOptions> app, CancellationToken ct)
+    private static async Task<Accepted> ResendConfirmation(EmailRequest request, AccountService accounts, CancellationToken ct)
     {
-        var user = await users.FindByEmailAsync(request.Email.Trim());
-        if (user is { EmailConfirmed: false })
-        {
-            await SendConfirmationAsync(users, email, app.Value, user, ct);
-        }
-
+        await accounts.ResendVerificationAsync(request.Email, ct);
         return TypedResults.Accepted((string?)null);
     }
 
-    private static async Task<Results<Ok<UserInfo>, ProblemHttpResult>> Login(LoginRequest request, SignInManager<ApplicationUser> signIn, UserManager<ApplicationUser> users)
+    private static async Task<Ok<AuthResponse>> Login(LoginRequest request, HttpContext http, SessionService sessions, CancellationToken ct)
     {
-        var result = await signIn.PasswordSignInAsync(request.Email.Trim(), request.Password, request.RememberMe, lockoutOnFailure: true);
-        if (!result.Succeeded)
-        {
-            // One generic answer for wrong password, unknown user, unconfirmed email and lockout.
-            return TypedResults.Problem(title: "Invalid credentials or the account is not available.", statusCode: StatusCodes.Status401Unauthorized);
-        }
-
-        var user = (await users.FindByEmailAsync(request.Email.Trim()))!;
-        return TypedResults.Ok(new UserInfo(user.Id, user.Email!, user.DisplayName));
+        var (tokens, user) = await sessions.LoginAsync(request.Email, request.Password, UserAgent(http), ct);
+        return TokenResponse(http, tokens, user);
     }
 
-    private static async Task<Accepted> ForgotPassword(
-        EmailRequest request, UserManager<ApplicationUser> users, IEmailService email, IOptions<AppOptions> app, CancellationToken ct)
+    private static async Task<Ok<AuthResponse>> Refresh(RefreshRequest request, HttpContext http, SessionService sessions, CancellationToken ct)
     {
-        var user = await users.FindByEmailAsync(request.Email.Trim());
-        if (user is { EmailConfirmed: true })
-        {
-            var token = Encode(await users.GeneratePasswordResetTokenAsync(user));
-            var link = $"{Base(app.Value)}/auth/reset-password?email={Uri.EscapeDataString(user.Email!)}&token={token}";
-            await email.SendAsync(user.Email!, "Reset your OpsFlow password", $"Reset your password: {link}\n\nIf you did not request this, ignore this email.", ct);
-        }
-
-        return TypedResults.Accepted((string?)null);
+        var (tokens, user) = await sessions.RefreshAsync(request.RefreshToken, UserAgent(http), ct);
+        return TokenResponse(http, tokens, user);
     }
 
-    private static async Task<Results<NoContent, ProblemHttpResult, ValidationProblem>> ResetPassword(ResetPasswordRequest request, UserManager<ApplicationUser> users)
+    private static async Task<NoContent> Logout(LogoutRequest request, SessionService sessions, CancellationToken ct)
     {
-        var user = await users.FindByEmailAsync(request.Email.Trim());
-        if (user is null || Decode(request.Token) is not { } token)
-        {
-            return TypedResults.Problem(title: InvalidTokenTitle, statusCode: StatusCodes.Status400BadRequest);
-        }
-
-        var result = await users.ResetPasswordAsync(user, token, request.NewPassword);
-        if (result.Succeeded)
-        {
-            return TypedResults.NoContent();
-        }
-
-        return result.Errors.Any(e => e.Code == nameof(IdentityErrorDescriber.InvalidToken))
-            ? TypedResults.Problem(title: InvalidTokenTitle, statusCode: StatusCodes.Status400BadRequest)
-            : TypedResults.ValidationProblem(ToErrors(result));
-    }
-
-    private static async Task<NoContent> Logout(SignInManager<ApplicationUser> signIn)
-    {
-        await signIn.SignOutAsync();
+        await sessions.LogoutAsync(request.RefreshToken, ct);
         return TypedResults.NoContent();
     }
 
-    private static async Task<Results<Ok<UserInfo>, UnauthorizedHttpResult>> Me(ClaimsPrincipal principal, UserManager<ApplicationUser> users)
+    private static async Task<Accepted> ForgotPassword(EmailRequest request, AccountService accounts, CancellationToken ct)
     {
-        var user = await users.GetUserAsync(principal);
-        return user is null ? TypedResults.Unauthorized() : TypedResults.Ok(new UserInfo(user.Id, user.Email!, user.DisplayName));
+        await accounts.ForgotPasswordAsync(request.Email, ct);
+        return TypedResults.Accepted((string?)null);
     }
 
-    private static async Task SendConfirmationAsync(UserManager<ApplicationUser> users, IEmailService email, AppOptions app, ApplicationUser user, CancellationToken ct)
+    private static async Task<NoContent> ResetPassword(ResetPasswordRequest request, AccountService accounts, CancellationToken ct)
     {
-        var token = Encode(await users.GenerateEmailConfirmationTokenAsync(user));
-        var link = $"{Base(app)}/auth/confirm-email?userId={user.Id}&token={token}";
-        await email.SendAsync(user.Email!, "Confirm your OpsFlow email", $"Welcome to OpsFlow. Confirm your email: {link}", ct);
+        await accounts.ResetPasswordAsync(request.Email, request.Token, request.NewPassword, ct);
+        return TypedResults.NoContent();
     }
 
-    private static string Base(AppOptions app) => app.BaseUrl.TrimEnd('/');
+    private static async Task<Ok<UserInfo>> Me(ICurrentUser current, AccountService accounts, CancellationToken ct) =>
+        TypedResults.Ok(ToInfo(await accounts.GetAsync(current.UserId, ct)));
 
-    private static string Encode(string token) => WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
-
-    private static string? Decode(string token)
+    private static async Task<NoContent> LogoutAll(ICurrentUser current, SessionService sessions, CancellationToken ct)
     {
-        try
-        {
-            return Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(token));
-        }
-        catch (FormatException)
-        {
-            return null;
-        }
+        await sessions.LogoutAllAsync(current.UserId, ct);
+        return TypedResults.NoContent();
     }
 
-    private static Dictionary<string, string[]> ToErrors(IdentityResult result) =>
-        result.Errors.GroupBy(e => e.Code).ToDictionary(g => g.Key, g => g.Select(e => e.Description).ToArray());
+    private static async Task<Ok<List<SessionResponse>>> ListSessions(ICurrentUser current, SessionService sessions, CancellationToken ct)
+    {
+        var list = await sessions.ListAsync(current.UserId, current.SessionId, ct);
+        return TypedResults.Ok(list.Select(s => new SessionResponse(s.Id, s.UserAgent, s.CreatedAtUtc, s.LastUsedAtUtc, s.IsCurrent)).ToList());
+    }
+
+    private static async Task<NoContent> RevokeSession(Guid sessionId, ICurrentUser current, SessionService sessions, CancellationToken ct)
+    {
+        await sessions.RevokeAsync(current.UserId, sessionId, ct);
+        return TypedResults.NoContent();
+    }
+
+    // Every session is revoked; the caller immediately gets a brand-new one so the SPA stays signed in on this device.
+    private static async Task<Ok<AuthResponse>> ChangePassword(
+        ChangePasswordRequest request, ICurrentUser current, HttpContext http, AccountService accounts, SessionService sessions, CancellationToken ct)
+    {
+        var user = await accounts.ChangePasswordAsync(current.UserId, request.CurrentPassword, request.NewPassword, ct);
+        return TokenResponse(http, await sessions.StartAsync(user, UserAgent(http), ct), user);
+    }
+
+    private static async Task<NoContent> Deactivate(DeactivateAccountRequest request, ICurrentUser current, AccountService accounts, CancellationToken ct)
+    {
+        await accounts.DeactivateAsync(current.UserId, request.Password, ct);
+        return TypedResults.NoContent();
+    }
+
+    // Responses carrying tokens must never be stored by browsers or intermediaries.
+    private static Ok<AuthResponse> TokenResponse(HttpContext http, SessionTokens tokens, User user)
+    {
+        http.Response.Headers.CacheControl = "no-store";
+        http.Response.Headers.Pragma = "no-cache";
+        return TypedResults.Ok(new AuthResponse(tokens.AccessToken, "Bearer", tokens.AccessTokenExpiresAtUtc, tokens.RefreshToken, tokens.RefreshTokenExpiresAtUtc, ToInfo(user)));
+    }
+
+    private static string? UserAgent(HttpContext http) => http.Request.Headers.UserAgent.ToString() is { Length: > 0 } ua ? ua : null;
+
+    private static UserInfo ToInfo(User user) => new(user.Id, user.Email, user.DisplayName);
 }

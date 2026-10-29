@@ -38,9 +38,10 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI(options => options.SwaggerEndpoint("/openapi/v1.json", "OpsFlow API v1"));
 }
 
+// UPDATED: CORS (explicit origins) rate limiter se pehle
+app.UseCors(ApiSecurityExtensions.CorsPolicy);
 app.UseRateLimiter();
 app.UseAuthentication();
-app.UseMiddleware<CsrfMiddleware>();
 app.UseAuthorization();
 
 if (app.Environment.IsDevelopment())

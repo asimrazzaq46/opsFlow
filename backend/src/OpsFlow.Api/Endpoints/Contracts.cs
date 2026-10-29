@@ -15,15 +15,30 @@ public sealed record ConfirmEmailRequest([property: Required] Guid UserId, [prop
 
 public sealed record LoginRequest(
     [property: Required, EmailAddress] string Email,
-    [property: Required] string Password,
-    bool RememberMe = false);
+    [property: Required, StringLength(128)] string Password);
+
+/// <summary>The refresh token travels in the HTTPS JSON body (no cookies are used anywhere).</summary>
+public sealed record RefreshRequest([property: Required, StringLength(200)] string RefreshToken);
+
+public sealed record LogoutRequest([property: Required, StringLength(200)] string RefreshToken);
 
 public sealed record ResetPasswordRequest(
     [property: Required, EmailAddress] string Email,
     [property: Required] string Token,
     [property: Required, StringLength(128)] string NewPassword);
 
+public sealed record ChangePasswordRequest(
+    [property: Required, StringLength(128)] string CurrentPassword,
+    [property: Required, StringLength(128)] string NewPassword);
+
+public sealed record DeactivateAccountRequest([property: Required, StringLength(128)] string Password);
+
 public sealed record UserInfo(Guid Id, string Email, string DisplayName);
+
+/// <summary>Short-lived access token for the Authorization: Bearer header plus a single-use rotating refresh token. Keep both in memory.</summary>
+public sealed record AuthResponse(string AccessToken, string TokenType, DateTime ExpiresAtUtc, string RefreshToken, DateTime RefreshTokenExpiresAtUtc, UserInfo User);
+
+public sealed record SessionResponse(Guid Id, string? UserAgent, DateTime CreatedAtUtc, DateTime LastUsedAtUtc, bool IsCurrent);
 
 public sealed record CreateOrganizationRequest([property: Required, StringLength(100, MinimumLength = 2)] string Name);
 
