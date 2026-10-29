@@ -1,0 +1,7 @@
+{
+  "$schema": "node_modules/ng-openapi-gen/ng-openapi-gen-schema.json",
+  "input": "openapi/OpsFlow.Api.json",
+  "output": "src/app/core/api/generated",
+  "skipJsonSuffix": true,
+  "promises": false
+}

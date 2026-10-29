@@ -6,7 +6,9 @@
     "start": "ng serve",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test"
+    "test": "ng test",
+    "apigen": "node scripts/apigen.mjs",
+    "apigen:check": "node scripts/apigen.mjs --check"
   },
   "private": true,
   "packageManager": "npm@11.12.1",
@@ -29,6 +31,7 @@
     "@angular/build": "^22.0.5",
     "@angular/cli": "^22.0.5",
     "@angular/compiler-cli": "^22.0.0",
+    "ng-openapi-gen": "^1.1.0",
     "prettier": "^3.8.1",
     "typescript": "~6.0.2"
   }

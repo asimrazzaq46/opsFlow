@@ -15,6 +15,8 @@ app.UseStatusCodePages();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    // UPDATED: Swagger UI sirf Development mein, existing native OpenAPI document par
+    app.UseSwaggerUI(options => options.SwaggerEndpoint("/openapi/v1.json", "OpsFlow API v1"));
 }
 
 app.MapHealthEndpoints();

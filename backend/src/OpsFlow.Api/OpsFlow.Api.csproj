@@ -1,7 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
+  <!-- Spec is emitted only on demand: dotnet build -p:OpenApiGenerateDocuments=true (see frontend `npm run apigen`). -->
+  <PropertyGroup>
+    <OpenApiDocumentsDirectory Condition="'$(OpenApiSpecOutputDir)' != ''">$(OpenApiSpecOutputDir)</OpenApiDocumentsDirectory>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Microsoft.Extensions.ApiDescription.Server">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" />
   </ItemGroup>
 
   <ItemGroup>
