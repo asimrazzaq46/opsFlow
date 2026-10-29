@@ -1,0 +1,41 @@
+# AI instructions (local only)
+/backend/CLAUDE.md
+/frontend/CLAUDE.md
+
+# .NET
+bin/
+obj/
+*.user
+*.suo
+*.userprefs
+.vs/
+TestResults/
+*.nupkg
+*.log
+
+# Angular / Node
+node_modules/
+/frontend/dist/
+/frontend/.angular/
+/frontend/coverage/
+npm-debug.log*
+yarn-error.log*
+
+# IDE
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets / local env
+.env
+.env.*
+!.env.example
+appsettings.*.local.json
+secrets.json
+*.pfx
+*.key

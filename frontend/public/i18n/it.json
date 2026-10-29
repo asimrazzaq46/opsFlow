@@ -1,0 +1,9 @@
+{
+  "shell": { "language": "Lingua", "toggleTheme": "Cambia tema chiaro/scuro" },
+  "health": { "checking": "Verifica API…", "online": "API online", "offline": "API offline" },
+  "home": {
+    "eyebrow": "Operazioni di servizio multi-tenant",
+    "title": "OpsFlow",
+    "subtitle": "Ticket, team e clienti in un unico spazio di lavoro sicuro. Le fondamenta sono pronte."
+  }
+}

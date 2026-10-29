@@ -1,0 +1,9 @@
+{
+  "shell": { "language": "Language", "toggleTheme": "Toggle dark/light theme" },
+  "health": { "checking": "Checking API…", "online": "API online", "offline": "API offline" },
+  "home": {
+    "eyebrow": "Multi-tenant service operations",
+    "title": "OpsFlow",
+    "subtitle": "Tickets, teams and customers in one secure workspace. The foundation is up and running."
+  }
+}
