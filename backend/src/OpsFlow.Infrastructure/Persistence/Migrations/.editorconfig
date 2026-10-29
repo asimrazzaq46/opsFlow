@@ -1,0 +1,3 @@
+# Generated EF migrations: constant array arguments are emitted by the EF tooling (CA1861 only).
+[*.cs]
+dotnet_diagnostic.CA1861.severity = none

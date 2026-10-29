@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using OpsFlow.Api.Endpoints;
 using OpsFlow.Api.Infrastructure;
+using OpsFlow.Api.Infrastructure.Initialization;
 using OpsFlow.Application;
 using OpsFlow.Application.Abstractions;
 using OpsFlow.Infrastructure;
@@ -23,6 +24,8 @@ builder.Services.Configure<AppOptions>(builder.Configuration.GetSection(AppOptio
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddApiSecurity(builder.Configuration, builder.Environment);
+// UPDATED: Development startup par migrate + seed (production mein kabhi register nahi hota)
+builder.Services.AddDevelopmentInitialization(builder.Configuration, builder.Environment);
 
 var app = builder.Build();
 
