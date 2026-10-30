@@ -5,9 +5,7 @@ namespace OpsFlow.Domain.Tickets;
 /// <summary>Append-only ticket timeline entry, persisted in the same transaction as the change it describes.</summary>
 public sealed class TicketActivity : ITenantOwned
 {
-    private TicketActivity()
-    {
-    }
+    private TicketActivity() { }
 
     public Guid Id { get; private set; }
     public Guid TenantId { get; private set; }
@@ -25,18 +23,29 @@ public sealed class TicketActivity : ITenantOwned
     public Guid? RelatedId { get; private set; }
     public bool CustomerVisible { get; private set; }
 
-    internal static TicketActivity Create(Guid tenantId, Guid ticketId, int sequence, TicketActivityType type, Guid? actorUserId, DateTime nowUtc, string? oldValue, string? newValue, Guid? relatedId) => new()
-    {
-        Id = Guid.NewGuid(),
-        TenantId = tenantId,
-        TicketId = ticketId,
-        Sequence = sequence,
-        Type = type,
-        ActorUserId = actorUserId,
-        OccurredAtUtc = nowUtc,
-        OldValue = oldValue is { Length: > 200 } ? oldValue[..200] : oldValue,
-        NewValue = newValue is { Length: > 200 } ? newValue[..200] : newValue,
-        RelatedId = relatedId,
-        CustomerVisible = TicketWorkflow.IsCustomerVisible(type),
-    };
+    internal static TicketActivity Create(
+        Guid tenantId,
+        Guid ticketId,
+        int sequence,
+        TicketActivityType type,
+        Guid? actorUserId,
+        DateTime nowUtc,
+        string? oldValue,
+        string? newValue,
+        Guid? relatedId
+    ) =>
+        new()
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            TicketId = ticketId,
+            Sequence = sequence,
+            Type = type,
+            ActorUserId = actorUserId,
+            OccurredAtUtc = nowUtc,
+            OldValue = oldValue is { Length: > 200 } ? oldValue[..200] : oldValue,
+            NewValue = newValue is { Length: > 200 } ? newValue[..200] : newValue,
+            RelatedId = relatedId,
+            CustomerVisible = TicketWorkflow.IsCustomerVisible(type),
+        };
 }

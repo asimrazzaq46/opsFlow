@@ -17,10 +17,18 @@ public sealed class InvitationsController(InvitationService invitations) : Contr
     [Authorize]
     [EnableRateLimiting(RateLimitPolicies.Sensitive)]
     [EndpointSummary("Accept invitation")]
-    [EndpointDescription("Accepts a tenant invitation with the one-time token; the signed-in user's verified email must match the invited address.")]
+    [EndpointDescription(
+        "Accepts a tenant invitation with the one-time token; the signed-in user's verified email must match the invited address."
+    )]
     [ProducesResponseType<OrganizationDto>(StatusCodes.Status200OK)]
-    [ProducesResponseType<ProblemResponse>(StatusCodes.Status409Conflict, "application/problem+json")]
-    public async Task<ActionResult<OrganizationDto>> AcceptInvitation(AcceptInvitationRequest request, CancellationToken ct)
+    [ProducesResponseType<ProblemResponse>(
+        StatusCodes.Status409Conflict,
+        "application/problem+json"
+    )]
+    public async Task<ActionResult<OrganizationDto>> AcceptInvitation(
+        AcceptInvitationRequest request,
+        CancellationToken ct
+    )
     {
         return Ok(await invitations.AcceptAsync(request.Token, ct));
     }
@@ -28,8 +36,12 @@ public sealed class InvitationsController(InvitationService invitations) : Contr
     [HttpGet("tenants/{tenantId:guid}/invitations", Name = "ListInvitations")]
     [Authorize(Policy = AuthPolicies.TenantManager)]
     [EndpointSummary("List pending invitations")]
-    [EndpointDescription("Returns the tenant's pending invitations. Requires the Owner or Manager role in the tenant.")]
-    public async Task<ActionResult<IReadOnlyList<InvitationDto>>> ListInvitations(CancellationToken ct)
+    [EndpointDescription(
+        "Returns the tenant's pending invitations. Requires the Owner or Manager role in the tenant."
+    )]
+    public async Task<ActionResult<IReadOnlyList<InvitationDto>>> ListInvitations(
+        CancellationToken ct
+    )
     {
         return Ok(await invitations.ListPendingAsync(ct));
     }
@@ -38,21 +50,38 @@ public sealed class InvitationsController(InvitationService invitations) : Contr
     [Authorize(Policy = AuthPolicies.TenantManager)]
     [EnableRateLimiting(RateLimitPolicies.Sensitive)]
     [EndpointSummary("Invite a user")]
-    [EndpointDescription("Creates an invitation and emails a one-time token. Managers may invite Agents and Customers only. Requires the Owner or Manager role in the tenant.")]
+    [EndpointDescription(
+        "Creates an invitation and emails a one-time token. Managers may invite Agents and Customers only. Requires the Owner or Manager role in the tenant."
+    )]
     [ProducesResponseType<InvitationDto>(StatusCodes.Status201Created)]
-    [ProducesResponseType<ProblemResponse>(StatusCodes.Status409Conflict, "application/problem+json")]
-    public async Task<ActionResult<InvitationDto>> CreateInvitation(Guid tenantId, CreateInvitationRequest request, CancellationToken ct)
+    [ProducesResponseType<ProblemResponse>(
+        StatusCodes.Status409Conflict,
+        "application/problem+json"
+    )]
+    public async Task<ActionResult<InvitationDto>> CreateInvitation(
+        Guid tenantId,
+        CreateInvitationRequest request,
+        CancellationToken ct
+    )
     {
         var invitation = await invitations.CreateAsync(request.Email, request.Role, ct);
         return Created($"/api/v1/tenants/{tenantId}/invitations/{invitation.Id}", invitation);
     }
 
-    [HttpDelete("tenants/{tenantId:guid}/invitations/{invitationId:guid}", Name = "RevokeInvitation")]
+    [HttpDelete(
+        "tenants/{tenantId:guid}/invitations/{invitationId:guid}",
+        Name = "RevokeInvitation"
+    )]
     [Authorize(Policy = AuthPolicies.TenantManager)]
     [EndpointSummary("Revoke invitation")]
-    [EndpointDescription("Revokes a pending invitation. Requires the Owner or Manager role in the tenant.")]
+    [EndpointDescription(
+        "Revokes a pending invitation. Requires the Owner or Manager role in the tenant."
+    )]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType<ProblemResponse>(StatusCodes.Status409Conflict, "application/problem+json")]
+    [ProducesResponseType<ProblemResponse>(
+        StatusCodes.Status409Conflict,
+        "application/problem+json"
+    )]
     public async Task<IActionResult> RevokeInvitation(Guid invitationId, CancellationToken ct)
     {
         await invitations.RevokeAsync(invitationId, ct);

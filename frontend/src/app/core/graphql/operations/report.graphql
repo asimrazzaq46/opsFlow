@@ -1,0 +1,20 @@
+query Report($filter: AnalyticsFilterInput) {
+  report(filter: $filter) {
+    generatedAtUtc
+    timeZone
+    fromUtc
+    toUtc
+    grouping
+    ticketsCreated
+    trend { periodStartUtc created resolved avgResolutionMinutes }
+    byStatus { key count }
+    byPriority { key count }
+    resolution { completedCycles avgMinutes medianMinutes }
+    sla { eligibleCycles met breached compliancePercent }
+    openOverdueTickets
+    reopen { resolvedCycles reopenedCycles reopenRatePercent reopenEventsInPeriod }
+    agents { membershipId displayName currentWorkload resolvedInPeriod }
+    categories { categoryId name count sharePercent }
+    customers { customerId name tickets open resolved overdueOpen }
+  }
+}

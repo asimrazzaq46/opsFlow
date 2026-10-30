@@ -10,7 +10,13 @@ namespace OpsFlow.Realtime;
 /// (and re-validated) token - a revoked session cannot reconnect. Group joins are decided by the host's <see cref="IRealtimeGroupAuthorizer"/>.
 /// </summary>
 [Authorize]
-public sealed partial class RealtimeHub(IRealtimeGroupAuthorizer authorizer, RealtimeConnectionRegistry registry, IOptions<RealtimeOptions> options, TimeProvider clock, ILogger<RealtimeHub> logger) : Hub<IRealtimeClient>
+public sealed partial class RealtimeHub(
+    IRealtimeGroupAuthorizer authorizer,
+    RealtimeConnectionRegistry registry,
+    IOptions<RealtimeOptions> options,
+    TimeProvider clock,
+    ILogger<RealtimeHub> logger
+) : Hub<IRealtimeClient>
 {
     public override Task OnConnectedAsync()
     {
@@ -35,8 +41,12 @@ public sealed partial class RealtimeHub(IRealtimeGroupAuthorizer authorizer, Rea
     /// <summary>Returns false (and joins nothing) unless the host authorizer allows this user right now.</summary>
     public async Task<bool> JoinGroup(string group)
     {
-        if (string.IsNullOrWhiteSpace(group) || group.Length > options.Value.MaxGroupNameLength || Context.User is null
-            || !await authorizer.CanJoinAsync(Context.User, group, Context.ConnectionAborted))
+        if (
+            string.IsNullOrWhiteSpace(group)
+            || group.Length > options.Value.MaxGroupNameLength
+            || Context.User is null
+            || !await authorizer.CanJoinAsync(Context.User, group, Context.ConnectionAborted)
+        )
         {
             LogJoinDenied(logger, Context.UserIdentifier);
             return false;
@@ -53,11 +63,19 @@ public sealed partial class RealtimeHub(IRealtimeGroupAuthorizer authorizer, Rea
         registry.Left(Context.ConnectionId, group);
     }
 
-    private static async Task AbortAtExpiryAsync(HubCallerContext context, TimeSpan remaining, TimeProvider clock)
+    private static async Task AbortAtExpiryAsync(
+        HubCallerContext context,
+        TimeSpan remaining,
+        TimeProvider clock
+    )
     {
         try
         {
-            await Task.Delay(remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero, clock, context.ConnectionAborted);
+            await Task.Delay(
+                remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero,
+                clock,
+                context.ConnectionAborted
+            );
             context.Abort();
         }
         catch (OperationCanceledException)
@@ -69,9 +87,15 @@ public sealed partial class RealtimeHub(IRealtimeGroupAuthorizer authorizer, Rea
     [LoggerMessage(Level = LogLevel.Information, Message = "Realtime connected user {UserId}")]
     private static partial void LogConnected(ILogger logger, string? userId);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Realtime disconnected user {UserId} ({Reason})")]
+    [LoggerMessage(
+        Level = LogLevel.Information,
+        Message = "Realtime disconnected user {UserId} ({Reason})"
+    )]
     private static partial void LogDisconnected(ILogger logger, string? userId, string reason);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Realtime group join denied for user {UserId}")]
+    [LoggerMessage(
+        Level = LogLevel.Warning,
+        Message = "Realtime group join denied for user {UserId}"
+    )]
     private static partial void LogJoinDenied(ILogger logger, string? userId);
 }

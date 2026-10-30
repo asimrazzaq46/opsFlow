@@ -7,9 +7,7 @@ public sealed class SlaPolicy : ITenantOwned
 {
     public const int MaxMinutes = 525_600; // one year
 
-    private SlaPolicy()
-    {
-    }
+    private SlaPolicy() { }
 
     public Guid Id { get; private set; }
     public Guid TenantId { get; private set; }
@@ -20,7 +18,13 @@ public sealed class SlaPolicy : ITenantOwned
     public DateTime CreatedAtUtc { get; private set; }
     public DateTime UpdatedAtUtc { get; private set; }
 
-    public static SlaPolicy Create(Guid tenantId, TicketPriority priority, int responseMinutes, int resolutionMinutes, DateTime nowUtc)
+    public static SlaPolicy Create(
+        Guid tenantId,
+        TicketPriority priority,
+        int responseMinutes,
+        int resolutionMinutes,
+        DateTime nowUtc
+    )
     {
         Validate(responseMinutes, resolutionMinutes);
         return new SlaPolicy
@@ -52,9 +56,15 @@ public sealed class SlaPolicy : ITenantOwned
 
     private static void Validate(int responseMinutes, int resolutionMinutes)
     {
-        if (responseMinutes is < 1 or > MaxMinutes || resolutionMinutes is < 1 or > MaxMinutes || resolutionMinutes < responseMinutes)
+        if (
+            responseMinutes is < 1 or > MaxMinutes
+            || resolutionMinutes is < 1 or > MaxMinutes
+            || resolutionMinutes < responseMinutes
+        )
         {
-            throw new ArgumentException("SLA targets must be 1..525600 minutes and resolution must not be shorter than response.");
+            throw new ArgumentException(
+                "SLA targets must be 1..525600 minutes and resolution must not be shorter than response."
+            );
         }
     }
 }

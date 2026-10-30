@@ -17,14 +17,20 @@ public sealed class RefreshToken
     /// <summary>Concurrency token: of N concurrent rotations of the same token exactly one can persist.</summary>
     public DateTime? UsedAtUtc { get; private set; }
 
-    public static RefreshToken Issue(Guid sessionId, string tokenHash, DateTime nowUtc, DateTime expiresAtUtc) => new()
-    {
-        Id = Guid.NewGuid(),
-        SessionId = sessionId,
-        TokenHash = tokenHash,
-        CreatedAtUtc = nowUtc,
-        ExpiresAtUtc = expiresAtUtc,
-    };
+    public static RefreshToken Issue(
+        Guid sessionId,
+        string tokenHash,
+        DateTime nowUtc,
+        DateTime expiresAtUtc
+    ) =>
+        new()
+        {
+            Id = Guid.NewGuid(),
+            SessionId = sessionId,
+            TokenHash = tokenHash,
+            CreatedAtUtc = nowUtc,
+            ExpiresAtUtc = expiresAtUtc,
+        };
 
     public void MarkUsed(DateTime nowUtc) => UsedAtUtc = nowUtc;
 }

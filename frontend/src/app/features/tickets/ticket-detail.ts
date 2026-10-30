@@ -4,6 +4,7 @@ import { Router, RouterLink } from '@angular/router';
 import { TranslatePipe } from '@ngx-translate/core';
 import { TicketDetailDto } from '../../core/api/generated/models';
 import { TenantService } from '../../core/auth/tenant.service';
+import { TicketActions } from './ticket-actions';
 import { TicketAttachments } from './ticket-attachments';
 import { TicketChat } from './ticket-chat';
 import { TicketNotes } from './ticket-notes';
@@ -11,7 +12,7 @@ import { TicketsApi } from './tickets-api';
 
 @Component({
   selector: 'app-ticket-detail',
-  imports: [RouterLink, TranslatePipe, DatePipe, TicketChat, TicketNotes, TicketAttachments],
+  imports: [RouterLink, TranslatePipe, DatePipe, TicketChat, TicketNotes, TicketAttachments, TicketActions],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <a routerLink="/tickets" class="text-sm text-brand underline">‹ {{ 'tickets.back' | translate }}</a>
@@ -31,7 +32,8 @@ import { TicketsApi } from './tickets-api';
         </p>
         <p class="mt-3 whitespace-pre-wrap break-words">{{ t.description }}</p>
       </header>
-      <div class="mt-6 grid gap-6 lg:grid-cols-2">
+      <div class="mt-6"><app-ticket-actions [ticket]="t" (changed)="refresh()" /></div>
+      <div class="mt-2 grid gap-6 lg:grid-cols-2">
         <app-ticket-chat [ticketId]="id()" />
         <div class="space-y-6">
           @if (tenant.isStaff()) {
@@ -64,6 +66,11 @@ export class TicketDetail {
       this.id();
       untracked(() => this.load());
     });
+  }
+
+  /** Silent reload after a command: keeps chat/notes mounted. */
+  protected refresh(): void {
+    this.api.get(this.id()).subscribe((t) => this.ticket.set(t));
   }
 
   protected load(): void {

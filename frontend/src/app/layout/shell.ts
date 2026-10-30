@@ -1,5 +1,5 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
-import { RouterLink, RouterOutlet } from '@angular/router';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { TranslatePipe } from '@ngx-translate/core';
 import { AuthService } from '../core/auth/auth.service';
 import { TenantService } from '../core/auth/tenant.service';
@@ -11,7 +11,7 @@ import { HealthStatus } from '../shared/components/health-status';
 
 @Component({
   selector: 'app-shell',
-  imports: [RouterOutlet, RouterLink, TranslatePipe, HealthStatus, NotificationCenter],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, TranslatePipe, HealthStatus, NotificationCenter],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="flex min-h-screen flex-col">
@@ -31,7 +31,6 @@ import { HealthStatus } from '../shared/components/health-status';
 
             <!-- UPDATED: login ke baad workspace picker, notification center aur sign-out -->
             @if (auth.isAuthenticated()) {
-              <a routerLink="/tickets" class="hidden text-sm font-medium text-muted hover:text-fg sm:inline">{{ 'nav.tickets' | translate }}</a>
               @if (tenant.organizations().length) {
                 <label class="sr-only" for="tenant-select">{{ 'tenant.label' | translate }}</label>
                 <select id="tenant-select" class="max-w-32 rounded-lg border border-border bg-card px-2 py-1 text-sm focus-visible:outline-2 focus-visible:outline-brand sm:max-w-48"
@@ -71,6 +70,16 @@ import { HealthStatus } from '../shared/components/health-status';
             </button>
           </div>
         </div>
+        <!-- UPDATED: Milestone 5 - role-aware navigation (UX only; the backend enforces access) -->
+        @if (auth.isAuthenticated()) {
+          <nav class="mx-auto max-w-6xl overflow-x-auto px-4 sm:px-6" [attr.aria-label]="'nav.menu' | translate">
+            <ul class="flex gap-1 pb-2 text-sm font-medium">
+              @for (item of navItems(); track item.link) {
+                <li><a [routerLink]="item.link" routerLinkActive="bg-brand text-brand-fg" class="block whitespace-nowrap rounded-lg px-3 py-1.5 text-muted hover:text-fg focus-visible:outline-2 focus-visible:outline-brand">{{ item.label | translate }}</a></li>
+              }
+            </ul>
+          </nav>
+        }
       </header>
 
       @if (auth.isAuthenticated() && realtime.state() !== 'connected') {
@@ -92,6 +101,19 @@ export class Shell {
   protected readonly theme = inject(ThemeService);
   protected readonly language = inject(LanguageService);
   protected readonly languages = SUPPORTED_LANGUAGES;
+
+  protected readonly navItems = computed(() => {
+    const role = this.tenant.role();
+    const staff = role !== null && role !== 'Customer';
+    const manager = role === 'TenantOwner' || role === 'Manager';
+    return [
+      { link: '/dashboard', label: 'nav.dashboard' },
+      { link: '/tickets', label: 'nav.tickets' },
+      ...(staff ? [{ link: '/kanban', label: 'nav.kanban' }] : []),
+      ...(manager ? [{ link: '/customers', label: 'nav.customers' }, { link: '/reports', label: 'nav.reports' }] : []),
+      ...(staff ? [{ link: '/team', label: 'nav.team' }] : []),
+    ];
+  });
 
   protected selectTenant(event: Event): void {
     this.tenant.select((event.target as HTMLSelectElement).value);

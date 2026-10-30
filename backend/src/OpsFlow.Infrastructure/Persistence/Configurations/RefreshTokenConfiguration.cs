@@ -14,7 +14,10 @@ internal sealed class RefreshTokenConfiguration : IEntityTypeConfiguration<Refre
         b.Property(t => t.TokenHash).HasMaxLength(64).IsRequired();
         b.Property(t => t.UsedAtUtc).IsConcurrencyToken(); // atomic rotation: of N concurrent uses exactly one persists
 
-        b.HasOne<UserSession>().WithMany().HasForeignKey(t => t.SessionId).OnDelete(DeleteBehavior.Cascade);
+        b.HasOne<UserSession>()
+            .WithMany()
+            .HasForeignKey(t => t.SessionId)
+            .OnDelete(DeleteBehavior.Cascade);
         b.HasIndex(t => t.TokenHash).IsUnique();
         b.HasIndex(t => t.SessionId);
     }

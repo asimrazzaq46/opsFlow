@@ -26,18 +26,25 @@ public sealed class Customer : ITenantOwned
     public DateTime CreatedAtUtc { get; private set; }
     public DateTime UpdatedAtUtc { get; private set; }
 
-    public static Customer Create(Guid tenantId, string name, string email, string? phone, DateTime nowUtc) => new()
-    {
-        Id = Guid.NewGuid(),
-        TenantId = tenantId,
-        Name = name.Trim(),
-        Email = email.Trim(),
-        NormalizedEmail = EmailAddress.Normalize(email),
-        Phone = string.IsNullOrWhiteSpace(phone) ? null : phone.Trim(),
-        IsActive = true,
-        CreatedAtUtc = nowUtc,
-        UpdatedAtUtc = nowUtc,
-    };
+    public static Customer Create(
+        Guid tenantId,
+        string name,
+        string email,
+        string? phone,
+        DateTime nowUtc
+    ) =>
+        new()
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            Name = name.Trim(),
+            Email = email.Trim(),
+            NormalizedEmail = EmailAddress.Normalize(email),
+            Phone = string.IsNullOrWhiteSpace(phone) ? null : phone.Trim(),
+            IsActive = true,
+            CreatedAtUtc = nowUtc,
+            UpdatedAtUtc = nowUtc,
+        };
 
     public void Update(string name, string email, string? phone, DateTime nowUtc)
     {

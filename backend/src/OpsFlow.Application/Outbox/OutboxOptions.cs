@@ -14,8 +14,14 @@ public sealed class OutboxOptions
     public int CompletedRetentionDays { get; set; } = 14;
 
     /// <summary>Notification types that are also e-mailed (in addition to the in-app notification). Dead letters are kept until an operator handles them.</summary>
-    public NotificationType[] EmailNotificationTypes { get; set; } = [NotificationType.TicketAssigned, NotificationType.SlaWarning, NotificationType.SlaBreached];
+    public NotificationType[] EmailNotificationTypes { get; set; } =
+        [
+            NotificationType.TicketAssigned,
+            NotificationType.SlaWarning,
+            NotificationType.SlaBreached,
+        ];
 }
 
 /// <summary>A failure a retry cannot fix (unknown event type, invalid configuration): the event goes straight to the dead letters.</summary>
-public sealed class OutboxPermanentException(string message, Exception? inner = null) : Exception(message, inner);
+public sealed class OutboxPermanentException(string message, Exception? inner = null)
+    : Exception(message, inner);

@@ -8,7 +8,14 @@ internal sealed class UserTokenConfiguration : IEntityTypeConfiguration<UserToke
 {
     public void Configure(EntityTypeBuilder<UserToken> b)
     {
-        b.ToTable("UserTokens", t => t.HasCheckConstraint("CK_UserTokens_Purpose", "\"Purpose\" IN ('EmailVerification','PasswordReset')"));
+        b.ToTable(
+            "UserTokens",
+            t =>
+                t.HasCheckConstraint(
+                    "CK_UserTokens_Purpose",
+                    "\"Purpose\" IN ('EmailVerification','PasswordReset')"
+                )
+        );
         b.HasKey(t => t.Id);
         b.Property(t => t.Id).ValueGeneratedNever();
         b.Property(t => t.Purpose).HasConversion<string>().HasMaxLength(30);

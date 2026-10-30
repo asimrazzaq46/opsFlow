@@ -2,11 +2,12 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { Api } from '../../core/api/generated/api';
 import {
-  createTicketNote, downloadTicketAttachment, getTicket, listTicketAttachments, listTicketMessages, listTicketNotes, listTickets, sendTicketMessage,
-  uploadTicketAttachment,
+  assignTicketAgents, changeTicketStatus, createTicket, createTicketNote, downloadTicketAttachment, getTicket, listMembers, listTicketAttachments,
+  listTicketCategories, listTicketMessages, listTicketNotes, listTickets, reopenTicket, sendTicketMessage, unassignTicketAgent, uploadTicketAttachment,
 } from '../../core/api/generated/functions';
 import {
-  AttachmentDto, PagedResultOfTicketMessageDto, PagedResultOfTicketNoteDto, PagedResultOfTicketSummaryDto, TicketDetailDto, TicketMessageDto, TicketNoteDto,
+  AttachmentDto, CreateTicketRequest, MemberDto, PagedResultOfTicketMessageDto, PagedResultOfTicketNoteDto, PagedResultOfTicketSummaryDto, TicketCategoryDto,
+  TicketDetailDto, TicketMessageDto, TicketNoteDto, TicketStatus,
 } from '../../core/api/generated/models';
 import { TenantService } from '../../core/auth/tenant.service';
 
@@ -59,5 +60,35 @@ export class TicketsApi {
     return this.api
       .invoke$Response(downloadTicketAttachment, { tenantId: this.tenantId, ticketId, attachmentId })
       .pipe(map((r) => r.body as unknown as Blob));
+  }
+
+  // UPDATED: Milestone 5 - REST commands (server stays authoritative; version = optimistic concurrency token)
+  create(body: CreateTicketRequest): Observable<TicketDetailDto> {
+    return this.api.invoke(createTicket, { tenantId: this.tenantId, body });
+  }
+
+  categories(): Observable<TicketCategoryDto[]> {
+    return this.api.invoke(listTicketCategories, { tenantId: this.tenantId });
+  }
+
+  changeStatus(ticketId: string, status: TicketStatus, version: number): Observable<TicketDetailDto> {
+    return this.api.invoke(changeTicketStatus, { tenantId: this.tenantId, ticketId, body: { status, version } });
+  }
+
+  reopen(ticketId: string, version: number): Observable<TicketDetailDto> {
+    return this.api.invoke(reopenTicket, { tenantId: this.tenantId, ticketId, body: { version } });
+  }
+
+  assign(ticketId: string, membershipIds: string[], version: number): Observable<TicketDetailDto> {
+    return this.api.invoke(assignTicketAgents, { tenantId: this.tenantId, ticketId, body: { membershipIds, version } });
+  }
+
+  unassign(ticketId: string, membershipId: string, version: number): Observable<TicketDetailDto> {
+    return this.api.invoke(unassignTicketAgent, { tenantId: this.tenantId, ticketId, membershipId, version });
+  }
+
+  /** Tenant members (Agents are the assignable ones). */
+  members(): Observable<MemberDto[]> {
+    return this.api.invoke(listMembers, { tenantId: this.tenantId, pageSize: 100 }).pipe(map((p) => p.items));
   }
 }

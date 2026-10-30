@@ -16,7 +16,10 @@ internal sealed class TicketCategoryConfiguration : IEntityTypeConfiguration<Tic
         b.Property(c => c.Name).HasMaxLength(100).IsRequired();
         b.Property(c => c.NormalizedName).HasMaxLength(100).IsRequired();
 
-        b.HasOne<Tenant>().WithMany().HasForeignKey(c => c.TenantId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Tenant>()
+            .WithMany()
+            .HasForeignKey(c => c.TenantId)
+            .OnDelete(DeleteBehavior.Restrict);
         b.HasIndex(c => new { c.TenantId, c.NormalizedName }).IsUnique();
     }
 }

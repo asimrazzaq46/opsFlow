@@ -403,6 +403,13 @@ namespace OpsFlow.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("ReportingTimeZone")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasDefaultValue("UTC");
+
                     b.Property<string>("TicketNumberPrefix")
                         .IsRequired()
                         .HasMaxLength(10)
@@ -513,6 +520,9 @@ namespace OpsFlow.Infrastructure.Persistence.Migrations
                     b.HasIndex("TenantId", "Status");
 
                     b.HasIndex("TenantId", "CreatedAtUtc", "Id");
+
+                    b.HasIndex("TenantId", "UpdatedAtUtc", "Number")
+                        .IsDescending(false, true, false);
 
                     b.ToTable("Tickets", null, t =>
                         {

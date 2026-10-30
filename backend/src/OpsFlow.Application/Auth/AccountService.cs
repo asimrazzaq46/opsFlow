@@ -20,14 +20,21 @@ public sealed partial class AccountService(
     IOptions<AppOptions> app,
     IOptions<AuthOptions> auth,
     TimeProvider clock,
-    ILogger<AccountService> logger)
+    ILogger<AccountService> logger
+)
 {
     private const int MaxAttempts = 3;
 
     private DateTime Now => clock.GetUtcNow().UtcDateTime;
 
     /// <summary>Creates a user; returns null when the email already exists (callers must not reveal that).</summary>
-    public async Task<User?> CreateAsync(string address, string displayName, string password, bool emailVerified, CancellationToken ct)
+    public async Task<User?> CreateAsync(
+        string address,
+        string displayName,
+        string password,
+        bool emailVerified,
+        CancellationToken ct
+    )
     {
         PasswordPolicy.EnsureValid(password);
         var hash = hasher.Hash(password); // hashed BEFORE the duplicate check so both outcomes cost the same time
@@ -52,7 +59,12 @@ public sealed partial class AccountService(
         return user;
     }
 
-    public async Task RegisterAsync(string address, string displayName, string password, CancellationToken ct)
+    public async Task RegisterAsync(
+        string address,
+        string displayName,
+        string password,
+        CancellationToken ct
+    )
     {
         var user = await CreateAsync(address, displayName, password, emailVerified: false, ct);
         if (user is not null)
@@ -64,7 +76,14 @@ public sealed partial class AccountService(
     public async Task ConfirmEmailAsync(Guid userId, string rawToken, CancellationToken ct)
     {
         var now = Now;
-        var token = await tokens.FindUsableAsync(userId, UserTokenPurpose.EmailVerification, rawToken, now, ct) ?? throw InvalidLink();
+        var token =
+            await tokens.FindUsableAsync(
+                userId,
+                UserTokenPurpose.EmailVerification,
+                rawToken,
+                now,
+                ct
+            ) ?? throw InvalidLink();
         var user = await db.Users.SingleAsync(u => u.Id == userId, ct);
         token.MarkUsed(now);
         user.VerifyEmail(now);
@@ -89,15 +108,32 @@ public sealed partial class AccountService(
         }
 
         var now = Now;
-        var raw = await tokens.IssueAsync(user.Id, UserTokenPurpose.PasswordReset, TimeSpan.FromMinutes(auth.Value.Tokens.PasswordResetMinutes), now, ct);
+        var raw = await tokens.IssueAsync(
+            user.Id,
+            UserTokenPurpose.PasswordReset,
+            TimeSpan.FromMinutes(auth.Value.Tokens.PasswordResetMinutes),
+            now,
+            ct
+        );
         if (await TrySaveAsync(ct))
         {
-            var link = $"{Base}/auth/reset-password?email={Uri.EscapeDataString(user.Email)}&token={raw}";
-            await SendAsync(user.Email, "Reset your OpsFlow password", $"Reset your password: {link}\n\nIf you did not request this, ignore this email.", ct);
+            var link =
+                $"{Base}/auth/reset-password?email={Uri.EscapeDataString(user.Email)}&token={raw}";
+            await SendAsync(
+                user.Email,
+                "Reset your OpsFlow password",
+                $"Reset your password: {link}\n\nIf you did not request this, ignore this email.",
+                ct
+            );
         }
     }
 
-    public async Task ResetPasswordAsync(string address, string rawToken, string newPassword, CancellationToken ct)
+    public async Task ResetPasswordAsync(
+        string address,
+        string rawToken,
+        string newPassword,
+        CancellationToken ct
+    )
     {
         PasswordPolicy.EnsureValid(newPassword, "newPassword");
         var now = Now;
@@ -108,7 +144,13 @@ public sealed partial class AccountService(
             throw InvalidLink();
         }
 
-        var token = await tokens.FindUsableAsync(user.Id, UserTokenPurpose.PasswordReset, rawToken, now, ct);
+        var token = await tokens.FindUsableAsync(
+            user.Id,
+            UserTokenPurpose.PasswordReset,
+            rawToken,
+            now,
+            ct
+        );
         if (token is null || !user.IsActive)
         {
             throw InvalidLink();
@@ -122,7 +164,12 @@ public sealed partial class AccountService(
     }
 
     /// <summary>Changes the password and revokes EVERY session (including the caller's); the caller starts a fresh one.</summary>
-    public async Task<User> ChangePasswordAsync(Guid userId, string currentPassword, string newPassword, CancellationToken ct)
+    public async Task<User> ChangePasswordAsync(
+        Guid userId,
+        string currentPassword,
+        string newPassword,
+        CancellationToken ct
+    )
     {
         PasswordPolicy.EnsureValid(newPassword, "newPassword");
         var now = Now;
@@ -158,24 +205,41 @@ public sealed partial class AccountService(
         {
             await using var transaction = await db.BeginTransactionAsync(ct);
             var now = Now;
-            var tenantIds = await db.Memberships.IgnoreQueryFilters().Where(m => m.UserId == userId && m.Status == MembershipStatus.Active)
-                .Select(m => m.TenantId).ToListAsync(ct);
-            var stamps = await db.Tenants.IgnoreQueryFilters().Where(t => tenantIds.Contains(t.Id))
-                .Select(t => new { t.Id, t.OwnerChangeStamp }).ToListAsync(ct);
+            var tenantIds = await db
+                .Memberships.IgnoreQueryFilters()
+                .Where(m => m.UserId == userId && m.Status == MembershipStatus.Active)
+                .Select(m => m.TenantId)
+                .ToListAsync(ct);
+            var stamps = await db
+                .Tenants.IgnoreQueryFilters()
+                .Where(t => tenantIds.Contains(t.Id))
+                .Select(t => new { t.Id, t.OwnerChangeStamp })
+                .ToListAsync(ct);
 
             // UPDATED: sirf USABLE Owners gine jate hain (active membership + active user)
-            var soleOwner = await db.UsableOwners(allTenants: true).Where(m => m.UserId == userId)
-                .AnyAsync(m => !db.UsableOwners(allTenants: true).Any(o => o.TenantId == m.TenantId && o.UserId != userId), ct);
+            var soleOwner = await db.UsableOwners(allTenants: true)
+                .Where(m => m.UserId == userId)
+                .AnyAsync(
+                    m =>
+                        !db.UsableOwners(allTenants: true)
+                            .Any(o => o.TenantId == m.TenantId && o.UserId != userId),
+                    ct
+                );
             if (soleOwner)
             {
-                throw AppException.Conflict("You are the only active Owner of an organization.", "Promote another Owner before deactivating your account.");
+                throw AppException.Conflict(
+                    "You are the only active Owner of an organization.",
+                    "Promote another Owner before deactivating your account."
+                );
             }
 
             var stale = false;
             foreach (var stamp in stamps)
             {
                 var next = Guid.NewGuid();
-                var rows = await db.Tenants.IgnoreQueryFilters().Where(t => t.Id == stamp.Id && t.OwnerChangeStamp == stamp.OwnerChangeStamp)
+                var rows = await db
+                    .Tenants.IgnoreQueryFilters()
+                    .Where(t => t.Id == stamp.Id && t.OwnerChangeStamp == stamp.OwnerChangeStamp)
                     .ExecuteUpdateAsync(s => s.SetProperty(t => t.OwnerChangeStamp, next), ct);
                 if (rows == 0)
                 {
@@ -203,7 +267,8 @@ public sealed partial class AccountService(
     }
 
     public async Task<User> GetAsync(Guid userId, CancellationToken ct) =>
-        await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Id == userId, ct) ?? throw AppException.NotFound("User not found.");
+        await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Id == userId, ct)
+        ?? throw AppException.NotFound("User not found.");
 
     private Task<User?> FindByEmailAsync(string address, CancellationToken ct)
     {
@@ -213,11 +278,22 @@ public sealed partial class AccountService(
 
     private async Task SendVerificationAsync(User user, CancellationToken ct)
     {
-        var raw = await tokens.IssueAsync(user.Id, UserTokenPurpose.EmailVerification, TimeSpan.FromHours(auth.Value.Tokens.EmailVerificationHours), Now, ct);
+        var raw = await tokens.IssueAsync(
+            user.Id,
+            UserTokenPurpose.EmailVerification,
+            TimeSpan.FromHours(auth.Value.Tokens.EmailVerificationHours),
+            Now,
+            ct
+        );
         if (await TrySaveAsync(ct))
         {
             var link = $"{Base}/auth/confirm-email?userId={user.Id}&token={raw}";
-            await SendAsync(user.Email, "Confirm your OpsFlow email", $"Welcome to OpsFlow. Confirm your email: {link}", ct);
+            await SendAsync(
+                user.Email,
+                "Confirm your OpsFlow email",
+                $"Welcome to OpsFlow. Confirm your email: {link}",
+                ct
+            );
         }
     }
 
@@ -250,7 +326,12 @@ public sealed partial class AccountService(
     }
 
     // Delivery failures are logged, never surfaced: a 500 for new accounts only would reveal which emails exist.
-    private async Task SendAsync(string recipient, string subject, string body, CancellationToken ct)
+    private async Task SendAsync(
+        string recipient,
+        string subject,
+        string body,
+        CancellationToken ct
+    )
     {
         try
         {
@@ -264,12 +345,19 @@ public sealed partial class AccountService(
 
     private string Base => app.Value.BaseUrl.TrimEnd('/');
 
-    private static AppException InvalidLink() => AppException.BadRequest("The link is invalid or has expired.");
+    private static AppException InvalidLink() =>
+        AppException.BadRequest("The link is invalid or has expired.");
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "User {UserId} password {Operation} completed; all sessions revoked")]
+    [LoggerMessage(
+        Level = LogLevel.Information,
+        Message = "User {UserId} password {Operation} completed; all sessions revoked"
+    )]
     private static partial void LogPasswordChanged(ILogger logger, Guid userId, string operation);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "User {UserId} deactivated; all sessions revoked")]
+    [LoggerMessage(
+        Level = LogLevel.Information,
+        Message = "User {UserId} deactivated; all sessions revoked"
+    )]
     private static partial void LogDeactivated(ILogger logger, Guid userId);
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Sending an authentication email failed")]

@@ -1,0 +1,375 @@
+schema {
+  query: Query
+}
+
+type Query {
+  tickets(filter: TicketFilterInput): PagedResultOfTicketSummaryDto!
+    @cost(weight: "10")
+  ticket(id: UUID!): TicketDetailDto! @cost(weight: "5")
+  ticketActivity(ticketId: UUID!, page: Int! = 1, pageSize: Int! = 20): PagedResultOfTicketActivityDto!
+    @cost(weight: "10")
+  ticketSla(ticketId: UUID!): TicketSlaDto! @cost(weight: "5")
+  customers(
+    search: String
+    isActive: Boolean
+    page: Int! = 1
+    pageSize: Int! = 20
+  ): PagedResultOfCustomerDto! @cost(weight: "10")
+  customer(id: UUID!): CustomerDto! @cost(weight: "5")
+  teamMembers(page: Int! = 1, pageSize: Int! = 20): PagedResultOfMemberDto!
+    @cost(weight: "10")
+  dashboard(filter: AnalyticsFilterInput): DashboardDto! @cost(weight: "30")
+  report(filter: AnalyticsFilterInput): ReportDto! @cost(weight: "60")
+  kanbanBoard(filter: KanbanFilterInput, perColumn: Int! = 20): [KanbanColumn!]!
+    @cost(weight: "40")
+}
+
+type AgentPerformanceDto {
+  membershipId: UUID!
+  displayName: String!
+  currentWorkload: Int!
+  resolvedInPeriod: Int!
+}
+
+type AssigneeDto {
+  membershipId: UUID!
+  userId: UUID!
+  displayName: String!
+  assignedAtUtc: DateTime!
+  isAgentActive: Boolean!
+}
+
+type CategoryShareDto {
+  categoryId: UUID!
+  name: String!
+  count: Int!
+  sharePercent: Float!
+}
+
+type CountByDto {
+  key: String!
+  count: Int!
+}
+
+type CurrentStateDto {
+  openTickets: Int!
+  unassignedTickets: Int!
+  overdueTickets: Int!
+  resolvedToday: Int!
+}
+
+type CustomerAnalysisDto {
+  customerId: UUID!
+  name: String!
+  tickets: Int!
+  open: Int!
+  resolved: Int!
+  overdueOpen: Int!
+}
+
+type CustomerDto {
+  id: UUID!
+  name: String!
+  email: String!
+  phone: String
+  linkedUserId: UUID
+  isActive: Boolean!
+  createdAtUtc: DateTime!
+  updatedAtUtc: DateTime!
+}
+
+type DashboardDto {
+  generatedAtUtc: DateTime!
+  timeZone: String!
+  fromUtc: DateTime!
+  toUtc: DateTime!
+  grouping: String!
+  current: CurrentStateDto!
+  createdInPeriod: Int!
+  resolvedInPeriod: Int!
+  avgFirstResponseMinutes: Float
+  firstResponseSample: Int!
+  sla: SlaComplianceDto
+  trend: [TrendPointDto!]!
+  openByStatus: [CountByDto!]!
+  byPriority: [CountByDto!]!
+  workload: [WorkloadDto!]
+}
+
+type KanbanColumn {
+  status: TicketStatus!
+  total: Int!
+  tickets: [TicketSummaryDto!]!
+}
+
+type MemberDto {
+  id: UUID!
+  userId: UUID!
+  email: String!
+  displayName: String!
+  role: TenantRole!
+  isActive: Boolean!
+  createdAtUtc: DateTime!
+}
+
+type PagedResultOfCustomerDto {
+  items: [CustomerDto!]!
+  page: Int!
+  pageSize: Int!
+  totalCount: Int!
+}
+
+type PagedResultOfMemberDto {
+  items: [MemberDto!]!
+  page: Int!
+  pageSize: Int!
+  totalCount: Int!
+}
+
+type PagedResultOfTicketActivityDto {
+  items: [TicketActivityDto!]!
+  page: Int!
+  pageSize: Int!
+  totalCount: Int!
+}
+
+type PagedResultOfTicketSummaryDto {
+  items: [TicketSummaryDto!]!
+  page: Int!
+  pageSize: Int!
+  totalCount: Int!
+}
+
+type ReopenReportDto {
+  resolvedCycles: Int!
+  reopenedCycles: Int!
+  reopenRatePercent: Float
+  reopenEventsInPeriod: Int!
+}
+
+type ReportDto {
+  generatedAtUtc: DateTime!
+  timeZone: String!
+  fromUtc: DateTime!
+  toUtc: DateTime!
+  grouping: String!
+  ticketsCreated: Int!
+  trend: [TrendPointDto!]!
+  byStatus: [CountByDto!]!
+  byPriority: [CountByDto!]!
+  resolution: ResolutionReportDto!
+  sla: SlaComplianceDto!
+  openOverdueTickets: Int!
+  reopen: ReopenReportDto!
+  agents: [AgentPerformanceDto!]!
+  categories: [CategoryShareDto!]!
+  customers: [CustomerAnalysisDto!]!
+}
+
+type ResolutionReportDto {
+  completedCycles: Int!
+  avgMinutes: Float
+  medianMinutes: Float
+}
+
+type SlaComplianceDto {
+  eligibleCycles: Int!
+  met: Int!
+  breached: Int!
+  compliancePercent: Float
+}
+
+type SlaCycleDto {
+  id: UUID!
+  cycleNumber: Int!
+  reason: SlaCycleReason!
+  startedAtUtc: DateTime!
+  responseMinutes: Int!
+  resolutionMinutes: Int!
+  responseDueAtUtc: DateTime
+  resolutionDueAtUtc: DateTime!
+  firstResponseAtUtc: DateTime
+  resolvedAtUtc: DateTime
+  responseState: SlaState!
+  resolutionState: SlaState!
+  remainingResolutionMinutes: Float
+}
+
+type TicketActivityDto {
+  id: UUID!
+  sequence: Int!
+  type: TicketActivityType!
+  occurredAtUtc: DateTime!
+  actorUserId: UUID
+  oldValue: String
+  newValue: String
+}
+
+type TicketDetailDto {
+  summary: TicketSummaryDto!
+  description: String!
+  createdByUserId: UUID
+  assignees: [AssigneeDto!]
+  currentSla: SlaCycleDto
+}
+
+type TicketSlaDto {
+  current: SlaCycleDto
+  cycles: [SlaCycleDto!]!
+}
+
+type TicketSummaryDto {
+  id: UUID!
+  number: Long!
+  displayNumber: String!
+  title: String!
+  priority: TicketPriority!
+  status: TicketStatus!
+  categoryId: UUID!
+  categoryName: String!
+  customerId: UUID
+  customerName: String
+  createdAtUtc: DateTime!
+  updatedAtUtc: DateTime!
+  resolvedAtUtc: DateTime
+  version: Int!
+  assigneeCount: Int
+  eligibleAssigneeCount: Int
+  resolutionDueAtUtc: DateTime
+  isOverdue: Boolean
+}
+
+type TrendPointDto {
+  periodStartUtc: DateTime!
+  created: Int!
+  resolved: Int!
+  avgResolutionMinutes: Float
+}
+
+type WorkloadDto {
+  membershipId: UUID!
+  displayName: String!
+  activeTickets: Int!
+}
+
+input AnalyticsFilterInput {
+  from: LocalDate
+  to: LocalDate
+  priority: TicketPriority
+  categoryId: UUID
+  status: TicketStatus
+  agentMembershipId: UUID
+  customerId: UUID
+}
+
+input KanbanFilterInput {
+  search: String
+  priority: TicketPriority
+  categoryId: UUID
+  assignedMembershipId: UUID
+  overdue: Boolean
+  includeClosed: Boolean! = false
+  page: Int
+}
+
+input TicketFilterInput {
+  statuses: [TicketStatus!]
+  priority: TicketPriority
+  categoryId: UUID
+  assignedMembershipId: UUID
+  customerId: UUID
+  createdFrom: DateTime
+  createdTo: DateTime
+  state: TicketState
+  search: String
+  sortBy: String
+  descending: Boolean! = true
+  page: Int! = 1
+  pageSize: Int! = 20
+}
+
+enum SlaCycleReason {
+  INITIAL
+  REOPENED
+}
+
+enum SlaState {
+  NOT_APPLICABLE
+  RUNNING
+  OVERDUE
+  MET
+  MISSED
+}
+
+enum TenantRole {
+  TENANT_OWNER
+  MANAGER
+  AGENT
+  CUSTOMER
+}
+
+enum TicketActivityType {
+  CREATED
+  DETAILS_UPDATED
+  PRIORITY_CHANGED
+  CATEGORY_CHANGED
+  AGENT_ASSIGNED
+  AGENT_UNASSIGNED
+  STATUS_CHANGED
+  RESOLVED
+  REOPENED
+  SLA_CYCLE_STARTED
+  SLA_CYCLE_COMPLETED
+  ATTACHMENT_ADDED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TicketState {
+  OPEN
+  FINISHED
+  OVERDUE
+  UNSTAFFED
+}
+
+enum TicketStatus {
+  OPEN
+  ASSIGNED
+  IN_PROGRESS
+  ON_HOLD
+  RESOLVED
+  CLOSED
+}
+
+"The `DateTime` scalar type represents a date and time with time zone offset information."
+scalar DateTime
+  @specifiedBy(url: "https://scalars.graphql.org/chillicream/date-time.html")
+
+"The `LocalDate` scalar type represents a date without time or time zone information."
+scalar LocalDate
+  @specifiedBy(url: "https://scalars.graphql.org/chillicream/local-date.html")
+
+"The `Long` scalar type represents a signed 64-bit integer."
+scalar Long
+  @specifiedBy(url: "https://scalars.graphql.org/chillicream/long.html")
+
+"The `UUID` scalar type represents a Universally Unique Identifier (UUID) as defined by RFC 9562."
+scalar UUID
+  @specifiedBy(url: "https://scalars.graphql.org/chillicream/uuid.html")
+
+"The purpose of the `cost` directive is to define a `weight` for GraphQL types, fields, and arguments. Static analysis can use these weights when calculating the overall cost of a query or response."
+directive @cost(
+  "The `weight` argument defines what value to add to the overall cost for every appearance, or possible appearance, of a type, field, argument, etc."
+  weight: String!
+) on
+  | SCALAR
+  | OBJECT
+  | FIELD_DEFINITION
+  | ARGUMENT_DEFINITION
+  | ENUM
+  | INPUT_FIELD_DEFINITION

@@ -1,0 +1,22 @@
+fragment BoardTicket on TicketSummaryDto {
+  id
+  displayNumber
+  title
+  priority
+  status
+  categoryName
+  customerName
+  updatedAtUtc
+  version
+  assigneeCount
+  resolutionDueAtUtc
+  isOverdue
+}
+
+query KanbanBoard($filter: KanbanFilterInput, $perColumn: Int) {
+  kanbanBoard(filter: $filter, perColumn: $perColumn) {
+    status
+    total
+    tickets { ...BoardTicket }
+  }
+}

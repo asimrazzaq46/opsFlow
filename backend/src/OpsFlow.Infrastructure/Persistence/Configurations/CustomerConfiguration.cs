@@ -19,10 +19,15 @@ internal sealed class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         b.Property(c => c.NormalizedEmail).HasMaxLength(256).IsRequired();
         b.Property(c => c.Phone).HasMaxLength(50);
 
-        b.HasOne<Tenant>().WithMany().HasForeignKey(c => c.TenantId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Tenant>()
+            .WithMany()
+            .HasForeignKey(c => c.TenantId)
+            .OnDelete(DeleteBehavior.Restrict);
         b.HasOne<User>().WithMany().HasForeignKey(c => c.UserId).OnDelete(DeleteBehavior.Restrict);
 
         b.HasIndex(c => new { c.TenantId, c.NormalizedEmail }).IsUnique();
-        b.HasIndex(c => new { c.TenantId, c.UserId }).IsUnique().HasFilter("\"UserId\" IS NOT NULL"); // a user maps to at most one contact per tenant
+        b.HasIndex(c => new { c.TenantId, c.UserId })
+            .IsUnique()
+            .HasFilter("\"UserId\" IS NOT NULL"); // a user maps to at most one contact per tenant
     }
 }

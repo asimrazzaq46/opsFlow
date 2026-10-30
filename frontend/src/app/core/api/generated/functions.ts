@@ -61,6 +61,8 @@ export type { ListMyOrganizations$Params as ListMyOrganizations$Params } from '.
 export { listMyOrganizations as listMyOrganizations } from './fn/organizations/list-my-organizations';
 export type { CreateOrganization$Params as CreateOrganization$Params } from './fn/organizations/create-organization';
 export { createOrganization as createOrganization } from './fn/organizations/create-organization';
+export type { ExportReportCsv$Params as ExportReportCsv$Params } from './fn/reports/export-report-csv';
+export { exportReportCsv as exportReportCsv } from './fn/reports/export-report-csv';
 export type { ListSlaPolicies$Params as ListSlaPolicies$Params } from './fn/sla-policies/list-sla-policies';
 export { listSlaPolicies as listSlaPolicies } from './fn/sla-policies/list-sla-policies';
 export type { CreateSlaPolicy$Params as CreateSlaPolicy$Params } from './fn/sla-policies/create-sla-policy';
@@ -79,6 +81,10 @@ export type { SetMemberStatus$Params as SetMemberStatus$Params } from './fn/tena
 export { setMemberStatus as setMemberStatus } from './fn/tenants/set-member-status';
 export type { InitializeTenantDefaults$Params as InitializeTenantDefaults$Params } from './fn/tenants/initialize-tenant-defaults';
 export { initializeTenantDefaults as initializeTenantDefaults } from './fn/tenants/initialize-tenant-defaults';
+export type { GetTenantSettings$Params as GetTenantSettings$Params } from './fn/tenants/get-tenant-settings';
+export { getTenantSettings as getTenantSettings } from './fn/tenants/get-tenant-settings';
+export type { UpdateTenantSettings$Params as UpdateTenantSettings$Params } from './fn/tenants/update-tenant-settings';
+export { updateTenantSettings as updateTenantSettings } from './fn/tenants/update-tenant-settings';
 export type { ListTicketAssignments$Params as ListTicketAssignments$Params } from './fn/tickets/list-ticket-assignments';
 export { listTicketAssignments as listTicketAssignments } from './fn/tickets/list-ticket-assignments';
 export type { AssignTicketAgents$Params as AssignTicketAgents$Params } from './fn/tickets/assign-ticket-agents';

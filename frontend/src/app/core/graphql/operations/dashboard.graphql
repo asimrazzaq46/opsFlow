@@ -1,0 +1,19 @@
+query Dashboard($filter: AnalyticsFilterInput) {
+  dashboard(filter: $filter) {
+    generatedAtUtc
+    timeZone
+    fromUtc
+    toUtc
+    grouping
+    current { openTickets unassignedTickets overdueTickets resolvedToday }
+    createdInPeriod
+    resolvedInPeriod
+    avgFirstResponseMinutes
+    firstResponseSample
+    sla { eligibleCycles met breached compliancePercent }
+    trend { periodStartUtc created resolved avgResolutionMinutes }
+    openByStatus { key count }
+    byPriority { key count }
+    workload { membershipId displayName activeTickets }
+  }
+}

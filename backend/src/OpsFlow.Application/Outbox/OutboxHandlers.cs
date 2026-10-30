@@ -22,8 +22,13 @@ public sealed class NotificationEligibility(IOpsFlowDbContext db, TicketAudience
 {
     public async Task<bool> IsEligibleAsync(Notification n, CancellationToken ct)
     {
-        var active = await db.Memberships.AsNoTracking().AnyAsync(m => m.UserId == n.UserId && m.Status == MembershipStatus.Active, ct)
-            && await db.Users.AsNoTracking().AnyAsync(u => u.Id == n.UserId && u.Status == UserStatus.Active, ct);
+        var active =
+            await db
+                .Memberships.AsNoTracking()
+                .AnyAsync(m => m.UserId == n.UserId && m.Status == MembershipStatus.Active, ct)
+            && await db
+                .Users.AsNoTracking()
+                .AnyAsync(u => u.Id == n.UserId && u.Status == UserStatus.Active, ct);
         if (!active)
         {
             return false;
@@ -34,15 +39,31 @@ public sealed class NotificationEligibility(IOpsFlowDbContext db, TicketAudience
             return true;
         }
 
-        var ticket = await db.Tickets.AsNoTracking().Where(t => t.Id == n.TicketId).Select(t => new { t.CreatedByUserId, t.CustomerId }).SingleOrDefaultAsync(ct);
+        var ticket = await db
+            .Tickets.AsNoTracking()
+            .Where(t => t.Id == n.TicketId)
+            .Select(t => new { t.CreatedByUserId, t.CustomerId })
+            .SingleOrDefaultAsync(ct);
         return ticket is not null
-            && ((await audience.StaffAsync(n.TicketId, ticket.CreatedByUserId, ct)).Contains(n.UserId) || await audience.CustomerAsync(ticket.CustomerId, ct) == n.UserId);
+            && (
+                (await audience.StaffAsync(n.TicketId, ticket.CreatedByUserId, ct)).Contains(
+                    n.UserId
+                )
+                || await audience.CustomerAsync(ticket.CustomerId, ct) == n.UserId
+            );
     }
 }
 
 /// <summary>SignalR delivery through the existing <see cref="IRealtimePublisher"/>. Payloads are rebuilt from the database; ids in the payload let clients de-duplicate a re-delivery.</summary>
-public sealed class RealtimeOutboxHandler(IOpsFlowDbContext db, NotificationEligibility eligibility, TicketAudience audience, TicketMessageMapper messages, TicketNoteMapper notes, IRealtimePublisher publisher, ITenantContext tenantContext)
-    : IOutboxChannelHandler
+public sealed class RealtimeOutboxHandler(
+    IOpsFlowDbContext db,
+    NotificationEligibility eligibility,
+    TicketAudience audience,
+    TicketMessageMapper messages,
+    TicketNoteMapper notes,
+    IRealtimePublisher publisher,
+    ITenantContext tenantContext
+) : IOutboxChannelHandler
 {
     public OutboxChannels Channel => OutboxChannels.Realtime;
 
@@ -62,7 +83,9 @@ public sealed class RealtimeOutboxHandler(IOpsFlowDbContext db, NotificationElig
                     await PublishNoteAsync(Read<TicketNoteEvent>(message), ct);
                     break;
                 default:
-                    throw new OutboxPermanentException($"Unsupported realtime event type '{message.EventType}'.");
+                    throw new OutboxPermanentException(
+                        $"Unsupported realtime event type '{message.EventType}'."
+                    );
             }
         }
         catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
@@ -73,17 +96,27 @@ public sealed class RealtimeOutboxHandler(IOpsFlowDbContext db, NotificationElig
 
     private async Task PublishNotificationAsync(NotificationEvent ev, CancellationToken ct)
     {
-        var n = await db.Notifications.AsNoTracking().SingleOrDefaultAsync(x => x.Id == ev.NotificationId, ct);
+        var n = await db
+            .Notifications.AsNoTracking()
+            .SingleOrDefaultAsync(x => x.Id == ev.NotificationId, ct);
         if (n is not null && await eligibility.IsEligibleAsync(n, ct))
         {
-            await publisher.NotifyUserAsync(n.UserId.ToString(), new NotificationCreated(NotificationService.ToDto(n)), ct);
+            await publisher.NotifyUserAsync(
+                n.UserId.ToString(),
+                new NotificationCreated(NotificationService.ToDto(n)),
+                ct
+            );
         }
     }
 
     private async Task PublishMessageAsync(TicketMessageEvent ev, CancellationToken ct)
     {
-        var ticket = await db.Tickets.AsNoTracking().SingleOrDefaultAsync(t => t.Id == ev.TicketId, ct);
-        var message = await db.TicketMessages.AsNoTracking().SingleOrDefaultAsync(m => m.Id == ev.MessageId && m.TicketId == ev.TicketId, ct);
+        var ticket = await db
+            .Tickets.AsNoTracking()
+            .SingleOrDefaultAsync(t => t.Id == ev.TicketId, ct);
+        var message = await db
+            .TicketMessages.AsNoTracking()
+            .SingleOrDefaultAsync(m => m.Id == ev.MessageId && m.TicketId == ev.TicketId, ct);
         if (ticket is null || message is null)
         {
             return;
@@ -92,17 +125,37 @@ public sealed class RealtimeOutboxHandler(IOpsFlowDbContext db, NotificationElig
         // Recipients are recomputed from the database NOW; each audience gets its own view (customers never see staff identities).
         var tenantId = tenantContext.TenantId!.Value;
         var staff = await audience.StaffAsync(ticket.Id, ticket.CreatedByUserId, ct);
-        await publisher.SendToUsersAsync(staff.ConvertAll(u => u.ToString()), new TicketMessageCreated(tenantId, ticket.Id, (await messages.MapAsync([message], false, ct))[0]), ct);
+        await publisher.SendToUsersAsync(
+            staff.ConvertAll(u => u.ToString()),
+            new TicketMessageCreated(
+                tenantId,
+                ticket.Id,
+                (await messages.MapAsync([message], false, ct))[0]
+            ),
+            ct
+        );
         if (await audience.CustomerAsync(ticket.CustomerId, ct) is { } customer)
         {
-            await publisher.SendToUsersAsync([customer.ToString()], new TicketMessageCreated(tenantId, ticket.Id, (await messages.MapAsync([message], true, ct))[0]), ct);
+            await publisher.SendToUsersAsync(
+                [customer.ToString()],
+                new TicketMessageCreated(
+                    tenantId,
+                    ticket.Id,
+                    (await messages.MapAsync([message], true, ct))[0]
+                ),
+                ct
+            );
         }
     }
 
     private async Task PublishNoteAsync(TicketNoteEvent ev, CancellationToken ct)
     {
-        var ticket = await db.Tickets.AsNoTracking().SingleOrDefaultAsync(t => t.Id == ev.TicketId, ct);
-        var note = await db.TicketNotes.AsNoTracking().SingleOrDefaultAsync(n => n.Id == ev.NoteId && n.TicketId == ev.TicketId, ct);
+        var ticket = await db
+            .Tickets.AsNoTracking()
+            .SingleOrDefaultAsync(t => t.Id == ev.TicketId, ct);
+        var note = await db
+            .TicketNotes.AsNoTracking()
+            .SingleOrDefaultAsync(n => n.Id == ev.NoteId && n.TicketId == ev.TicketId, ct);
         if (ticket is null || note is null)
         {
             return;
@@ -110,11 +163,20 @@ public sealed class RealtimeOutboxHandler(IOpsFlowDbContext db, NotificationElig
 
         // Internal notes go to STAFF only; there is no customer delivery path at all.
         var staff = await audience.StaffAsync(ticket.Id, ticket.CreatedByUserId, ct);
-        await publisher.NotifyUsersAsync(staff.ConvertAll(u => u.ToString()), new TicketNoteCreated(tenantContext.TenantId!.Value, ticket.Id, (await notes.MapAsync([note], ct))[0]), ct);
+        await publisher.NotifyUsersAsync(
+            staff.ConvertAll(u => u.ToString()),
+            new TicketNoteCreated(
+                tenantContext.TenantId!.Value,
+                ticket.Id,
+                (await notes.MapAsync([note], ct))[0]
+            ),
+            ct
+        );
     }
 
     internal static T Read<T>(OutboxMessage message) =>
-        JsonSerializer.Deserialize<T>(message.Payload) ?? throw new OutboxPermanentException($"Event {message.Id} has an unreadable payload.");
+        JsonSerializer.Deserialize<T>(message.Payload)
+        ?? throw new OutboxPermanentException($"Event {message.Id} has an unreadable payload.");
 }
 
 /// <summary>
@@ -122,8 +184,13 @@ public sealed class RealtimeOutboxHandler(IOpsFlowDbContext db, NotificationElig
 /// this channel retry with backoff; it never touches the committed business data. SMTP has an unavoidable "sent but not acknowledged"
 /// window, so a crash at that instant can send the e-mail twice.
 /// </summary>
-public sealed partial class EmailOutboxHandler(IOpsFlowDbContext db, NotificationEligibility eligibility, IEmailService email, IOptions<AppOptions> app, ILogger<EmailOutboxHandler> logger)
-    : IOutboxChannelHandler
+public sealed partial class EmailOutboxHandler(
+    IOpsFlowDbContext db,
+    NotificationEligibility eligibility,
+    IEmailService email,
+    IOptions<AppOptions> app,
+    ILogger<EmailOutboxHandler> logger
+) : IOutboxChannelHandler
 {
     public OutboxChannels Channel => OutboxChannels.Email;
 
@@ -131,35 +198,53 @@ public sealed partial class EmailOutboxHandler(IOpsFlowDbContext db, Notificatio
     {
         if (message.EventType != OutboxEvents.NotificationCreated)
         {
-            throw new OutboxPermanentException($"Unsupported e-mail event type '{message.EventType}'.");
+            throw new OutboxPermanentException(
+                $"Unsupported e-mail event type '{message.EventType}'."
+            );
         }
 
-        var n = await db.Notifications.AsNoTracking().SingleOrDefaultAsync(x => x.Id == RealtimeOutboxHandler.Read<NotificationEvent>(message).NotificationId, ct);
+        var n = await db
+            .Notifications.AsNoTracking()
+            .SingleOrDefaultAsync(
+                x => x.Id == RealtimeOutboxHandler.Read<NotificationEvent>(message).NotificationId,
+                ct
+            );
         if (n is null)
         {
             return;
         }
 
-        var recipient = await db.Users.AsNoTracking().Where(u => u.Id == n.UserId && u.Status == UserStatus.Active && u.EmailVerifiedAtUtc != null).Select(u => u.Email).SingleOrDefaultAsync(ct);
+        var recipient = await db
+            .Users.AsNoTracking()
+            .Where(u =>
+                u.Id == n.UserId && u.Status == UserStatus.Active && u.EmailVerifiedAtUtc != null
+            )
+            .Select(u => u.Email)
+            .SingleOrDefaultAsync(ct);
         if (recipient is null || !await eligibility.IsEligibleAsync(n, ct))
         {
             LogSkipped(logger, message.Id);
             return;
         }
 
-        var body = $"{n.Subject}{(n.Detail is null ? string.Empty : $" ({n.Detail})")}\n\nOpen OpsFlow to view it: {app.Value.BaseUrl}";
+        var body =
+            $"{n.Subject}{(n.Detail is null ? string.Empty : $" ({n.Detail})")}\n\nOpen OpsFlow to view it: {app.Value.BaseUrl}";
         await email.SendAsync(recipient, $"[OpsFlow] {Describe(n.Type)}: {n.Subject}", body, ct);
     }
 
-    private static string Describe(NotificationType type) => type switch
-    {
-        NotificationType.TicketAssigned => "Ticket assigned to you",
-        NotificationType.SlaWarning => "SLA deadline approaching",
-        NotificationType.SlaBreached => "SLA breached",
-        _ => type.ToString(),
-    };
+    private static string Describe(NotificationType type) =>
+        type switch
+        {
+            NotificationType.TicketAssigned => "Ticket assigned to you",
+            NotificationType.SlaWarning => "SLA deadline approaching",
+            NotificationType.SlaBreached => "SLA breached",
+            _ => type.ToString(),
+        };
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Outbox event {EventId}: e-mail skipped (recipient no longer eligible)")]
+    [LoggerMessage(
+        Level = LogLevel.Information,
+        Message = "Outbox event {EventId}: e-mail skipped (recipient no longer eligible)"
+    )]
     private static partial void LogSkipped(ILogger logger, Guid eventId);
 }
 
@@ -173,7 +258,9 @@ public sealed class CacheOutboxHandler(ITenantCache cache) : IOutboxChannelHandl
         var ev = RealtimeOutboxHandler.Read<CacheInvalidatedEvent>(message);
         if (!await cache.InvalidateAsync(message.TenantId, ev.Resource, ct))
         {
-            throw new InvalidOperationException("Cache backend unavailable; invalidation will be retried.");
+            throw new InvalidOperationException(
+                "Cache backend unavailable; invalidation will be retried."
+            );
         }
     }
 }

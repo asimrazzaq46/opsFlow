@@ -2,12 +2,6 @@ using OpsFlow.Domain.Common;
 
 namespace OpsFlow.Domain.Users;
 
-public enum UserStatus
-{
-    Active,
-    Deactivated,
-}
-
 /// <summary>Global user identity. Tenant roles live in memberships, never here.</summary>
 public sealed class User
 {
@@ -42,19 +36,26 @@ public sealed class User
 
     public bool IsLockedOut(DateTime nowUtc) => LockoutEndUtc is { } end && end > nowUtc;
 
-    public static User Create(string email, string displayName, string passwordHash, bool emailVerified, DateTime nowUtc) => new()
-    {
-        Id = Guid.NewGuid(),
-        Email = email.Trim(),
-        NormalizedEmail = EmailAddress.Normalize(email),
-        DisplayName = displayName.Trim(),
-        PasswordHash = passwordHash,
-        EmailVerifiedAtUtc = emailVerified ? nowUtc : null,
-        Status = UserStatus.Active,
-        AuthVersion = 1,
-        CreatedAtUtc = nowUtc,
-        UpdatedAtUtc = nowUtc,
-    };
+    public static User Create(
+        string email,
+        string displayName,
+        string passwordHash,
+        bool emailVerified,
+        DateTime nowUtc
+    ) =>
+        new()
+        {
+            Id = Guid.NewGuid(),
+            Email = email.Trim(),
+            NormalizedEmail = EmailAddress.Normalize(email),
+            DisplayName = displayName.Trim(),
+            PasswordHash = passwordHash,
+            EmailVerifiedAtUtc = emailVerified ? nowUtc : null,
+            Status = UserStatus.Active,
+            AuthVersion = 1,
+            CreatedAtUtc = nowUtc,
+            UpdatedAtUtc = nowUtc,
+        };
 
     public void VerifyEmail(DateTime nowUtc)
     {

@@ -2,20 +2,6 @@ using OpsFlow.Domain.Common;
 
 namespace OpsFlow.Domain.Notifications;
 
-public enum NotificationType
-{
-    TicketCreated,
-    TicketAssigned,
-    TicketUnassigned,
-    TicketStatusChanged,
-    TicketResolved,
-    TicketReopened,
-    MessageReceived,
-    NoteAdded,
-    SlaWarning, // UPDATED: Milestone 4 - automated SLA monitoring
-    SlaBreached,
-}
-
 /// <summary>
 /// One persisted notification of one user in one tenant. Carries no message or note content - only the ticket reference and a short
 /// subject - so it can never leak private text. <see cref="DedupKey"/> is unique per recipient, so retries cannot duplicate it.
@@ -43,16 +29,26 @@ public sealed class Notification : ITenantOwned
     public DateTime CreatedAtUtc { get; private set; }
     public DateTime? ReadAtUtc { get; private set; }
 
-    public static Notification Create(Guid tenantId, Guid userId, NotificationType type, Guid ticketId, string subject, string? detail, string dedupKey, DateTime nowUtc) => new()
-    {
-        Id = Guid.NewGuid(),
-        TenantId = tenantId,
-        UserId = userId,
-        Type = type,
-        TicketId = ticketId,
-        Subject = subject.Length > 200 ? subject[..200] : subject,
-        Detail = detail is { Length: > 100 } ? detail[..100] : detail,
-        DedupKey = dedupKey,
-        CreatedAtUtc = nowUtc,
-    };
+    public static Notification Create(
+        Guid tenantId,
+        Guid userId,
+        NotificationType type,
+        Guid ticketId,
+        string subject,
+        string? detail,
+        string dedupKey,
+        DateTime nowUtc
+    ) =>
+        new()
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            UserId = userId,
+            Type = type,
+            TicketId = ticketId,
+            Subject = subject.Length > 200 ? subject[..200] : subject,
+            Detail = detail is { Length: > 100 } ? detail[..100] : detail,
+            DedupKey = dedupKey,
+            CreatedAtUtc = nowUtc,
+        };
 }

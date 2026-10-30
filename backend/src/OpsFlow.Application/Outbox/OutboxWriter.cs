@@ -29,8 +29,34 @@ public sealed class OutboxWriter(IOpsFlowDbContext db, TimeProvider clock)
 {
     /// <summary>Durable backstop for cache invalidation: the dispatcher repeats it if the immediate post-commit invalidation was lost (Redis down, crash).</summary>
     public void StageCacheInvalidation(Guid tenantId, string resource) =>
-        Stage(tenantId, OutboxEvents.CacheInvalidated, null, new CacheInvalidatedEvent(resource), $"cache:{resource}:{Guid.NewGuid():N}", OutboxChannels.Cache);
+        Stage(
+            tenantId,
+            OutboxEvents.CacheInvalidated,
+            null,
+            new CacheInvalidatedEvent(resource),
+            $"cache:{resource}:{Guid.NewGuid():N}",
+            OutboxChannels.Cache
+        );
 
-    public void Stage(Guid tenantId, string eventType, Guid? aggregateId, object payload, string dedupKey, OutboxChannels channels) =>
-        db.OutboxMessages.Add(OutboxMessage.Create(tenantId, eventType, 1, aggregateId, JsonSerializer.Serialize(payload), dedupKey, channels, Activity.Current?.TraceId.ToString(), clock.GetUtcNow().UtcDateTime));
+    public void Stage(
+        Guid tenantId,
+        string eventType,
+        Guid? aggregateId,
+        object payload,
+        string dedupKey,
+        OutboxChannels channels
+    ) =>
+        db.OutboxMessages.Add(
+            OutboxMessage.Create(
+                tenantId,
+                eventType,
+                1,
+                aggregateId,
+                JsonSerializer.Serialize(payload),
+                dedupKey,
+                channels,
+                Activity.Current?.TraceId.ToString(),
+                clock.GetUtcNow().UtcDateTime
+            )
+        );
 }

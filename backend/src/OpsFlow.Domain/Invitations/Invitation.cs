@@ -20,6 +20,7 @@ public sealed class Invitation : ITenantOwned
 
     /// <summary>SHA-256 of the emailed token; the raw token is never stored.</summary>
     public string TokenHash { get; private set; }
+
     /// <summary>Inviting membership; a composite FK (TenantId, Id) guarantees it belongs to the same tenant.</summary>
     public Guid InvitedByMembershipId { get; private set; }
     public DateTime CreatedAtUtc { get; private set; }
@@ -31,7 +32,15 @@ public sealed class Invitation : ITenantOwned
     // UPDATED: normalization ab shared EmailAddress helper se (User ke saath consistent)
     public static string Normalize(string email) => EmailAddress.Normalize(email);
 
-    public static Invitation Create(Guid tenantId, string email, TenantRole role, string tokenHash, Guid invitedByMembershipId, DateTime nowUtc, TimeSpan lifetime)
+    public static Invitation Create(
+        Guid tenantId,
+        string email,
+        TenantRole role,
+        string tokenHash,
+        Guid invitedByMembershipId,
+        DateTime nowUtc,
+        TimeSpan lifetime
+    )
     {
         // UPDATED: Customer role bhi invite ho sakta hai (customer-linked ticket workflow ke liye); sirf roles ki range check hoti hai
         if (!Enum.IsDefined(role))

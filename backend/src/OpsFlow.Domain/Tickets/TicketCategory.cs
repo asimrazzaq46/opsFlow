@@ -22,16 +22,17 @@ public sealed class TicketCategory : ITenantOwned
 
     public static string Normalize(string name) => name.Trim().ToLowerInvariant();
 
-    public static TicketCategory Create(Guid tenantId, string name, DateTime nowUtc) => new()
-    {
-        Id = Guid.NewGuid(),
-        TenantId = tenantId,
-        Name = name.Trim(),
-        NormalizedName = Normalize(name),
-        IsActive = true,
-        CreatedAtUtc = nowUtc,
-        UpdatedAtUtc = nowUtc,
-    };
+    public static TicketCategory Create(Guid tenantId, string name, DateTime nowUtc) =>
+        new()
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            Name = name.Trim(),
+            NormalizedName = Normalize(name),
+            IsActive = true,
+            CreatedAtUtc = nowUtc,
+            UpdatedAtUtc = nowUtc,
+        };
 
     public void Rename(string name, DateTime nowUtc)
     {

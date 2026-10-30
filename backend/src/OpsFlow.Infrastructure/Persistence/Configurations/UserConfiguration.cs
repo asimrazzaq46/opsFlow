@@ -8,11 +8,14 @@ internal sealed class UserConfiguration : IEntityTypeConfiguration<User>
 {
     public void Configure(EntityTypeBuilder<User> b)
     {
-        b.ToTable("Users", t =>
-        {
-            t.HasCheckConstraint("CK_Users_Status", "\"Status\" IN ('Active','Deactivated')");
-            t.HasCheckConstraint("CK_Users_FailedLoginCount", "\"FailedLoginCount\" >= 0");
-        });
+        b.ToTable(
+            "Users",
+            t =>
+            {
+                t.HasCheckConstraint("CK_Users_Status", "\"Status\" IN ('Active','Deactivated')");
+                t.HasCheckConstraint("CK_Users_FailedLoginCount", "\"FailedLoginCount\" >= 0");
+            }
+        );
         b.HasKey(u => u.Id);
         b.Property(u => u.Id).ValueGeneratedNever();
         b.Property(u => u.Email).HasMaxLength(256).IsRequired();

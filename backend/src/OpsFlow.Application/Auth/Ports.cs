@@ -47,5 +47,10 @@ public sealed record RefreshTokenClaims(Guid UserId, Guid SessionId);
 public interface ISessionValidator
 {
     /// <summary>Checks on every request that the session is active, the user is active and the token's auth version is current.</summary>
-    Task<bool> IsValidAsync(Guid userId, Guid sessionId, int authVersion, CancellationToken cancellationToken);
+    Task<bool> IsValidAsync(
+        Guid userId,
+        Guid sessionId,
+        int authVersion,
+        CancellationToken cancellationToken
+    );
 }

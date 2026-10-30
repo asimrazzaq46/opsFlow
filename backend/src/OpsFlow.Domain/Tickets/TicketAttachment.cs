@@ -31,18 +31,30 @@ public sealed class TicketAttachment : ITenantOwned
     public bool IsInternal { get; private set; }
     public DateTime CreatedAtUtc { get; private set; }
 
-    public static TicketAttachment Create(Guid tenantId, Guid ticketId, Guid uploadedByUserId, string fileName, string contentType, long sizeBytes, string storageKey, string sha256, bool isInternal, DateTime nowUtc) => new()
-    {
-        Id = Guid.NewGuid(),
-        TenantId = tenantId,
-        TicketId = ticketId,
-        UploadedByUserId = uploadedByUserId,
-        FileName = fileName,
-        ContentType = contentType,
-        SizeBytes = sizeBytes,
-        StorageKey = storageKey,
-        Sha256 = sha256,
-        IsInternal = isInternal,
-        CreatedAtUtc = nowUtc,
-    };
+    public static TicketAttachment Create(
+        Guid tenantId,
+        Guid ticketId,
+        Guid uploadedByUserId,
+        string fileName,
+        string contentType,
+        long sizeBytes,
+        string storageKey,
+        string sha256,
+        bool isInternal,
+        DateTime nowUtc
+    ) =>
+        new()
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            TicketId = ticketId,
+            UploadedByUserId = uploadedByUserId,
+            FileName = fileName,
+            ContentType = contentType,
+            SizeBytes = sizeBytes,
+            StorageKey = storageKey,
+            Sha256 = sha256,
+            IsInternal = isInternal,
+            CreatedAtUtc = nowUtc,
+        };
 }

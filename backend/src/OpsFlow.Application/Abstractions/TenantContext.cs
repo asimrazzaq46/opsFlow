@@ -23,7 +23,10 @@ public sealed class TenantContext : ITenantContext
         return new Restore(this, previous);
     }
 
-    private sealed class Restore(TenantContext owner, (Guid? TenantId, Guid? MembershipId, TenantRole? Role) previous) : IDisposable
+    private sealed class Restore(
+        TenantContext owner,
+        (Guid? TenantId, Guid? MembershipId, TenantRole? Role) previous
+    ) : IDisposable
     {
         public void Dispose() => (owner.TenantId, owner.MembershipId, owner.Role) = previous;
     }

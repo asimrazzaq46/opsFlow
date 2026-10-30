@@ -21,11 +21,16 @@ public sealed class ActorAccess(IOpsFlowDbContext db, ITenantContext tenantConte
         var actorId = tenantContext.MembershipId;
         TenantRole? role = actorId is null
             ? null
-            : await db.Memberships
-                .Where(m => m.Id == actorId && m.Status == MembershipStatus.Active && db.Users.Any(u => u.Id == m.UserId && u.Status == UserStatus.Active))
+            : await db
+                .Memberships.Where(m =>
+                    m.Id == actorId
+                    && m.Status == MembershipStatus.Active
+                    && db.Users.Any(u => u.Id == m.UserId && u.Status == UserStatus.Active)
+                )
                 .Select(m => (TenantRole?)m.Role)
                 .SingleOrDefaultAsync(ct);
-        return role ?? throw AppException.Forbidden("Your access to this organization is no longer valid.");
+        return role
+            ?? throw AppException.Forbidden("Your access to this organization is no longer valid.");
     }
 
     /// <summary>
@@ -33,9 +38,14 @@ public sealed class ActorAccess(IOpsFlowDbContext db, ITenantContext tenantConte
     /// current role. Until the caller commits or disposes, no demotion/suspension/deactivation of those rows can commit, so authorization
     /// is valid at the commit boundary. The caller commits.
     /// </summary>
-    public async Task<(IDbContextTransaction Transaction, TenantRole Role)> BeginAuthorizedAsync(IReadOnlyCollection<Guid>? alsoLock, CancellationToken ct)
+    public async Task<(IDbContextTransaction Transaction, TenantRole Role)> BeginAuthorizedAsync(
+        IReadOnlyCollection<Guid>? alsoLock,
+        CancellationToken ct
+    )
     {
-        var actorId = tenantContext.MembershipId ?? throw AppException.Forbidden("Your access to this organization is no longer valid.");
+        var actorId =
+            tenantContext.MembershipId
+            ?? throw AppException.Forbidden("Your access to this organization is no longer valid.");
         var transaction = await db.BeginTransactionAsync(ct);
         try
         {
@@ -58,7 +68,10 @@ public sealed class ActorAccess(IOpsFlowDbContext db, ITenantContext tenantConte
     }
 
     /// <summary>Owner/Manager-only mutation: an authorized transaction that is rejected (and rolled back) for everybody else.</summary>
-    public async Task<IDbContextTransaction> BeginManagerAsync(string forbiddenMessage, CancellationToken ct)
+    public async Task<IDbContextTransaction> BeginManagerAsync(
+        string forbiddenMessage,
+        CancellationToken ct
+    )
     {
         var (transaction, role) = await BeginAuthorizedAsync(null, ct);
         if (role is not (TenantRole.TenantOwner or TenantRole.Manager))
@@ -82,8 +95,13 @@ public sealed class ActorAccess(IOpsFlowDbContext db, ITenantContext tenantConte
 public static class MembershipQueries
 {
     /// <summary>Owners that actually count: ACTIVE membership AND active user account (a deactivated Owner is not usable).</summary>
-    public static IQueryable<Membership> UsableOwners(this IOpsFlowDbContext db, bool allTenants = false) =>
-        (allTenants ? db.Memberships.IgnoreQueryFilters() : db.Memberships)
-            .Where(m => m.Role == TenantRole.TenantOwner && m.Status == MembershipStatus.Active
-                && db.Users.Any(u => u.Id == m.UserId && u.Status == UserStatus.Active));
+    public static IQueryable<Membership> UsableOwners(
+        this IOpsFlowDbContext db,
+        bool allTenants = false
+    ) =>
+        (allTenants ? db.Memberships.IgnoreQueryFilters() : db.Memberships).Where(m =>
+            m.Role == TenantRole.TenantOwner
+            && m.Status == MembershipStatus.Active
+            && db.Users.Any(u => u.Id == m.UserId && u.Status == UserStatus.Active)
+        );
 }

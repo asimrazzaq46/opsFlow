@@ -19,13 +19,31 @@ internal sealed class NotificationConfiguration : IEntityTypeConfiguration<Notif
         b.Property(n => n.Detail).HasMaxLength(100);
         b.Property(n => n.DedupKey).HasMaxLength(100).IsRequired();
 
-        b.HasOne<Tenant>().WithMany().HasForeignKey(n => n.TenantId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Tenant>()
+            .WithMany()
+            .HasForeignKey(n => n.TenantId)
+            .OnDelete(DeleteBehavior.Restrict);
         b.HasOne<User>().WithMany().HasForeignKey(n => n.UserId).OnDelete(DeleteBehavior.Restrict);
-        b.HasOne<Ticket>().WithMany().HasForeignKey(n => new { n.TenantId, n.TicketId })
-            .HasPrincipalKey(t => new { t.TenantId, t.Id }).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Ticket>()
+            .WithMany()
+            .HasForeignKey(n => new { n.TenantId, n.TicketId })
+            .HasPrincipalKey(t => new { t.TenantId, t.Id })
+            .OnDelete(DeleteBehavior.Restrict);
 
-        b.HasIndex(n => new { n.TenantId, n.UserId, n.DedupKey }).IsUnique(); // retries/concurrent writers cannot duplicate
-        b.HasIndex(n => new { n.TenantId, n.UserId, n.CreatedAtUtc, n.Id }); // history paging
+        b.HasIndex(n => new
+            {
+                n.TenantId,
+                n.UserId,
+                n.DedupKey,
+            })
+            .IsUnique(); // retries/concurrent writers cannot duplicate
+        b.HasIndex(n => new
+        {
+            n.TenantId,
+            n.UserId,
+            n.CreatedAtUtc,
+            n.Id,
+        }); // history paging
         b.HasIndex(n => new { n.TenantId, n.UserId }).HasFilter("\"ReadAtUtc\" IS NULL"); // unread count
     }
 }

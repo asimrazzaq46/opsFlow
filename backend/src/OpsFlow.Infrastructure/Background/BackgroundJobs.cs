@@ -39,7 +39,11 @@ public sealed class BackgroundOptions
 }
 
 // Recurring jobs re-run on their own schedule, so Hangfire's automatic retry would only pile up duplicates of a failing run.
-public sealed class OutboxDispatchJob(OutboxDispatcher dispatcher, IOptions<OutboxOptions> outbox, IOptions<BackgroundOptions> background)
+public sealed class OutboxDispatchJob(
+    OutboxDispatcher dispatcher,
+    IOptions<OutboxOptions> outbox,
+    IOptions<BackgroundOptions> background
+)
 {
     [AutomaticRetry(Attempts = 0)]
     public async Task RunAsync(CancellationToken cancellationToken)
@@ -57,11 +61,17 @@ public sealed class OutboxDispatchJob(OutboxDispatcher dispatcher, IOptions<Outb
 public sealed class SlaScanJob(SlaMonitor monitor)
 {
     [AutomaticRetry(Attempts = 0)]
-    public Task RunAsync(CancellationToken cancellationToken) => monitor.ScanAsync(cancellationToken);
+    public Task RunAsync(CancellationToken cancellationToken) =>
+        monitor.ScanAsync(cancellationToken);
 }
 
 /// <summary>Deletes old COMPLETED events (bounded) and reports the unfinished/dead-letter backlog. Dead letters are never deleted automatically.</summary>
-public sealed partial class OutboxMaintenanceJob(IOpsFlowDbContext db, IOptions<OutboxOptions> options, TimeProvider clock, ILogger<OutboxMaintenanceJob> logger)
+public sealed partial class OutboxMaintenanceJob(
+    IOpsFlowDbContext db,
+    IOptions<OutboxOptions> options,
+    TimeProvider clock,
+    ILogger<OutboxMaintenanceJob> logger
+)
 {
     private const int DeleteBatch = 1000;
 
@@ -72,14 +82,34 @@ public sealed partial class OutboxMaintenanceJob(IOpsFlowDbContext db, IOptions<
         int deleted;
         do
         {
-            var ids = await db.OutboxMessages.Where(m => m.Status == OutboxStatus.Completed && m.ProcessedAtUtc < cutoff).OrderBy(m => m.ProcessedAtUtc).Select(m => m.Id).Take(DeleteBatch).ToListAsync(cancellationToken);
-            deleted = ids.Count == 0 ? 0 : await db.OutboxMessages.Where(m => ids.Contains(m.Id)).ExecuteDeleteAsync(cancellationToken);
-        }
-        while (deleted == DeleteBatch);
+            var ids = await db
+                .OutboxMessages.Where(m =>
+                    m.Status == OutboxStatus.Completed && m.ProcessedAtUtc < cutoff
+                )
+                .OrderBy(m => m.ProcessedAtUtc)
+                .Select(m => m.Id)
+                .Take(DeleteBatch)
+                .ToListAsync(cancellationToken);
+            deleted =
+                ids.Count == 0
+                    ? 0
+                    : await db
+                        .OutboxMessages.Where(m => ids.Contains(m.Id))
+                        .ExecuteDeleteAsync(cancellationToken);
+        } while (deleted == DeleteBatch);
 
-        var pending = await db.OutboxMessages.CountAsync(m => m.Status == OutboxStatus.Pending || m.Status == OutboxStatus.Claimed, cancellationToken);
-        var retrying = await db.OutboxMessages.CountAsync(m => m.Status == OutboxStatus.RetryScheduled, cancellationToken);
-        var dead = await db.OutboxMessages.CountAsync(m => m.Status == OutboxStatus.DeadLetter, cancellationToken);
+        var pending = await db.OutboxMessages.CountAsync(
+            m => m.Status == OutboxStatus.Pending || m.Status == OutboxStatus.Claimed,
+            cancellationToken
+        );
+        var retrying = await db.OutboxMessages.CountAsync(
+            m => m.Status == OutboxStatus.RetryScheduled,
+            cancellationToken
+        );
+        var dead = await db.OutboxMessages.CountAsync(
+            m => m.Status == OutboxStatus.DeadLetter,
+            cancellationToken
+        );
         if (dead > 0)
         {
             LogDeadLetters(logger, pending, retrying, dead);
@@ -90,9 +120,15 @@ public sealed partial class OutboxMaintenanceJob(IOpsFlowDbContext db, IOptions<
         }
     }
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Outbox backlog: {Pending} pending, {Retrying} retrying, 0 dead letters")]
+    [LoggerMessage(
+        Level = LogLevel.Information,
+        Message = "Outbox backlog: {Pending} pending, {Retrying} retrying, 0 dead letters"
+    )]
     private static partial void LogStats(ILogger logger, int pending, int retrying);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Outbox backlog: {Pending} pending, {Retrying} retrying, {Dead} DEAD LETTER(S) need operator attention")]
+    [LoggerMessage(
+        Level = LogLevel.Warning,
+        Message = "Outbox backlog: {Pending} pending, {Retrying} retrying, {Dead} DEAD LETTER(S) need operator attention"
+    )]
     private static partial void LogDeadLetters(ILogger logger, int pending, int retrying, int dead);
 }

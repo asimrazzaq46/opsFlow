@@ -159,4 +159,25 @@ public class RealtimeTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Empty(otherOwner.Events);
         Assert.Equal(HttpStatusCode.Forbidden, (await b.Owner.GetAsync(a.Url($"tickets/{ticket.Id}/messages"))).StatusCode);
     }
+
+    // UPDATED: Milestone 5 hardening - lifecycle notifications (outbox -> realtime) are tenant scoped too
+    [Fact]
+    public async Task Ticket_lifecycle_notifications_never_reach_another_tenants_staff()
+    {
+        var a = await TicketWorld.CreateAsync(factory);
+        var b = await TicketWorld.CreateAsync(factory);
+        await using var otherManager = await ConnectAsync(b.Manager);
+        await using var otherOwner = await ConnectAsync(b.Owner);
+        await using var control = await ConnectAsync(a.Manager);
+
+        var ticket = await a.CreateTicketAsync(a.Customer);
+        await a.AssignAsync(ticket.Id, a.Agent1Membership);
+        await a.MoveAsync(a.Manager, ticket.Id, "InProgress");
+        await factory.DrainOutboxAsync();
+
+        Assert.True(await control.WaitForAsync(e => e.Name == "notification.created"));
+        await Task.Delay(300);
+        Assert.Empty(otherManager.Events);
+        Assert.Empty(otherOwner.Events);
+    }
 }

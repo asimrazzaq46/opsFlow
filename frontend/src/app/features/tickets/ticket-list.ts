@@ -13,7 +13,10 @@ const PAGE_SIZE = 20;
   imports: [RouterLink, TranslatePipe, DatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <h1 class="text-2xl font-bold tracking-tight">{{ 'tickets.title' | translate }}</h1>
+    <div class="flex items-center justify-between gap-3">
+      <h1 class="text-2xl font-bold tracking-tight">{{ 'tickets.title' | translate }}</h1>
+      <a routerLink="/tickets/new" class="rounded-lg bg-brand px-3 py-1.5 text-sm font-semibold text-brand-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">{{ 'tickets.new' | translate }}</a>
+    </div>
     <div class="mt-6" aria-live="polite">
       @if (!tenant.tenantId()) {
         <p class="text-muted">{{ (tenant.loading() ? 'common.loading' : 'tenant.none') | translate }}</p>

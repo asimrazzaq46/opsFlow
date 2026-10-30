@@ -248,7 +248,7 @@ public class ApiContractTests(ApiFactory factory) : IClassFixture<ApiFactory>
             .Where(e => e.RoutePattern.RawText!.StartsWith("api/", StringComparison.Ordinal)).ToList();
         string[] anonymous = ["GetHealth", "Register", "ConfirmEmail", "ResendConfirmation", "Login", "RefreshSession", "Logout", "ForgotPassword", "ResetPassword"];
 
-        Assert.Equal(61, endpoints.Count); // UPDATED: 50 purane operations + 11 Milestone 3 (messages 2, notes 2, attachments 3, notifications 4)
+        Assert.Equal(64, endpoints.Count); // UPDATED: 50 purane + 11 Milestone 3 (messages 2, notes 2, attachments 3, notifications 4) + 3 Milestone 5 (ExportReportCsv, GetTenantSettings, UpdateTenantSettings; GraphQL alag endpoint hai)
         Assert.All(endpoints, e => Assert.NotNull(e.Metadata.GetMetadata<ControllerActionDescriptor>())); // no Minimal API mapping left
         var routes = endpoints.Select(e => $"{e.Metadata.GetMetadata<HttpMethodMetadata>()!.HttpMethods.Single()} {e.RoutePattern.RawText!.TrimEnd('/')}").ToList();
         Assert.Equal(routes.Count, routes.Distinct().Count()); // no ambiguous routes

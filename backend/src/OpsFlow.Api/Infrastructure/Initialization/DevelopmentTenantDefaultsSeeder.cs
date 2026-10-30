@@ -15,12 +15,17 @@ public sealed partial class DevelopmentTenantDefaultsSeeder(
     TenantDefaultsService defaults,
     ITenantContext tenantContext,
     IOptions<DevelopmentSeedOptions> options,
-    ILogger<DevelopmentTenantDefaultsSeeder> logger) : IDevelopmentSeeder
+    ILogger<DevelopmentTenantDefaultsSeeder> logger
+) : IDevelopmentSeeder
 {
     public async Task SeedAsync(CancellationToken cancellationToken)
     {
         var name = options.Value.OrganizationName;
-        var tenantId = await db.Tenants.IgnoreQueryFilters().Where(t => t.Name == name).Select(t => (Guid?)t.Id).FirstOrDefaultAsync(cancellationToken);
+        var tenantId = await db
+            .Tenants.IgnoreQueryFilters()
+            .Where(t => t.Name == name)
+            .Select(t => (Guid?)t.Id)
+            .FirstOrDefaultAsync(cancellationToken);
         if (tenantId is null)
         {
             return;
@@ -31,6 +36,9 @@ public sealed partial class DevelopmentTenantDefaultsSeeder(
         LogEnsured(logger, name, added);
     }
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Development tenant '{Name}' ticket defaults ensured ({Added} records added)")]
+    [LoggerMessage(
+        Level = LogLevel.Information,
+        Message = "Development tenant '{Name}' ticket defaults ensured ({Added} records added)"
+    )]
     private static partial void LogEnsured(ILogger logger, string name, int added);
 }

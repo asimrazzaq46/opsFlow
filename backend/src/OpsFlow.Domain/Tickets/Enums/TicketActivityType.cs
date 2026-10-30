@@ -1,23 +1,5 @@
 namespace OpsFlow.Domain.Tickets;
 
-public enum TicketStatus
-{
-    Open,
-    Assigned,
-    InProgress,
-    OnHold,
-    Resolved,
-    Closed,
-}
-
-public enum TicketPriority
-{
-    Low,
-    Medium,
-    High,
-    Urgent,
-}
-
 public enum TicketActivityType
 {
     Created,
@@ -32,19 +14,4 @@ public enum TicketActivityType
     SlaCycleStarted,
     SlaCycleCompleted,
     AttachmentAdded, // UPDATED: staff-only timeline entry (file name kabhi copy nahi hota)
-}
-
-public enum SlaCycleReason
-{
-    Initial,
-    Reopened,
-}
-
-public enum SlaState
-{
-    NotApplicable,
-    Running,
-    Overdue,
-    Met,
-    Missed,
 }

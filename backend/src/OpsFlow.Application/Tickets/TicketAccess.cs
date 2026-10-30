@@ -22,7 +22,12 @@ public sealed record TicketActor(Guid UserId, Guid MembershipId, TenantRole Role
 /// Owner/Manager see the whole tenant; an Agent sees tickets assigned to them or created by them; a Customer sees only tickets
 /// of the contact that is explicitly linked to their user account.
 /// </summary>
-public sealed class TicketAccess(ActorAccess actorAccess, ICurrentUser currentUser, ITenantContext tenantContext, IOpsFlowDbContext db)
+public sealed class TicketAccess(
+    ActorAccess actorAccess,
+    ICurrentUser currentUser,
+    ITenantContext tenantContext,
+    IOpsFlowDbContext db
+)
 {
     public async Task<TicketActor> ResolveAsync(CancellationToken ct)
     {
@@ -31,12 +36,18 @@ public sealed class TicketAccess(ActorAccess actorAccess, ICurrentUser currentUs
     }
 
     /// <summary>Authorized mutation transaction (see <see cref="ActorAccess.BeginAuthorizedAsync"/>); extra memberships (e.g. assignees) are locked and re-validated too.</summary>
-    public async Task<(IDbContextTransaction Transaction, TicketActor Actor)> BeginAuthorizedAsync(IReadOnlyCollection<Guid>? alsoLock, CancellationToken ct)
+    public async Task<(IDbContextTransaction Transaction, TicketActor Actor)> BeginAuthorizedAsync(
+        IReadOnlyCollection<Guid>? alsoLock,
+        CancellationToken ct
+    )
     {
         var (transaction, role) = await actorAccess.BeginAuthorizedAsync(alsoLock, ct);
         try
         {
-            return (transaction, new TicketActor(currentUser.UserId, tenantContext.MembershipId!.Value, role));
+            return (
+                transaction,
+                new TicketActor(currentUser.UserId, tenantContext.MembershipId!.Value, role)
+            );
         }
         catch
         {
@@ -50,20 +61,46 @@ public sealed class TicketAccess(ActorAccess actorAccess, ICurrentUser currentUs
     /// deactivated or re-roled agents keep their history row but no longer count as ticket owners.
     /// </summary>
     public IQueryable<TicketAssignment> EffectiveAssignments() =>
-        db.TicketAssignments.Where(a => a.UnassignedAtUtc == null
-            && db.Memberships.Any(m => m.Id == a.MembershipId && m.Role == TenantRole.Agent && m.Status == MembershipStatus.Active
-                && db.Users.Any(u => u.Id == m.UserId && u.Status == UserStatus.Active)));
+        db.TicketAssignments.Where(a =>
+            a.UnassignedAtUtc == null
+            && db.Memberships.Any(m =>
+                m.Id == a.MembershipId
+                && m.Role == TenantRole.Agent
+                && m.Status == MembershipStatus.Active
+                && db.Users.Any(u => u.Id == m.UserId && u.Status == UserStatus.Active)
+            )
+        );
 
-    public IQueryable<Ticket> Visible(TicketActor actor) => actor.Role switch
-    {
-        TenantRole.TenantOwner or TenantRole.Manager => db.Tickets,
-        TenantRole.Agent => db.Tickets.Where(t => t.CreatedByUserId == actor.UserId
-            || db.TicketAssignments.Any(a => a.TicketId == t.Id && a.MembershipId == actor.MembershipId && a.UnassignedAtUtc == null)),
-        _ => db.Tickets.Where(t => t.CustomerId != null && db.Customers.Any(c => c.Id == t.CustomerId && c.UserId == actor.UserId)),
-    };
+    public IQueryable<Ticket> Visible(TicketActor actor) =>
+        actor.Role switch
+        {
+            TenantRole.TenantOwner or TenantRole.Manager => db.Tickets,
+            TenantRole.Agent => db.Tickets.Where(t =>
+                t.CreatedByUserId == actor.UserId
+                || db.TicketAssignments.Any(a =>
+                    a.TicketId == t.Id
+                    && a.MembershipId == actor.MembershipId
+                    && a.UnassignedAtUtc == null
+                )
+            ),
+            _ => db.Tickets.Where(t =>
+                t.CustomerId != null
+                && db.Customers.Any(c => c.Id == t.CustomerId && c.UserId == actor.UserId)
+            ),
+        };
 
-    public Task<bool> IsActiveAssigneeAsync(Guid ticketId, Guid membershipId, CancellationToken ct) =>
-        db.TicketAssignments.AnyAsync(a => a.TicketId == ticketId && a.MembershipId == membershipId && a.UnassignedAtUtc == null, ct);
+    public Task<bool> IsActiveAssigneeAsync(
+        Guid ticketId,
+        Guid membershipId,
+        CancellationToken ct
+    ) =>
+        db.TicketAssignments.AnyAsync(
+            a =>
+                a.TicketId == ticketId
+                && a.MembershipId == membershipId
+                && a.UnassignedAtUtc == null,
+            ct
+        );
 
     /// <summary>
     /// UPDATED: messages/notes ka agla per-ticket sequence. ExecuteUpdate ticket row par lock leta hai (commit tak), is liye concurrent writers
@@ -71,22 +108,42 @@ public sealed class TicketAccess(ActorAccess actorAccess, ICurrentUser currentUs
     /// </summary>
     public async Task<int> NextMessageSequenceAsync(Guid ticketId, CancellationToken ct)
     {
-        var rows = await db.Tickets.Where(t => t.Id == ticketId).ExecuteUpdateAsync(s => s.SetProperty(t => t.MessageSequence, t => t.MessageSequence + 1), ct);
+        var rows = await db
+            .Tickets.Where(t => t.Id == ticketId)
+            .ExecuteUpdateAsync(
+                s => s.SetProperty(t => t.MessageSequence, t => t.MessageSequence + 1),
+                ct
+            );
         return rows == 1
-            ? await db.Tickets.AsNoTracking().Where(t => t.Id == ticketId).Select(t => t.MessageSequence).SingleAsync(ct)
+            ? await db
+                .Tickets.AsNoTracking()
+                .Where(t => t.Id == ticketId)
+                .Select(t => t.MessageSequence)
+                .SingleAsync(ct)
             : throw AppException.NotFound("Ticket not found.");
     }
 
     /// <summary>Every agent must be an ACTIVE Agent membership of THIS tenant whose user account is active.</summary>
-    public async Task<List<Guid>> RequireEligibleAgentsAsync(IReadOnlyCollection<Guid> membershipIds, CancellationToken ct)
+    public async Task<List<Guid>> RequireEligibleAgentsAsync(
+        IReadOnlyCollection<Guid> membershipIds,
+        CancellationToken ct
+    )
     {
         var distinct = membershipIds.Distinct().ToList();
-        var eligible = await db.Memberships.AsNoTracking()
-            .Where(m => distinct.Contains(m.Id) && m.Role == TenantRole.Agent && m.Status == MembershipStatus.Active
-                && db.Users.Any(u => u.Id == m.UserId && u.Status == UserStatus.Active))
-            .Select(m => m.Id).ToListAsync(ct);
+        var eligible = await db
+            .Memberships.AsNoTracking()
+            .Where(m =>
+                distinct.Contains(m.Id)
+                && m.Role == TenantRole.Agent
+                && m.Status == MembershipStatus.Active
+                && db.Users.Any(u => u.Id == m.UserId && u.Status == UserStatus.Active)
+            )
+            .Select(m => m.Id)
+            .ToListAsync(ct);
         return eligible.Count == distinct.Count && distinct.Count > 0
             ? eligible
-            : throw AppException.BadRequest("Every assignee must be an active Agent of this organization.");
+            : throw AppException.BadRequest(
+                "Every assignee must be an active Agent of this organization."
+            );
     }
 }

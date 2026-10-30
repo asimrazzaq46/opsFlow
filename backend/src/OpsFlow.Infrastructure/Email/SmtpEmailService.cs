@@ -24,17 +24,29 @@ public sealed class SmtpOptions
 
 internal sealed class SmtpEmailService(IOptions<SmtpOptions> options) : IEmailService
 {
-    public async Task SendAsync(string recipient, string subject, string body, CancellationToken cancellationToken)
+    public async Task SendAsync(
+        string recipient,
+        string subject,
+        string body,
+        CancellationToken cancellationToken
+    )
     {
         var o = options.Value;
         var timeout = TimeSpan.FromSeconds(Math.Clamp(o.TimeoutSeconds, 1, 300));
-        using var client = new SmtpClient(o.Host, o.Port) { EnableSsl = o.EnableSsl, Timeout = (int)timeout.TotalMilliseconds };
+        using var client = new SmtpClient(o.Host, o.Port)
+        {
+            EnableSsl = o.EnableSsl,
+            Timeout = (int)timeout.TotalMilliseconds,
+        };
         if (!string.IsNullOrEmpty(o.UserName))
         {
             client.Credentials = new NetworkCredential(o.UserName, o.Password);
         }
 
-        using var message = new MailMessage(new MailAddress(o.FromAddress, o.FromName), new MailAddress(recipient))
+        using var message = new MailMessage(
+            new MailAddress(o.FromAddress, o.FromName),
+            new MailAddress(recipient)
+        )
         {
             Subject = subject,
             Body = body,

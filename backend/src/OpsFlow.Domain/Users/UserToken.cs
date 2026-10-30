@@ -1,11 +1,5 @@
 namespace OpsFlow.Domain.Users;
 
-public enum UserTokenPurpose
-{
-    EmailVerification,
-    PasswordReset,
-}
-
 /// <summary>Single-use, expiring token (email verification, password reset). Only its SHA-256 hash is stored.</summary>
 public sealed class UserToken
 {
@@ -24,15 +18,22 @@ public sealed class UserToken
     /// <summary>Concurrency token: two concurrent uses of the same token cannot both succeed.</summary>
     public DateTime? UsedAtUtc { get; private set; }
 
-    public static UserToken Create(Guid userId, UserTokenPurpose purpose, string tokenHash, DateTime nowUtc, TimeSpan lifetime) => new()
-    {
-        Id = Guid.NewGuid(),
-        UserId = userId,
-        Purpose = purpose,
-        TokenHash = tokenHash,
-        CreatedAtUtc = nowUtc,
-        ExpiresAtUtc = nowUtc + lifetime,
-    };
+    public static UserToken Create(
+        Guid userId,
+        UserTokenPurpose purpose,
+        string tokenHash,
+        DateTime nowUtc,
+        TimeSpan lifetime
+    ) =>
+        new()
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            Purpose = purpose,
+            TokenHash = tokenHash,
+            CreatedAtUtc = nowUtc,
+            ExpiresAtUtc = nowUtc + lifetime,
+        };
 
     public bool IsUsable(DateTime nowUtc) => UsedAtUtc is null && ExpiresAtUtc > nowUtc;
 

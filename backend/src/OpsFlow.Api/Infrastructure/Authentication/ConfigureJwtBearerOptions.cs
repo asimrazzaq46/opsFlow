@@ -1,5 +1,5 @@
-using System.Security.Claims;
 using System.Globalization;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -14,9 +14,14 @@ namespace OpsFlow.Api.Infrastructure.Authentication;
 /// JWT bearer validation. The token proves WHO and WHICH SESSION only; on every request the database is asked whether
 /// that session, user and auth version are still valid, and tenant access is decided separately by the membership policies.
 /// </summary>
-internal sealed class ConfigureJwtBearerOptions(IOptions<AuthOptions> auth, IOptions<RealtimeOptions> realtime, TimeProvider clock) : IConfigureNamedOptions<JwtBearerOptions>
+internal sealed class ConfigureJwtBearerOptions(
+    IOptions<AuthOptions> auth,
+    IOptions<RealtimeOptions> realtime,
+    TimeProvider clock
+) : IConfigureNamedOptions<JwtBearerOptions>
 {
-    public void Configure(JwtBearerOptions options) => Configure(JwtBearerDefaults.AuthenticationScheme, options);
+    public void Configure(JwtBearerOptions options) =>
+        Configure(JwtBearerDefaults.AuthenticationScheme, options);
 
     public void Configure(string? name, JwtBearerOptions options)
     {
@@ -35,7 +40,10 @@ internal sealed class ConfigureJwtBearerOptions(IOptions<AuthOptions> auth, IOpt
         {
             OnMessageReceived = context =>
             {
-                if (string.IsNullOrEmpty(context.Token) && context.HttpContext.HubAccessToken(hubPath) is { } token)
+                if (
+                    string.IsNullOrEmpty(context.Token)
+                    && context.HttpContext.HubAccessToken(hubPath) is { } token
+                )
                 {
                     context.Token = token;
                 }
@@ -53,7 +61,8 @@ internal sealed class ConfigureJwtBearerOptions(IOptions<AuthOptions> auth, IOpt
         context.HttpContext.Items[ProblemDetailsSetup.CodeItem] = context.AuthenticateFailure switch
         {
             null => "AUTH_TOKEN_MISSING",
-            SecurityTokenExpiredException or SecurityTokenInvalidLifetimeException => "AUTH_TOKEN_EXPIRED", // custom LifetimeValidator => InvalidLifetime
+            SecurityTokenExpiredException or SecurityTokenInvalidLifetimeException =>
+                "AUTH_TOKEN_EXPIRED", // custom LifetimeValidator => InvalidLifetime
             _ => "AUTH_TOKEN_INVALID",
         };
         return Task.CompletedTask;
@@ -69,16 +78,30 @@ internal sealed class ConfigureJwtBearerOptions(IOptions<AuthOptions> auth, IOpt
             return;
         }
 
-        if (!Guid.TryParse(principal.FindFirstValue(AuthClaims.Subject), out var userId)
+        if (
+            !Guid.TryParse(principal.FindFirstValue(AuthClaims.Subject), out var userId)
             || !Guid.TryParse(principal.FindFirstValue(AuthClaims.SessionId), out var sessionId)
-            || !int.TryParse(principal.FindFirstValue(AuthClaims.AuthVersion), NumberStyles.Integer, CultureInfo.InvariantCulture, out var authVersion))
+            || !int.TryParse(
+                principal.FindFirstValue(AuthClaims.AuthVersion),
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out var authVersion
+            )
+        )
         {
             context.Fail("The access token is missing required claims.");
             return;
         }
 
         var validator = context.HttpContext.RequestServices.GetRequiredService<ISessionValidator>();
-        if (!await validator.IsValidAsync(userId, sessionId, authVersion, context.HttpContext.RequestAborted))
+        if (
+            !await validator.IsValidAsync(
+                userId,
+                sessionId,
+                authVersion,
+                context.HttpContext.RequestAborted
+            )
+        )
         {
             context.Fail("The session is no longer valid.");
         }
