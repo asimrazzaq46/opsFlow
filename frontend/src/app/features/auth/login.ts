@@ -54,7 +54,7 @@ export class Login {
     this.auth.login(email, password).subscribe({
       next: () => {
         this.tenant.load();
-        void this.router.navigateByUrl('/tickets');
+        void this.router.navigateByUrl('/dashboard');
       },
       error: () => {
         this.error.set(true);

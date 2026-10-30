@@ -15,15 +15,21 @@ internal sealed class Pbkdf2PasswordHasher(IOptions<AuthOptions> options) : IPas
     private const int HashSize = 32;
     private const int MaxAcceptedIterations = 5_000_000; // a corrupted/hostile stored value must not become a CPU DoS
 
-    private readonly Lazy<string> _dummyHash = new(() => CreateHash("dummy-password-for-timing", options.Value.Password.Iterations));
+    private readonly Lazy<string> _dummyHash = new(() =>
+        CreateHash("dummy-password-for-timing", options.Value.Password.Iterations)
+    );
 
     public string Hash(string password) => CreateHash(password, options.Value.Password.Iterations);
 
     public bool Verify(string hash, string password)
     {
         var parts = hash.Split('.');
-        if (parts.Length != 5 || $"{parts[0]}.{parts[1]}" != Prefix
-            || !int.TryParse(parts[2], out var iterations) || iterations is < 1 or > MaxAcceptedIterations)
+        if (
+            parts.Length != 5
+            || $"{parts[0]}.{parts[1]}" != Prefix
+            || !int.TryParse(parts[2], out var iterations)
+            || iterations is < 1 or > MaxAcceptedIterations
+        )
         {
             return false;
         }
@@ -32,7 +38,13 @@ internal sealed class Pbkdf2PasswordHasher(IOptions<AuthOptions> options) : IPas
         {
             var salt = Convert.FromBase64String(parts[3]);
             var expected = Convert.FromBase64String(parts[4]);
-            var actual = Rfc2898DeriveBytes.Pbkdf2(password, salt, iterations, HashAlgorithmName.SHA512, expected.Length);
+            var actual = Rfc2898DeriveBytes.Pbkdf2(
+                password,
+                salt,
+                iterations,
+                HashAlgorithmName.SHA512,
+                expected.Length
+            );
             return CryptographicOperations.FixedTimeEquals(actual, expected);
         }
         catch (FormatException)
@@ -42,14 +54,21 @@ internal sealed class Pbkdf2PasswordHasher(IOptions<AuthOptions> options) : IPas
     }
 
     public bool NeedsRehash(string hash) =>
-        !int.TryParse(hash.Split('.').ElementAtOrDefault(2), out var iterations) || iterations < options.Value.Password.Iterations;
+        !int.TryParse(hash.Split('.').ElementAtOrDefault(2), out var iterations)
+        || iterations < options.Value.Password.Iterations;
 
     public void SimulateVerify(string password) => Verify(_dummyHash.Value, password);
 
     private static string CreateHash(string password, int iterations)
     {
         var salt = RandomNumberGenerator.GetBytes(SaltSize);
-        var hash = Rfc2898DeriveBytes.Pbkdf2(password, salt, iterations, HashAlgorithmName.SHA512, HashSize);
+        var hash = Rfc2898DeriveBytes.Pbkdf2(
+            password,
+            salt,
+            iterations,
+            HashAlgorithmName.SHA512,
+            HashSize
+        );
         return $"{Prefix}.{iterations}.{Convert.ToBase64String(salt)}.{Convert.ToBase64String(hash)}";
     }
 }

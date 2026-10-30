@@ -8,9 +8,7 @@ namespace OpsFlow.Domain.Tickets;
 /// </summary>
 public sealed class TicketSlaCycle : ITenantOwned
 {
-    private TicketSlaCycle()
-    {
-    }
+    private TicketSlaCycle() { }
 
     public Guid Id { get; private set; }
     public Guid TenantId { get; private set; }
@@ -40,20 +38,28 @@ public sealed class TicketSlaCycle : ITenantOwned
 
     public bool IsActive => ResolvedAtUtc is null;
 
-    public static TicketSlaCycle Start(Ticket ticket, int cycleNumber, SlaCycleReason reason, SlaPolicy policy, DateTime nowUtc) => new()
-    {
-        Id = Guid.NewGuid(),
-        TenantId = ticket.TenantId,
-        TicketId = ticket.Id,
-        CycleNumber = cycleNumber,
-        Reason = reason,
-        SlaPolicyId = policy.Id,
-        ResponseMinutes = policy.ResponseMinutes,
-        ResolutionMinutes = policy.ResolutionMinutes,
-        StartedAtUtc = nowUtc,
-        ResponseDueAtUtc = reason == SlaCycleReason.Initial ? nowUtc.AddMinutes(policy.ResponseMinutes) : null,
-        ResolutionDueAtUtc = nowUtc.AddMinutes(policy.ResolutionMinutes),
-    };
+    public static TicketSlaCycle Start(
+        Ticket ticket,
+        int cycleNumber,
+        SlaCycleReason reason,
+        SlaPolicy policy,
+        DateTime nowUtc
+    ) =>
+        new()
+        {
+            Id = Guid.NewGuid(),
+            TenantId = ticket.TenantId,
+            TicketId = ticket.Id,
+            CycleNumber = cycleNumber,
+            Reason = reason,
+            SlaPolicyId = policy.Id,
+            ResponseMinutes = policy.ResponseMinutes,
+            ResolutionMinutes = policy.ResolutionMinutes,
+            StartedAtUtc = nowUtc,
+            ResponseDueAtUtc =
+                reason == SlaCycleReason.Initial ? nowUtc.AddMinutes(policy.ResponseMinutes) : null,
+            ResolutionDueAtUtc = nowUtc.AddMinutes(policy.ResolutionMinutes),
+        };
 
     public void Resolve(DateTime nowUtc) => ResolvedAtUtc ??= nowUtc;
 
@@ -85,11 +91,9 @@ public static class SlaEvaluation
             : (nowUtc > cycle.ResolutionDueAtUtc ? SlaState.Overdue : SlaState.Running);
 
     public static SlaState Response(TicketSlaCycle cycle, DateTime nowUtc) =>
-        cycle.ResponseDueAtUtc is not { } due
-            ? SlaState.NotApplicable
-            : cycle.FirstResponseAtUtc is { } first
-                ? (first <= due ? SlaState.Met : SlaState.Missed)
-                : (nowUtc > due ? SlaState.Overdue : SlaState.Running);
+        cycle.ResponseDueAtUtc is not { } due ? SlaState.NotApplicable
+        : cycle.FirstResponseAtUtc is { } first ? (first <= due ? SlaState.Met : SlaState.Missed)
+        : (nowUtc > due ? SlaState.Overdue : SlaState.Running);
 
     public static double? RemainingResolutionMinutes(TicketSlaCycle cycle, DateTime nowUtc) =>
         cycle.IsActive ? (cycle.ResolutionDueAtUtc - nowUtc).TotalMinutes : null;

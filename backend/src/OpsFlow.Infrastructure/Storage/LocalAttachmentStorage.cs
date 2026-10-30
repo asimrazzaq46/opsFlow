@@ -9,11 +9,14 @@ namespace OpsFlow.Infrastructure.Storage;
 /// characters; a key that is not exactly 32 hex characters is rejected, so no input can traverse out of the root.
 /// shortcut: local disk is not shared between nodes - swap this class for a blob provider when the API scales out.
 /// </summary>
-internal sealed partial class LocalAttachmentStorage(IOptions<AttachmentOptions> options) : IAttachmentStorage
+internal sealed partial class LocalAttachmentStorage(IOptions<AttachmentOptions> options)
+    : IAttachmentStorage
 {
-    private readonly string _root = Path.GetFullPath(string.IsNullOrWhiteSpace(options.Value.RootPath)
-        ? Path.Combine(AppContext.BaseDirectory, "attachments")
-        : options.Value.RootPath);
+    private readonly string _root = Path.GetFullPath(
+        string.IsNullOrWhiteSpace(options.Value.RootPath)
+            ? Path.Combine(AppContext.BaseDirectory, "attachments")
+            : options.Value.RootPath
+    );
 
     public async Task<string> SaveAsync(Stream content, CancellationToken cancellationToken)
     {
@@ -22,7 +25,14 @@ internal sealed partial class LocalAttachmentStorage(IOptions<AttachmentOptions>
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         try
         {
-            await using var file = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, useAsync: true);
+            await using var file = new FileStream(
+                path,
+                FileMode.CreateNew,
+                FileAccess.Write,
+                FileShare.None,
+                81920,
+                useAsync: true
+            );
             await content.CopyToAsync(file, cancellationToken);
         }
         catch
@@ -35,9 +45,18 @@ internal sealed partial class LocalAttachmentStorage(IOptions<AttachmentOptions>
     }
 
     public Task<Stream?> OpenReadAsync(string key, CancellationToken cancellationToken) =>
-        Task.FromResult<Stream?>(IsValid(key) && File.Exists(PathFor(key))
-            ? new FileStream(PathFor(key), FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true)
-            : null);
+        Task.FromResult<Stream?>(
+            IsValid(key) && File.Exists(PathFor(key))
+                ? new FileStream(
+                    PathFor(key),
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.Read,
+                    81920,
+                    useAsync: true
+                )
+                : null
+        );
 
     public Task DeleteAsync(string key, CancellationToken cancellationToken)
     {

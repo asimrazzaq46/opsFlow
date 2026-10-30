@@ -14,14 +14,21 @@ public static class TicketWorkflow
         [TicketStatus.Resolved] = [TicketStatus.Closed],
     };
 
-    public static bool IsAllowed(TicketStatus from, TicketStatus to) => Transitions.TryGetValue(from, out var targets) && targets.Contains(to);
+    public static bool IsAllowed(TicketStatus from, TicketStatus to) =>
+        Transitions.TryGetValue(from, out var targets) && targets.Contains(to);
 
     /// <summary>Statuses in which a ticket must have at least one active assignee.</summary>
-    public static bool RequiresAssignee(TicketStatus status) => status is TicketStatus.Assigned or TicketStatus.InProgress or TicketStatus.OnHold;
+    public static bool RequiresAssignee(TicketStatus status) =>
+        status is TicketStatus.Assigned or TicketStatus.InProgress or TicketStatus.OnHold;
 
-    public static bool IsFinished(TicketStatus status) => status is TicketStatus.Resolved or TicketStatus.Closed;
+    public static bool IsFinished(TicketStatus status) =>
+        status is TicketStatus.Resolved or TicketStatus.Closed;
 
     /// <summary>Whether customers may be shown this event type (internal staffing/SLA events never are).</summary>
     public static bool IsCustomerVisible(TicketActivityType type) =>
-        type is TicketActivityType.Created or TicketActivityType.StatusChanged or TicketActivityType.Resolved or TicketActivityType.Reopened;
+        type
+            is TicketActivityType.Created
+                or TicketActivityType.StatusChanged
+                or TicketActivityType.Resolved
+                or TicketActivityType.Reopened;
 }

@@ -14,7 +14,10 @@ public static class TenantDefaults
 {
     public static readonly string[] CategoryNames = ["General", "Technical Issue", "Billing"];
 
-    public static readonly IReadOnlyDictionary<TicketPriority, (int ResponseMinutes, int ResolutionMinutes)> SlaTargets = new Dictionary<TicketPriority, (int, int)>
+    public static readonly IReadOnlyDictionary<
+        TicketPriority,
+        (int ResponseMinutes, int ResolutionMinutes)
+    > SlaTargets = new Dictionary<TicketPriority, (int, int)>
     {
         [TicketPriority.Low] = (1440, 4320),
         [TicketPriority.Medium] = (480, 2880),
@@ -23,7 +26,15 @@ public static class TenantDefaults
     };
 
     /// <summary>Adds whatever is missing (nothing is overwritten) and returns how many records were added. The caller saves.</summary>
-    public static int AddMissing(IOpsFlowDbContext db, Guid tenantId, DateTime nowUtc, bool hasSettings, bool hasCounter, ISet<string> existingCategories, ISet<TicketPriority> existingPriorities)
+    public static int AddMissing(
+        IOpsFlowDbContext db,
+        Guid tenantId,
+        DateTime nowUtc,
+        bool hasSettings,
+        bool hasCounter,
+        ISet<string> existingCategories,
+        ISet<TicketPriority> existingPriorities
+    )
     {
         var added = 0;
         if (!hasSettings)
@@ -38,15 +49,29 @@ public static class TenantDefaults
             added++;
         }
 
-        foreach (var name in CategoryNames.Where(n => !existingCategories.Contains(TicketCategory.Normalize(n))))
+        foreach (
+            var name in CategoryNames.Where(n =>
+                !existingCategories.Contains(TicketCategory.Normalize(n))
+            )
+        )
         {
             db.TicketCategories.Add(TicketCategory.Create(tenantId, name, nowUtc));
             added++;
         }
 
-        foreach (var (priority, targets) in SlaTargets.Where(p => !existingPriorities.Contains(p.Key)))
+        foreach (
+            var (priority, targets) in SlaTargets.Where(p => !existingPriorities.Contains(p.Key))
+        )
         {
-            db.SlaPolicies.Add(SlaPolicy.Create(tenantId, priority, targets.ResponseMinutes, targets.ResolutionMinutes, nowUtc));
+            db.SlaPolicies.Add(
+                SlaPolicy.Create(
+                    tenantId,
+                    priority,
+                    targets.ResponseMinutes,
+                    targets.ResolutionMinutes,
+                    nowUtc
+                )
+            );
             added++;
         }
 
@@ -55,11 +80,26 @@ public static class TenantDefaults
 
     /// <summary>Everything a brand-new tenant needs (used by onboarding, atomically with the tenant).</summary>
     public static void AddAll(IOpsFlowDbContext db, Guid tenantId, DateTime nowUtc) =>
-        AddMissing(db, tenantId, nowUtc, false, false, new HashSet<string>(), new HashSet<TicketPriority>());
+        AddMissing(
+            db,
+            tenantId,
+            nowUtc,
+            false,
+            false,
+            new HashSet<string>(),
+            new HashSet<TicketPriority>()
+        );
 }
 
 /// <summary>Explicit, idempotent initialization of tenants created before these defaults existed (e.g. OpsFlow Demo).</summary>
-public sealed partial class TenantDefaultsService(IOpsFlowDbContext db, ITenantContext tenantContext, ITenantCache cache, OutboxWriter outbox, TimeProvider clock, ILogger<TenantDefaultsService> logger)
+public sealed partial class TenantDefaultsService(
+    IOpsFlowDbContext db,
+    ITenantContext tenantContext,
+    ITenantCache cache,
+    OutboxWriter outbox,
+    TimeProvider clock,
+    ILogger<TenantDefaultsService> logger
+)
 {
     /// <summary>
     /// Concurrent initializations of one tenant are SERIALIZED by first taking the tenant row lock (the update lasts until the
@@ -71,12 +111,23 @@ public sealed partial class TenantDefaultsService(IOpsFlowDbContext db, ITenantC
         var tenantId = tenantContext.TenantId!.Value;
         await using var transaction = await db.BeginTransactionAsync(ct);
         var stamp = Guid.NewGuid();
-        await db.Tenants.Where(t => t.Id == tenantId).ExecuteUpdateAsync(s => s.SetProperty(t => t.OwnerChangeStamp, stamp), ct);
+        await db
+            .Tenants.Where(t => t.Id == tenantId)
+            .ExecuteUpdateAsync(s => s.SetProperty(t => t.OwnerChangeStamp, stamp), ct);
 
-        var categories = (await db.TicketCategories.Select(c => c.NormalizedName).ToListAsync(ct)).ToHashSet();
+        var categories = (
+            await db.TicketCategories.Select(c => c.NormalizedName).ToListAsync(ct)
+        ).ToHashSet();
         var priorities = (await db.SlaPolicies.Select(p => p.Priority).ToListAsync(ct)).ToHashSet();
-        var added = TenantDefaults.AddMissing(db, tenantId, clock.GetUtcNow().UtcDateTime,
-            await db.Settings.AnyAsync(ct), await db.TicketCounters.AnyAsync(ct), categories, priorities);
+        var added = TenantDefaults.AddMissing(
+            db,
+            tenantId,
+            clock.GetUtcNow().UtcDateTime,
+            await db.Settings.AnyAsync(ct),
+            await db.TicketCounters.AnyAsync(ct),
+            categories,
+            priorities
+        );
         if (added == 0)
         {
             return 0;
@@ -99,20 +150,32 @@ public sealed partial class TenantDefaultsService(IOpsFlowDbContext db, ITenantC
         await transaction.CommitAsync(ct);
         if (categoriesChanged)
         {
-            await cache.InvalidateAsync(tenantId, CacheResources.Categories, CancellationToken.None); // commit ke baad; outbox event backstop hai
+            await cache.InvalidateAsync(
+                tenantId,
+                CacheResources.Categories,
+                CancellationToken.None
+            ); // commit ke baad; outbox event backstop hai
         }
 
         if (policiesChanged)
         {
-            await cache.InvalidateAsync(tenantId, CacheResources.SlaPolicies, CancellationToken.None);
+            await cache.InvalidateAsync(
+                tenantId,
+                CacheResources.SlaPolicies,
+                CancellationToken.None
+            );
         }
 
         LogInitialized(logger, tenantId, added);
         return added;
     }
 
-    private static bool CategoryNamesMissing(HashSet<string> existing) => TenantDefaults.CategoryNames.Any(n => !existing.Contains(TicketCategory.Normalize(n)));
+    private static bool CategoryNamesMissing(HashSet<string> existing) =>
+        TenantDefaults.CategoryNames.Any(n => !existing.Contains(TicketCategory.Normalize(n)));
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Tenant {TenantId} defaults initialized ({Added} records)")]
+    [LoggerMessage(
+        Level = LogLevel.Information,
+        Message = "Tenant {TenantId} defaults initialized ({Added} records)"
+    )]
     private static partial void LogInitialized(ILogger logger, Guid tenantId, int added);
 }

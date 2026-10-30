@@ -38,22 +38,33 @@ public sealed class Ticket : ITenantOwned
     // UPDATED: messages/notes ka per-ticket sequence counter (row-lock wala ExecuteUpdate allocate karta hai, EF isay kabhi nahi likhta)
     public int MessageSequence { get; private set; }
 
-    public static Ticket Create(Guid tenantId, long number, string title, string description, TicketPriority priority, Guid categoryId, Guid? customerId, Guid createdByUserId, DateTime nowUtc) => new()
-    {
-        Id = Guid.NewGuid(),
-        TenantId = tenantId,
-        Number = number,
-        Title = title.Trim(),
-        Description = description.Trim(),
-        Priority = priority,
-        CategoryId = categoryId,
-        CustomerId = customerId,
-        CreatedByUserId = createdByUserId,
-        Status = TicketStatus.Open,
-        CreatedAtUtc = nowUtc,
-        UpdatedAtUtc = nowUtc,
-        Version = 1,
-    };
+    public static Ticket Create(
+        Guid tenantId,
+        long number,
+        string title,
+        string description,
+        TicketPriority priority,
+        Guid categoryId,
+        Guid? customerId,
+        Guid createdByUserId,
+        DateTime nowUtc
+    ) =>
+        new()
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            Number = number,
+            Title = title.Trim(),
+            Description = description.Trim(),
+            Priority = priority,
+            CategoryId = categoryId,
+            CustomerId = customerId,
+            CreatedByUserId = createdByUserId,
+            Status = TicketStatus.Open,
+            CreatedAtUtc = nowUtc,
+            UpdatedAtUtc = nowUtc,
+            Version = 1,
+        };
 
     public void UpdateDetails(string title, string description, DateTime nowUtc)
     {
@@ -98,8 +109,25 @@ public sealed class Ticket : ITenantOwned
     public int NextCycleNumber() => ++CycleCount;
 
     /// <summary>Records a timeline entry; the per-ticket sequence gives a deterministic order.</summary>
-    public TicketActivity Record(TicketActivityType type, Guid? actorUserId, DateTime nowUtc, string? oldValue = null, string? newValue = null, Guid? relatedId = null) =>
-        TicketActivity.Create(TenantId, Id, ++ActivitySequence, type, actorUserId, nowUtc, oldValue, newValue, relatedId);
+    public TicketActivity Record(
+        TicketActivityType type,
+        Guid? actorUserId,
+        DateTime nowUtc,
+        string? oldValue = null,
+        string? newValue = null,
+        Guid? relatedId = null
+    ) =>
+        TicketActivity.Create(
+            TenantId,
+            Id,
+            ++ActivitySequence,
+            type,
+            actorUserId,
+            nowUtc,
+            oldValue,
+            newValue,
+            relatedId
+        );
 
     public void Touch(DateTime nowUtc)
     {

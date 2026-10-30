@@ -2,25 +2,6 @@ using OpsFlow.Domain.Common;
 
 namespace OpsFlow.Domain.Outbox;
 
-public enum OutboxStatus
-{
-    Pending,
-    Claimed,
-    RetryScheduled,
-    Completed,
-    DeadLetter,
-}
-
-/// <summary>Independent delivery destinations of one event; each is tracked durably so a retry never repeats a finished one.</summary>
-[Flags]
-public enum OutboxChannels
-{
-    None = 0,
-    Realtime = 1,
-    Email = 2,
-    Cache = 4,
-}
-
 /// <summary>
 /// Durable event written in the SAME transaction as the business change. Payloads carry ids only (never content or secrets); handlers
 /// re-read current data and re-check authorization. <see cref="DedupKey"/> is unique per tenant so a retried business operation cannot enqueue twice.
@@ -57,19 +38,30 @@ public sealed class OutboxMessage : ITenantOwned
 
     public OutboxChannels PendingChannels => RequiredChannels & ~CompletedChannels;
 
-    public static OutboxMessage Create(Guid tenantId, string eventType, int eventVersion, Guid? aggregateId, string payload, string dedupKey, OutboxChannels channels, string? correlationId, DateTime nowUtc) => new()
-    {
-        Id = Guid.NewGuid(),
-        TenantId = tenantId,
-        EventType = eventType,
-        EventVersion = eventVersion,
-        AggregateId = aggregateId,
-        Payload = payload,
-        DedupKey = dedupKey.Length > 150 ? dedupKey[..150] : dedupKey,
-        CorrelationId = correlationId,
-        RequiredChannels = channels,
-        Status = OutboxStatus.Pending,
-        CreatedAtUtc = nowUtc,
-        NextAttemptAtUtc = nowUtc,
-    };
+    public static OutboxMessage Create(
+        Guid tenantId,
+        string eventType,
+        int eventVersion,
+        Guid? aggregateId,
+        string payload,
+        string dedupKey,
+        OutboxChannels channels,
+        string? correlationId,
+        DateTime nowUtc
+    ) =>
+        new()
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            EventType = eventType,
+            EventVersion = eventVersion,
+            AggregateId = aggregateId,
+            Payload = payload,
+            DedupKey = dedupKey.Length > 150 ? dedupKey[..150] : dedupKey,
+            CorrelationId = correlationId,
+            RequiredChannels = channels,
+            Status = OutboxStatus.Pending,
+            CreatedAtUtc = nowUtc,
+            NextAttemptAtUtc = nowUtc,
+        };
 }

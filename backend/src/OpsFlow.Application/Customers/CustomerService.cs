@@ -10,14 +10,23 @@ using OpsFlow.Domain.Users;
 
 namespace OpsFlow.Application.Customers;
 
-public sealed record CustomerDto(Guid Id, string Name, string Email, string? Phone, Guid? LinkedUserId, bool IsActive, DateTime CreatedAtUtc, DateTime UpdatedAtUtc);
-
 /// <summary>Customer contacts: managed by Owners and Managers only. Deactivation (never deletion) keeps ticket history intact.</summary>
-public sealed partial class CustomerService(IOpsFlowDbContext db, ActorAccess actor, TimeProvider clock, ILogger<CustomerService> logger)
+public sealed partial class CustomerService(
+    IOpsFlowDbContext db,
+    ActorAccess actor,
+    TimeProvider clock,
+    ILogger<CustomerService> logger
+)
 {
     private const int MaxPageSize = 100;
 
-    public async Task<PagedResult<CustomerDto>> ListAsync(string? search, bool? isActive, int page, int pageSize, CancellationToken ct)
+    public async Task<PagedResult<CustomerDto>> ListAsync(
+        string? search,
+        bool? isActive,
+        int page,
+        int pageSize,
+        CancellationToken ct
+    )
     {
         await RequireManagerAsync(ct);
         (page, pageSize, var skip) = Paging.Normalize(page, pageSize, MaxPageSize); // UPDATED: overflow-safe paging
@@ -32,25 +41,53 @@ public sealed partial class CustomerService(IOpsFlowDbContext db, ActorAccess ac
         {
             var term = search.Trim().ToLowerInvariant();
 #pragma warning disable CA1304, CA1311, CA1862 // translated to SQL lower(..) LIKE; culture/StringComparison overloads cannot be translated
-            query = query.Where(c => c.Name.ToLower().Contains(term) || c.NormalizedEmail.Contains(term));
+            query = query.Where(c =>
+                c.Name.ToLower().Contains(term) || c.NormalizedEmail.Contains(term)
+            );
 #pragma warning restore CA1304, CA1311, CA1862
         }
 
         var total = await query.CountAsync(ct);
-        var items = await query.OrderBy(c => c.Name).ThenBy(c => c.Id).Skip(skip).Take(pageSize)
-            .Select(c => new CustomerDto(c.Id, c.Name, c.Email, c.Phone, c.UserId, c.IsActive, c.CreatedAtUtc, c.UpdatedAtUtc)).ToListAsync(ct);
+        var items = await query
+            .OrderBy(c => c.Name)
+            .ThenBy(c => c.Id)
+            .Skip(skip)
+            .Take(pageSize)
+            .Select(c => new CustomerDto(
+                c.Id,
+                c.Name,
+                c.Email,
+                c.Phone,
+                c.UserId,
+                c.IsActive,
+                c.CreatedAtUtc,
+                c.UpdatedAtUtc
+            ))
+            .ToListAsync(ct);
         return new PagedResult<CustomerDto>(items, page, pageSize, total);
     }
 
     public async Task<CustomerDto> GetAsync(Guid id, CancellationToken ct)
     {
         await RequireManagerAsync(ct);
-        return ToDto(await db.Customers.AsNoTracking().SingleOrDefaultAsync(c => c.Id == id, ct) ?? throw NotFound());
+        return ToDto(
+            await db.Customers.AsNoTracking().SingleOrDefaultAsync(c => c.Id == id, ct)
+                ?? throw NotFound()
+        );
     }
 
-    public async Task<CustomerDto> CreateAsync(string name, string email, string? phone, Guid? linkedUserId, CancellationToken ct)
+    public async Task<CustomerDto> CreateAsync(
+        string name,
+        string email,
+        string? phone,
+        Guid? linkedUserId,
+        CancellationToken ct
+    )
     {
-        await using var transaction = await actor.BeginManagerAsync("Only Owners and Managers can manage customers.", ct); // UPDATED: authorization commit tak valid
+        await using var transaction = await actor.BeginManagerAsync(
+            "Only Owners and Managers can manage customers.",
+            ct
+        ); // UPDATED: authorization commit tak valid
         var normalized = EmailAddress.Normalize(email);
         if (await db.Customers.AnyAsync(c => c.NormalizedEmail == normalized, ct))
         {
@@ -71,10 +108,21 @@ public sealed partial class CustomerService(IOpsFlowDbContext db, ActorAccess ac
         return ToDto(customer);
     }
 
-    public async Task<CustomerDto> UpdateAsync(Guid id, string name, string email, string? phone, Guid? linkedUserId, CancellationToken ct)
+    public async Task<CustomerDto> UpdateAsync(
+        Guid id,
+        string name,
+        string email,
+        string? phone,
+        Guid? linkedUserId,
+        CancellationToken ct
+    )
     {
-        await using var transaction = await actor.BeginManagerAsync("Only Owners and Managers can manage customers.", ct);
-        var customer = await db.Customers.SingleOrDefaultAsync(c => c.Id == id, ct) ?? throw NotFound();
+        await using var transaction = await actor.BeginManagerAsync(
+            "Only Owners and Managers can manage customers.",
+            ct
+        );
+        var customer =
+            await db.Customers.SingleOrDefaultAsync(c => c.Id == id, ct) ?? throw NotFound();
         var normalized = EmailAddress.Normalize(email);
         if (await db.Customers.AnyAsync(c => c.Id != id && c.NormalizedEmail == normalized, ct))
         {
@@ -96,8 +144,12 @@ public sealed partial class CustomerService(IOpsFlowDbContext db, ActorAccess ac
 
     public async Task SetActiveAsync(Guid id, bool isActive, CancellationToken ct)
     {
-        await using var transaction = await actor.BeginManagerAsync("Only Owners and Managers can manage customers.", ct);
-        var customer = await db.Customers.SingleOrDefaultAsync(c => c.Id == id, ct) ?? throw NotFound();
+        await using var transaction = await actor.BeginManagerAsync(
+            "Only Owners and Managers can manage customers.",
+            ct
+        );
+        var customer =
+            await db.Customers.SingleOrDefaultAsync(c => c.Id == id, ct) ?? throw NotFound();
         customer.SetActive(isActive, Now);
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
@@ -107,11 +159,18 @@ public sealed partial class CustomerService(IOpsFlowDbContext db, ActorAccess ac
     private async Task ValidateLinkAsync(Guid userId, CancellationToken ct)
     {
         var eligible = await db.Memberships.AnyAsync(
-            m => m.UserId == userId && m.Role == TenantRole.Customer && m.Status == MembershipStatus.Active
-                && db.Users.Any(u => u.Id == userId && u.Status == UserStatus.Active), ct);
+            m =>
+                m.UserId == userId
+                && m.Role == TenantRole.Customer
+                && m.Status == MembershipStatus.Active
+                && db.Users.Any(u => u.Id == userId && u.Status == UserStatus.Active),
+            ct
+        );
         if (!eligible)
         {
-            throw AppException.BadRequest("The user must be an active Customer member of this organization.");
+            throw AppException.BadRequest(
+                "The user must be an active Customer member of this organization."
+            );
         }
     }
 
@@ -121,17 +180,20 @@ public sealed partial class CustomerService(IOpsFlowDbContext db, ActorAccess ac
         {
             await db.SaveChangesAsync(ct);
         }
-        catch (DbUpdateException ex) when (db.IsUniqueViolation(ex, UniqueConstraintKind.CustomerEmail))
+        catch (DbUpdateException ex)
+            when (db.IsUniqueViolation(ex, UniqueConstraintKind.CustomerEmail))
         {
             throw AppException.Conflict("A customer with this email already exists.");
         }
-        catch (DbUpdateException ex) when (db.IsUniqueViolation(ex, UniqueConstraintKind.CustomerUser))
+        catch (DbUpdateException ex)
+            when (db.IsUniqueViolation(ex, UniqueConstraintKind.CustomerUser))
         {
             throw AppException.Conflict("This user is already linked to another customer.");
         }
     }
 
-    private Task RequireManagerAsync(CancellationToken ct) => actor.RequireManagerAsync("Only Owners and Managers can manage customers.", ct);
+    private Task RequireManagerAsync(CancellationToken ct) =>
+        actor.RequireManagerAsync("Only Owners and Managers can manage customers.", ct);
 
     private Guid TenantId => actor.TenantId;
 
@@ -139,8 +201,12 @@ public sealed partial class CustomerService(IOpsFlowDbContext db, ActorAccess ac
 
     private static AppException NotFound() => AppException.NotFound("Customer not found.");
 
-    private static CustomerDto ToDto(Customer c) => new(c.Id, c.Name, c.Email, c.Phone, c.UserId, c.IsActive, c.CreatedAtUtc, c.UpdatedAtUtc);
+    private static CustomerDto ToDto(Customer c) =>
+        new(c.Id, c.Name, c.Email, c.Phone, c.UserId, c.IsActive, c.CreatedAtUtc, c.UpdatedAtUtc);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Customer {CustomerId} created in tenant {TenantId}")]
+    [LoggerMessage(
+        Level = LogLevel.Information,
+        Message = "Customer {CustomerId} created in tenant {TenantId}"
+    )]
     private static partial void LogCreated(ILogger logger, Guid customerId, Guid tenantId);
 }

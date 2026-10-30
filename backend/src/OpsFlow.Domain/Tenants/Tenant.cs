@@ -19,14 +19,15 @@ public sealed class Tenant
     /// </summary>
     public Guid OwnerChangeStamp { get; private set; }
 
-    public static Tenant Create(Guid id, string name, string slug, DateTime nowUtc) => new()
-    {
-        Id = id,
-        Name = name,
-        Slug = slug,
-        CreatedAtUtc = nowUtc,
-        OwnerChangeStamp = Guid.NewGuid(),
-    };
+    public static Tenant Create(Guid id, string name, string slug, DateTime nowUtc) =>
+        new()
+        {
+            Id = id,
+            Name = name,
+            Slug = slug,
+            CreatedAtUtc = nowUtc,
+            OwnerChangeStamp = Guid.NewGuid(),
+        };
 
     public void RotateOwnerChangeStamp() => OwnerChangeStamp = Guid.NewGuid();
 }

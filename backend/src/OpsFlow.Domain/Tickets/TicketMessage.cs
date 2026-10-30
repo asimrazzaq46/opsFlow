@@ -24,16 +24,26 @@ public sealed class TicketMessage : ITenantOwned
     public Guid ClientMessageId { get; private set; }
     public DateTime CreatedAtUtc { get; private set; }
 
-    public static TicketMessage Create(Guid tenantId, Guid ticketId, int sequence, Guid senderUserId, bool senderIsStaff, string content, Guid clientMessageId, DateTime nowUtc) => new()
-    {
-        Id = Guid.NewGuid(),
-        TenantId = tenantId,
-        TicketId = ticketId,
-        Sequence = sequence,
-        SenderUserId = senderUserId,
-        SenderIsStaff = senderIsStaff,
-        Content = content.Trim(),
-        ClientMessageId = clientMessageId,
-        CreatedAtUtc = nowUtc,
-    };
+    public static TicketMessage Create(
+        Guid tenantId,
+        Guid ticketId,
+        int sequence,
+        Guid senderUserId,
+        bool senderIsStaff,
+        string content,
+        Guid clientMessageId,
+        DateTime nowUtc
+    ) =>
+        new()
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            TicketId = ticketId,
+            Sequence = sequence,
+            SenderUserId = senderUserId,
+            SenderIsStaff = senderIsStaff,
+            Content = content.Trim(),
+            ClientMessageId = clientMessageId,
+            CreatedAtUtc = nowUtc,
+        };
 }

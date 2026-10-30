@@ -7,27 +7,47 @@ using OpsFlow.Domain.Users;
 
 namespace OpsFlow.Application.Memberships;
 
-public sealed record MemberDto(Guid Id, Guid UserId, string Email, string DisplayName, TenantRole Role, bool IsActive, DateTime CreatedAtUtc);
-
-public sealed partial class MembershipService(IOpsFlowDbContext db, ActorAccess actor, IUserDirectory users, TimeProvider clock, ILogger<MembershipService> logger)
+public sealed partial class MembershipService(
+    IOpsFlowDbContext db,
+    ActorAccess actor,
+    IUserDirectory users,
+    TimeProvider clock,
+    ILogger<MembershipService> logger
+)
 {
     private const int MaxAttempts = 3;
     private const int MaxPageSize = 100;
 
-    public async Task<PagedResult<MemberDto>> ListAsync(int page, int pageSize, CancellationToken ct)
+    public async Task<PagedResult<MemberDto>> ListAsync(
+        int page,
+        int pageSize,
+        CancellationToken ct
+    )
     {
         (page, pageSize, var skip) = Paging.Normalize(page, pageSize, MaxPageSize); // UPDATED: overflow-safe paging
 
         var query = db.Memberships.Where(m => m.Role != TenantRole.Customer);
         var total = await query.CountAsync(ct);
-        var rows = await query.OrderBy(m => m.CreatedAtUtc).ThenBy(m => m.Id)
-            .Skip(skip).Take(pageSize).ToListAsync(ct);
+        var rows = await query
+            .OrderBy(m => m.CreatedAtUtc)
+            .ThenBy(m => m.Id)
+            .Skip(skip)
+            .Take(pageSize)
+            .ToListAsync(ct);
 
         var directory = await users.GetAsync(rows.ConvertAll(m => m.UserId), ct);
         var items = rows.ConvertAll(m =>
         {
             directory.TryGetValue(m.UserId, out var u);
-            return new MemberDto(m.Id, m.UserId, u?.Email ?? string.Empty, u?.DisplayName ?? string.Empty, m.Role, m.Status == MembershipStatus.Active, m.CreatedAtUtc);
+            return new MemberDto(
+                m.Id,
+                m.UserId,
+                u?.Email ?? string.Empty,
+                u?.DisplayName ?? string.Empty,
+                m.Role,
+                m.Status == MembershipStatus.Active,
+                m.CreatedAtUtc
+            );
         });
         return new PagedResult<MemberDto>(items, page, pageSize, total);
     }
@@ -39,7 +59,11 @@ public sealed partial class MembershipService(IOpsFlowDbContext db, ActorAccess 
             throw AppException.BadRequest("Only staff roles can be assigned.");
         }
 
-        return UpdateAsync(membershipId, m => m.ChangeRole(role, clock.GetUtcNow().UtcDateTime), ct);
+        return UpdateAsync(
+            membershipId,
+            m => m.ChangeRole(role, clock.GetUtcNow().UtcDateTime),
+            ct
+        );
     }
 
     public Task SetActiveAsync(Guid membershipId, bool isActive, CancellationToken ct) =>
@@ -51,7 +75,11 @@ public sealed partial class MembershipService(IOpsFlowDbContext db, ActorAccess 
     /// actor's or an Owner's authorization (demotion, suspension, deactivation) makes this commit fail; the retry then
     /// re-reads the actor's CURRENT authorization and the Owner count against fresh data. Rejected attempts roll back fully.
     /// </summary>
-    private async Task UpdateAsync(Guid membershipId, Action<Membership> change, CancellationToken ct)
+    private async Task UpdateAsync(
+        Guid membershipId,
+        Action<Membership> change,
+        CancellationToken ct
+    )
     {
         for (var attempt = 0; attempt < MaxAttempts; attempt++)
         {
@@ -59,14 +87,20 @@ public sealed partial class MembershipService(IOpsFlowDbContext db, ActorAccess 
             var tenant = await db.Tenants.SingleAsync(ct);
             await actor.RequireOwnerAsync(ct);
 
-            var member = await db.Memberships.SingleOrDefaultAsync(m => m.Id == membershipId, ct)
+            var member =
+                await db.Memberships.SingleOrDefaultAsync(m => m.Id == membershipId, ct)
                 ?? throw AppException.NotFound("Member not found.");
             if (!member.Role.IsStaff())
             {
                 throw AppException.BadRequest("Only staff memberships can be managed here.");
             }
 
-            var removesUsableOwner = member.IsActiveOwner && await db.Users.AnyAsync(u => u.Id == member.UserId && u.Status == UserStatus.Active, ct);
+            var removesUsableOwner =
+                member.IsActiveOwner
+                && await db.Users.AnyAsync(
+                    u => u.Id == member.UserId && u.Status == UserStatus.Active,
+                    ct
+                );
             change(member);
 
             if (removesUsableOwner && !member.IsActiveOwner)
@@ -95,6 +129,15 @@ public sealed partial class MembershipService(IOpsFlowDbContext db, ActorAccess 
         throw AppException.Conflict("The membership was changed concurrently.", "Please retry.");
     }
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Membership {MembershipId} in tenant {TenantId} is now {Role}/{Status}")]
-    private static partial void LogChanged(ILogger logger, Guid tenantId, Guid membershipId, TenantRole role, MembershipStatus status);
+    [LoggerMessage(
+        Level = LogLevel.Information,
+        Message = "Membership {MembershipId} in tenant {TenantId} is now {Role}/{Status}"
+    )]
+    private static partial void LogChanged(
+        ILogger logger,
+        Guid tenantId,
+        Guid membershipId,
+        TenantRole role,
+        MembershipStatus status
+    );
 }

@@ -19,11 +19,15 @@ internal sealed class OutboxMessageConfiguration : IEntityTypeConfiguration<Outb
         b.Property(m => m.LastError).HasMaxLength(500);
         b.Property(m => m.Status).HasConversion<string>().HasMaxLength(20);
 
-        b.HasOne<Tenant>().WithMany().HasForeignKey(m => m.TenantId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Tenant>()
+            .WithMany()
+            .HasForeignKey(m => m.TenantId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         b.HasIndex(m => new { m.TenantId, m.DedupKey }).IsUnique(); // a retried business operation cannot enqueue the same event twice
         // dispatcher claim query: only unfinished rows are indexed
-        b.HasIndex(m => new { m.NextAttemptAtUtc, m.ClaimedUntilUtc }).HasFilter("\"Status\" IN ('Pending','RetryScheduled','Claimed')");
+        b.HasIndex(m => new { m.NextAttemptAtUtc, m.ClaimedUntilUtc })
+            .HasFilter("\"Status\" IN ('Pending','RetryScheduled','Claimed')");
         b.HasIndex(m => m.ProcessedAtUtc).HasFilter("\"Status\" = 'Completed'"); // retention cleanup
         b.HasIndex(m => m.CreatedAtUtc).HasFilter("\"Status\" = 'DeadLetter'"); // dead-letter visibility
     }

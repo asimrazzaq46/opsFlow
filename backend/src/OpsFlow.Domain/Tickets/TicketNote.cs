@@ -19,15 +19,24 @@ public sealed class TicketNote : ITenantOwned
     public Guid ClientNoteId { get; private set; }
     public DateTime CreatedAtUtc { get; private set; }
 
-    public static TicketNote Create(Guid tenantId, Guid ticketId, int sequence, Guid authorUserId, string content, Guid clientNoteId, DateTime nowUtc) => new()
-    {
-        Id = Guid.NewGuid(),
-        TenantId = tenantId,
-        TicketId = ticketId,
-        Sequence = sequence,
-        AuthorUserId = authorUserId,
-        Content = content.Trim(),
-        ClientNoteId = clientNoteId,
-        CreatedAtUtc = nowUtc,
-    };
+    public static TicketNote Create(
+        Guid tenantId,
+        Guid ticketId,
+        int sequence,
+        Guid authorUserId,
+        string content,
+        Guid clientNoteId,
+        DateTime nowUtc
+    ) =>
+        new()
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            TicketId = ticketId,
+            Sequence = sequence,
+            AuthorUserId = authorUserId,
+            Content = content.Trim(),
+            ClientNoteId = clientNoteId,
+            CreatedAtUtc = nowUtc,
+        };
 }

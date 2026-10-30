@@ -9,9 +9,19 @@ namespace OpsFlow.Application.Auth;
 public sealed class UserTokenService(IOpsFlowDbContext db)
 {
     /// <summary>Adds a new token (superseding any outstanding one of the same purpose) and returns the raw value. The caller saves.</summary>
-    public async Task<string> IssueAsync(Guid userId, UserTokenPurpose purpose, TimeSpan lifetime, DateTime nowUtc, CancellationToken ct)
+    public async Task<string> IssueAsync(
+        Guid userId,
+        UserTokenPurpose purpose,
+        TimeSpan lifetime,
+        DateTime nowUtc,
+        CancellationToken ct
+    )
     {
-        var outstanding = await db.UserTokens.Where(t => t.UserId == userId && t.Purpose == purpose && t.UsedAtUtc == null).ToListAsync(ct);
+        var outstanding = await db
+            .UserTokens.Where(t =>
+                t.UserId == userId && t.Purpose == purpose && t.UsedAtUtc == null
+            )
+            .ToListAsync(ct);
         outstanding.ForEach(t => t.MarkUsed(nowUtc));
 
         var (raw, hash) = SecureToken.Generate();
@@ -21,10 +31,19 @@ public sealed class UserTokenService(IOpsFlowDbContext db)
 
     /// <summary>Finds a usable (unused, unexpired) token of this user and purpose. The caller marks it used and saves; the
     /// concurrency token on <c>UsedAtUtc</c> makes a simultaneous second use fail.</summary>
-    public async Task<UserToken?> FindUsableAsync(Guid userId, UserTokenPurpose purpose, string rawToken, DateTime nowUtc, CancellationToken ct)
+    public async Task<UserToken?> FindUsableAsync(
+        Guid userId,
+        UserTokenPurpose purpose,
+        string rawToken,
+        DateTime nowUtc,
+        CancellationToken ct
+    )
     {
         var hash = SecureToken.Hash(rawToken);
-        var token = await db.UserTokens.SingleOrDefaultAsync(t => t.TokenHash == hash && t.UserId == userId && t.Purpose == purpose, ct);
+        var token = await db.UserTokens.SingleOrDefaultAsync(
+            t => t.TokenHash == hash && t.UserId == userId && t.Purpose == purpose,
+            ct
+        );
         return token is not null && token.IsUsable(nowUtc) ? token : null;
     }
 }

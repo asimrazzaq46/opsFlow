@@ -1,3 +1,4 @@
+using OpsFlow.Api.GraphQL;
 using OpsFlow.Api.Infrastructure;
 using OpsFlow.Api.Infrastructure.Background;
 using OpsFlow.Api.Infrastructure.Errors;
@@ -26,6 +27,7 @@ builder.Services.AddInfrastructure(builder.Configuration);
 // UPDATED: Milestone 3 - reusable realtime library (Redis backplane sirf config se, warna in-process)
 builder.Services.AddRealtime(o => builder.Configuration.GetSection(RealtimeOptions.SectionName).Bind(o));
 builder.Services.AddApiSecurity(builder.Configuration, builder.Environment);
+builder.Services.AddOpsFlowGraphQl(builder.Environment); // UPDATED: Milestone 5 - GraphQL read layer
 builder.Services.AddOpsFlowBackground(builder.Configuration); // UPDATED: Milestone 4 - Hangfire worker sirf Background:ServerEnabled par
 builder.Services.AddDevelopmentInitialization(builder.Configuration, builder.Environment);
 
@@ -51,6 +53,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseOpsFlowHangfireDashboard(); // UPDATED: default off; loopback-only, production mein explicit opt-in
 app.MapControllers(); // UPDATED: saare endpoints Controllers/ se
+app.MapOpsFlowGraphQl(app.Environment); // UPDATED: /api/v1/tenants/{tenantId}/graphql (read-only, same membership policy as REST)
 app.MapRealtimeHub(); // UPDATED: authenticated SignalR hub (/hubs/realtime)
 
 app.Run();

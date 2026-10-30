@@ -23,37 +23,64 @@ public interface IRealtimeClient
 /// </summary>
 public interface IRealtimePublisher
 {
-    Task NotifyUserAsync<TEvent>(string userId, TEvent payload, CancellationToken cancellationToken = default)
+    Task NotifyUserAsync<TEvent>(
+        string userId,
+        TEvent payload,
+        CancellationToken cancellationToken = default
+    )
         where TEvent : notnull;
 
-    Task NotifyUsersAsync<TEvent>(IReadOnlyCollection<string> userIds, TEvent payload, CancellationToken cancellationToken = default)
+    Task NotifyUsersAsync<TEvent>(
+        IReadOnlyCollection<string> userIds,
+        TEvent payload,
+        CancellationToken cancellationToken = default
+    )
         where TEvent : notnull;
 
     /// <summary>Runtime-typed variant (the payload's type carries <see cref="RealtimeEventAttribute"/>); used by the chat pipeline.</summary>
-    Task SendToUsersAsync(IReadOnlyCollection<string> userIds, object payload, CancellationToken cancellationToken = default);
+    Task SendToUsersAsync(
+        IReadOnlyCollection<string> userIds,
+        object payload,
+        CancellationToken cancellationToken = default
+    );
 
     /// <summary>Only for groups whose membership cannot go stale or whose content is not sensitive. Private data: use <see cref="PublishToGroupMembersAsync{TEvent}"/>.</summary>
-    Task PublishGroupAsync<TEvent>(string group, TEvent payload, CancellationToken cancellationToken = default)
+    Task PublishGroupAsync<TEvent>(
+        string group,
+        TEvent payload,
+        CancellationToken cancellationToken = default
+    )
         where TEvent : notnull;
 
     /// <summary>
     /// Private group delivery: the CURRENT member list is asked from the host (<see cref="IRealtimeGroupMembership"/>) at publish time and
     /// the event is sent to those users only, so a connection that joined earlier but lost access receives nothing.
     /// </summary>
-    Task PublishToGroupMembersAsync<TEvent>(string group, TEvent payload, CancellationToken cancellationToken = default)
+    Task PublishToGroupMembersAsync<TEvent>(
+        string group,
+        TEvent payload,
+        CancellationToken cancellationToken = default
+    )
         where TEvent : notnull;
 }
 
 /// <summary>Host-provided decision whether the authenticated user may join a group. Clients never grant themselves access.</summary>
 public interface IRealtimeGroupAuthorizer
 {
-    ValueTask<bool> CanJoinAsync(ClaimsPrincipal user, string group, CancellationToken cancellationToken);
+    ValueTask<bool> CanJoinAsync(
+        ClaimsPrincipal user,
+        string group,
+        CancellationToken cancellationToken
+    );
 }
 
 /// <summary>Host-provided CURRENT member user ids of a (private) group, read from the host's source of truth on every call. Never cache it.</summary>
 public interface IRealtimeGroupMembership
 {
-    ValueTask<IReadOnlyCollection<string>> GetMemberUserIdsAsync(string group, CancellationToken cancellationToken);
+    ValueTask<IReadOnlyCollection<string>> GetMemberUserIdsAsync(
+        string group,
+        CancellationToken cancellationToken
+    );
 }
 
 /// <summary>
@@ -72,7 +99,11 @@ public interface IRealtimeGroupManager
 /// <summary>Default: no group can be joined until the host registers its own authorizer.</summary>
 internal sealed class DenyAllGroupAuthorizer : IRealtimeGroupAuthorizer
 {
-    public ValueTask<bool> CanJoinAsync(ClaimsPrincipal user, string group, CancellationToken cancellationToken) => ValueTask.FromResult(false);
+    public ValueTask<bool> CanJoinAsync(
+        ClaimsPrincipal user,
+        string group,
+        CancellationToken cancellationToken
+    ) => ValueTask.FromResult(false);
 }
 
 public sealed class RealtimeOptions

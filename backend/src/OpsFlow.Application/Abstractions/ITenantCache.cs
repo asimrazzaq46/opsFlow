@@ -13,7 +13,12 @@ public static class CacheResources
 /// </summary>
 public interface ITenantCache
 {
-    Task<T> GetOrCreateAsync<T>(Guid tenantId, string resource, Func<CancellationToken, Task<T>> factory, CancellationToken cancellationToken);
+    Task<T> GetOrCreateAsync<T>(
+        Guid tenantId,
+        string resource,
+        Func<CancellationToken, Task<T>> factory,
+        CancellationToken cancellationToken
+    );
 
     /// <summary>Makes every entry of the resource unreachable. False when the cache backend could not be updated (the outbox retries it).</summary>
     Task<bool> InvalidateAsync(Guid tenantId, string resource, CancellationToken cancellationToken);
@@ -22,7 +27,16 @@ public interface ITenantCache
 /// <summary>Used when no Redis is configured: always reads the database.</summary>
 public sealed class NoCache : ITenantCache
 {
-    public Task<T> GetOrCreateAsync<T>(Guid tenantId, string resource, Func<CancellationToken, Task<T>> factory, CancellationToken cancellationToken) => factory(cancellationToken);
+    public Task<T> GetOrCreateAsync<T>(
+        Guid tenantId,
+        string resource,
+        Func<CancellationToken, Task<T>> factory,
+        CancellationToken cancellationToken
+    ) => factory(cancellationToken);
 
-    public Task<bool> InvalidateAsync(Guid tenantId, string resource, CancellationToken cancellationToken) => Task.FromResult(true);
+    public Task<bool> InvalidateAsync(
+        Guid tenantId,
+        string resource,
+        CancellationToken cancellationToken
+    ) => Task.FromResult(true);
 }

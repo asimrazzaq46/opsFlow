@@ -2,17 +2,9 @@ using OpsFlow.Domain.Common;
 
 namespace OpsFlow.Domain.Tenants;
 
-public enum MembershipStatus
-{
-    Active,
-    Inactive,
-}
-
 public sealed class Membership : ITenantOwned
 {
-    private Membership()
-    {
-    }
+    private Membership() { }
 
     public Guid Id { get; private set; }
     public Guid TenantId { get; private set; }
@@ -22,18 +14,20 @@ public sealed class Membership : ITenantOwned
     public DateTime CreatedAtUtc { get; private set; }
     public DateTime UpdatedAtUtc { get; private set; }
 
-    public bool IsActiveOwner => Role == TenantRole.TenantOwner && Status == MembershipStatus.Active;
+    public bool IsActiveOwner =>
+        Role == TenantRole.TenantOwner && Status == MembershipStatus.Active;
 
-    public static Membership Create(Guid tenantId, Guid userId, TenantRole role, DateTime nowUtc) => new()
-    {
-        Id = Guid.NewGuid(),
-        TenantId = tenantId,
-        UserId = userId,
-        Role = role,
-        Status = MembershipStatus.Active,
-        CreatedAtUtc = nowUtc,
-        UpdatedAtUtc = nowUtc,
-    };
+    public static Membership Create(Guid tenantId, Guid userId, TenantRole role, DateTime nowUtc) =>
+        new()
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            UserId = userId,
+            Role = role,
+            Status = MembershipStatus.Active,
+            CreatedAtUtc = nowUtc,
+            UpdatedAtUtc = nowUtc,
+        };
 
     public void ChangeRole(TenantRole role, DateTime nowUtc)
     {

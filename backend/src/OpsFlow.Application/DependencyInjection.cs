@@ -35,6 +35,9 @@ public static class DependencyInjection
         services.AddScoped<SlaPolicyService>();
         services.AddScoped<TicketService>();
         services.AddScoped<TicketWorkflowService>();
+        services.TryAddScoped<Analytics.IReportingTimeZoneProvider, Analytics.TenantReportingTimeZoneProvider>(); // UPDATED: tenant settings se timezone (UTC fallback)
+        services.AddScoped<Tenants.TenantSettingsService>();
+        services.AddScoped<Analytics.AnalyticsService>(); // UPDATED: Milestone 5 - dashboard/report aggregates
         services.AddScoped<TicketAssignmentService>();
         // UPDATED: Milestone 3 services
         services.AddScoped<TicketAudience>();

@@ -228,6 +228,7 @@ public class ApiFactory : WebApplicationFactory<Program>
     public TestClock Clock { get; } = new();
     public SaveGate SaveGate { get; } = new();
     public SaveFaultInjector Faults { get; } = new();
+    public QueryCounter Queries { get; } = new(); // UPDATED: Milestone 5 hardening - query-count / EXPLAIN measurements
 
     protected virtual int SensitivePermitLimit => 100_000;
 
@@ -248,7 +249,7 @@ public class ApiFactory : WebApplicationFactory<Program>
             services.RemoveAll<IDbContextOptionsConfiguration<OpsFlowDbContext>>();
             services.AddDbContext<OpsFlowDbContext>(o =>
             {
-                o.AddInterceptors(Gate, Faults, SaveGate);
+                o.AddInterceptors(Gate, Faults, SaveGate, Queries);
                 if (_postgresConnectionString is not null)
                 {
                     o.UseNpgsql(_postgresConnectionString);

@@ -30,7 +30,10 @@ public interface IAttachmentStorage
 /// </summary>
 public static partial class AttachmentValidator
 {
-    private static readonly Dictionary<string, (string ContentType, Func<byte[], bool> Matches)> Allowed = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly Dictionary<
+        string,
+        (string ContentType, Func<byte[], bool> Matches)
+    > Allowed = new(StringComparer.OrdinalIgnoreCase)
     {
         [".png"] = ("image/png", h => Starts(h, 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)),
         [".jpg"] = ("image/jpeg", h => Starts(h, 0xFF, 0xD8, 0xFF)),
@@ -38,7 +41,10 @@ public static partial class AttachmentValidator
         [".gif"] = ("image/gif", h => Starts(h, 0x47, 0x49, 0x46, 0x38)),
         [".pdf"] = ("application/pdf", h => Starts(h, 0x25, 0x50, 0x44, 0x46, 0x2D)),
         [".txt"] = ("text/plain", IsPlainText),
-        [".docx"] = ("application/vnd.openxmlformats-officedocument.wordprocessingml.document", IsZip),
+        [".docx"] = (
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            IsZip
+        ),
         [".xlsx"] = ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", IsZip),
     };
 
@@ -48,7 +54,11 @@ public static partial class AttachmentValidator
 
     /// <summary>Returns the verified content type, or null when the extension is not allowed or the content does not match it.</summary>
     public static string? Verify(string fileName, byte[] header) =>
-        Allowed.TryGetValue(Path.GetExtension(fileName), out var rule) && header.Length > 0 && rule.Matches(header) ? rule.ContentType : null;
+        Allowed.TryGetValue(Path.GetExtension(fileName), out var rule)
+        && header.Length > 0
+        && rule.Matches(header)
+            ? rule.ContentType
+            : null;
 
     /// <summary>Display name only: no directories, no control characters, bounded length. It never influences the storage path.</summary>
     public static string SanitizeFileName(string? fileName)
@@ -66,7 +76,8 @@ public static partial class AttachmentValidator
 
     private static bool IsZip(byte[] h) => Starts(h, 0x50, 0x4B, 0x03, 0x04);
 
-    private static bool Starts(byte[] header, params byte[] prefix) => header.AsSpan().StartsWith(prefix.AsSpan());
+    private static bool Starts(byte[] header, params byte[] prefix) =>
+        header.AsSpan().StartsWith(prefix.AsSpan());
 
     private static bool IsPlainText(byte[] h)
     {

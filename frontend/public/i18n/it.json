@@ -17,10 +17,26 @@
     "loading": "Caricamento…",
     "retry": "Riprova",
     "previous": "Precedente",
-    "next": "Successiva"
+    "next": "Successiva",
+    "forbidden": "Non hai l'autorizzazione per visualizzare questo contenuto.",
+    "na": "N/D",
+    "noData": "Nessun dato per questa selezione.",
+    "saving": "Salvataggio…",
+    "cancel": "Annulla",
+    "status": "Stato",
+    "active": "Attivo",
+    "inactive": "Inattivo",
+    "activate": "Attiva",
+    "deactivate": "Disattiva"
   },
   "nav": {
-    "tickets": "Ticket"
+    "tickets": "Ticket",
+    "dashboard": "Dashboard",
+    "kanban": "Bacheca",
+    "customers": "Clienti",
+    "team": "Team",
+    "reports": "Report",
+    "menu": "Navigazione principale"
   },
   "auth": {
     "signIn": "Accedi",
@@ -53,6 +69,50 @@
       "Medium": "Media",
       "High": "Alta",
       "Urgent": "Urgente"
+    },
+    "new": "Nuovo ticket",
+    "assignees": "Agenti assegnati",
+    "unassigned": "Nessuno assegnato",
+    "form": {
+      "title": "Titolo",
+      "description": "Descrizione",
+      "category": "Categoria",
+      "priority": "Priorità",
+      "customer": "Cliente",
+      "assignees": "Assegna agenti",
+      "submit": "Crea ticket",
+      "error": "Impossibile creare il ticket."
+    },
+    "actions": {
+      "status": "Cambia stato",
+      "reopen": "Riapri ticket",
+      "assign": "Aggiungi un agente",
+      "unassign": "Rimuovi"
+    },
+    "errors": {
+      "conflict": "Il ticket è stato modificato da qualcun altro. È stato ricaricato.",
+      "invalid": "Azione non consentita per il ticket.",
+      "generic": "Azione non riuscita."
+    },
+    "sla": {
+      "title": "Storico SLA",
+      "cycle": "Ciclo {{n}}",
+      "started": "Inizio",
+      "responseDue": "Risposta entro",
+      "firstResponse": "Prima risposta",
+      "resolutionDue": "Risoluzione entro",
+      "resolvedAt": "Risolto",
+      "reason": {
+        "Initial": "Iniziale",
+        "Reopened": "Dopo riapertura"
+      },
+      "state": {
+        "Running": "In corso",
+        "Overdue": "In ritardo",
+        "Met": "Rispettato",
+        "Missed": "Mancato",
+        "NotApplicable": "N/D"
+      }
     }
   },
   "chat": {
@@ -119,5 +179,122 @@
   "realtime": {
     "reconnecting": "Riconnessione agli aggiornamenti live…",
     "disconnected": "Aggiornamenti live offline. Nuovo tentativo…"
+  },
+  "roles": {
+    "TenantOwner": "Titolare",
+    "Manager": "Manager",
+    "Agent": "Agente",
+    "Customer": "Cliente"
+  },
+  "filters": {
+    "from": "Da",
+    "to": "A",
+    "priority": "Priorità",
+    "any": "Qualsiasi",
+    "apply": "Applica",
+    "search": "Cerca"
+  },
+  "validation": {
+    "required": "Campo obbligatorio."
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "loadError": "Impossibile caricare la dashboard.",
+    "currentState": "Situazione attuale",
+    "period": "Periodo selezionato",
+    "sample": "Su {{n}} ticket con risposta",
+    "slaDetail": "{{met}} rispettati · {{breached}} violati",
+    "kpi": {
+      "open": "Ticket aperti",
+      "unassigned": "Non assegnati",
+      "overdue": "In ritardo",
+      "resolvedToday": "Risolti oggi",
+      "avgFirstResponse": "Prima risposta media",
+      "slaCompliance": "Conformità SLA",
+      "created": "Creati",
+      "resolved": "Risolti"
+    },
+    "charts": {
+      "trend": "Creati e risolti",
+      "status": "Ticket aperti per stato",
+      "priority": "Distribuzione per priorità",
+      "workload": "Carico degli agenti"
+    }
+  },
+  "kanban": {
+    "title": "Bacheca",
+    "overdueOnly": "Solo in ritardo",
+    "loadError": "Impossibile caricare la bacheca.",
+    "empty": "Nessun ticket",
+    "more": "Altri {{n}} non mostrati — restringi i filtri",
+    "assignees": "{{n}} assegnati",
+    "due": "Scadenza",
+    "overdue": "In ritardo dal",
+    "moveTo": "Sposta in",
+    "errors": {
+      "conflict": "Qualcun altro ha modificato questo ticket. La bacheca è stata aggiornata.",
+      "forbidden": "Non puoi spostare questo ticket.",
+      "invalid": "Questo cambio di stato non è consentito.",
+      "generic": "Impossibile spostare il ticket."
+    }
+  },
+  "reports": {
+    "title": "Report",
+    "export": "Esporta CSV",
+    "kind": {
+      "Tickets": "Ticket",
+      "Agents": "Agenti",
+      "Categories": "Categorie",
+      "Customers": "Clienti"
+    },
+    "truncated": "Esportazione limitata alle prime 10.000 righe.",
+    "exportError": "Esportazione non riuscita.",
+    "loadError": "Impossibile caricare il report.",
+    "timezone": "I giorni sono calcolati in {{tz}}.",
+    "created": "Ticket creati",
+    "avgResolution": "Tempo medio di risoluzione",
+    "median": "Mediana",
+    "cycles": "{{n}} cicli completati",
+    "openOverdue": "{{n}} ticket aperti ora in ritardo",
+    "reopenRate": "Tasso di riapertura",
+    "reopenDetail": "{{a}} di {{b}} cicli risolti riaperti · {{c}} riaperture",
+    "byStatus": "Ticket per stato",
+    "byPriority": "Ticket per priorità",
+    "categories": "Distribuzione per categoria",
+    "agents": "Prestazioni degli agenti",
+    "agentsNote": "Risolti = ticket per cui la persona ha eseguito l'azione di risoluzione.",
+    "workload": "Carico attuale",
+    "resolvedBy": "Risolti",
+    "customers": "Analisi clienti",
+    "tickets": "Ticket",
+    "open": "Aperti",
+    "resolved": "Risolti",
+    "overdue": "In ritardo"
+  },
+  "customers": {
+    "title": "Clienti",
+    "name": "Nome",
+    "email": "Email",
+    "phone": "Telefono",
+    "add": "Aggiungi cliente",
+    "empty": "Nessun cliente trovato.",
+    "loadError": "Impossibile caricare i clienti.",
+    "saveError": "Impossibile salvare il cliente.",
+    "duplicate": "Esiste già un cliente con questa email."
+  },
+  "team": {
+    "title": "Team",
+    "name": "Nome",
+    "role": "Ruolo",
+    "loadError": "Impossibile caricare il team."
+  },
+  "invitations": {
+    "title": "Inviti",
+    "send": "Invia invito",
+    "revoke": "Revoca",
+    "empty": "Nessun invito in sospeso.",
+    "sent": "Invito inviato.",
+    "duplicate": "Esiste già un invito in sospeso o un'appartenenza.",
+    "error": "Operazione sull'invito non riuscita."
   }
 }

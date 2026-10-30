@@ -12,12 +12,33 @@ namespace OpsFlow.Application.Tickets;
 /// </summary>
 public sealed class TicketAudience(IOpsFlowDbContext db)
 {
-    public async Task<List<Guid>> StaffAsync(Guid ticketId, Guid createdByUserId, CancellationToken ct)
+    public async Task<List<Guid>> StaffAsync(
+        Guid ticketId,
+        Guid createdByUserId,
+        CancellationToken ct
+    )
     {
-        var active = db.Memberships.AsNoTracking().Where(m => m.Status == MembershipStatus.Active && db.Users.Any(u => u.Id == m.UserId && u.Status == UserStatus.Active));
-        var managers = active.Where(m => m.Role == TenantRole.TenantOwner || m.Role == TenantRole.Manager).Select(m => m.UserId);
-        var agents = active.Where(m => m.Role == TenantRole.Agent
-                && (m.UserId == createdByUserId || db.TicketAssignments.Any(a => a.TicketId == ticketId && a.MembershipId == m.Id && a.UnassignedAtUtc == null)))
+        var active = db
+            .Memberships.AsNoTracking()
+            .Where(m =>
+                m.Status == MembershipStatus.Active
+                && db.Users.Any(u => u.Id == m.UserId && u.Status == UserStatus.Active)
+            );
+        var managers = active
+            .Where(m => m.Role == TenantRole.TenantOwner || m.Role == TenantRole.Manager)
+            .Select(m => m.UserId);
+        var agents = active
+            .Where(m =>
+                m.Role == TenantRole.Agent
+                && (
+                    m.UserId == createdByUserId
+                    || db.TicketAssignments.Any(a =>
+                        a.TicketId == ticketId
+                        && a.MembershipId == m.Id
+                        && a.UnassignedAtUtc == null
+                    )
+                )
+            )
             .Select(m => m.UserId);
         return await managers.Union(agents).ToListAsync(ct);
     }
@@ -29,10 +50,15 @@ public sealed class TicketAudience(IOpsFlowDbContext db)
             return null;
         }
 
-        return await (from c in db.Customers.AsNoTracking()
-                      where c.Id == customerId && c.UserId != null
-                      join m in db.Memberships on c.UserId equals m.UserId
-                      where m.Role == TenantRole.Customer && m.Status == MembershipStatus.Active && db.Users.Any(u => u.Id == m.UserId && u.Status == UserStatus.Active)
-                      select c.UserId).SingleOrDefaultAsync(ct);
+        return await (
+            from c in db.Customers.AsNoTracking()
+            where c.Id == customerId && c.UserId != null
+            join m in db.Memberships on c.UserId equals m.UserId
+            where
+                m.Role == TenantRole.Customer
+                && m.Status == MembershipStatus.Active
+                && db.Users.Any(u => u.Id == m.UserId && u.Status == UserStatus.Active)
+            select c.UserId
+        ).SingleOrDefaultAsync(ct);
     }
 }

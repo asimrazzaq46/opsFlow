@@ -17,10 +17,26 @@
     "loading": "Loading…",
     "retry": "Retry",
     "previous": "Previous",
-    "next": "Next"
+    "next": "Next",
+    "forbidden": "You do not have permission to view this.",
+    "na": "N/A",
+    "noData": "No data for this selection.",
+    "saving": "Saving…",
+    "cancel": "Cancel",
+    "status": "Status",
+    "active": "Active",
+    "inactive": "Inactive",
+    "activate": "Activate",
+    "deactivate": "Deactivate"
   },
   "nav": {
-    "tickets": "Tickets"
+    "tickets": "Tickets",
+    "dashboard": "Dashboard",
+    "kanban": "Board",
+    "customers": "Customers",
+    "team": "Team",
+    "reports": "Reports",
+    "menu": "Main navigation"
   },
   "auth": {
     "signIn": "Sign in",
@@ -53,6 +69,50 @@
       "Medium": "Medium",
       "High": "High",
       "Urgent": "Urgent"
+    },
+    "new": "New ticket",
+    "assignees": "Assigned agents",
+    "unassigned": "Nobody assigned yet",
+    "form": {
+      "title": "Title",
+      "description": "Description",
+      "category": "Category",
+      "priority": "Priority",
+      "customer": "Customer",
+      "assignees": "Assign agents",
+      "submit": "Create ticket",
+      "error": "The ticket could not be created."
+    },
+    "actions": {
+      "status": "Change status",
+      "reopen": "Reopen ticket",
+      "assign": "Add an agent",
+      "unassign": "Remove"
+    },
+    "errors": {
+      "conflict": "The ticket was changed by someone else. It was reloaded.",
+      "invalid": "This action is not allowed for the ticket.",
+      "generic": "The action failed."
+    },
+    "sla": {
+      "title": "SLA history",
+      "cycle": "Cycle {{n}}",
+      "started": "Started",
+      "responseDue": "Response due",
+      "firstResponse": "First response",
+      "resolutionDue": "Resolution due",
+      "resolvedAt": "Resolved",
+      "reason": {
+        "Initial": "Initial",
+        "Reopened": "After reopen"
+      },
+      "state": {
+        "Running": "Running",
+        "Overdue": "Overdue",
+        "Met": "Met",
+        "Missed": "Missed",
+        "NotApplicable": "N/A"
+      }
     }
   },
   "chat": {
@@ -119,5 +179,122 @@
   "realtime": {
     "reconnecting": "Reconnecting to live updates…",
     "disconnected": "Live updates are offline. Retrying…"
+  },
+  "roles": {
+    "TenantOwner": "Owner",
+    "Manager": "Manager",
+    "Agent": "Agent",
+    "Customer": "Customer"
+  },
+  "filters": {
+    "from": "From",
+    "to": "To",
+    "priority": "Priority",
+    "any": "Any",
+    "apply": "Apply",
+    "search": "Search"
+  },
+  "validation": {
+    "required": "This field is required."
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "loadError": "Could not load the dashboard.",
+    "currentState": "Right now",
+    "period": "Selected period",
+    "sample": "Based on {{n}} replied tickets",
+    "slaDetail": "{{met}} met · {{breached}} breached",
+    "kpi": {
+      "open": "Open tickets",
+      "unassigned": "Unassigned",
+      "overdue": "Overdue",
+      "resolvedToday": "Resolved today",
+      "avgFirstResponse": "Avg first response",
+      "slaCompliance": "SLA compliance",
+      "created": "Created",
+      "resolved": "Resolved"
+    },
+    "charts": {
+      "trend": "Created vs resolved",
+      "status": "Open tickets by status",
+      "priority": "Priority distribution",
+      "workload": "Agent workload"
+    }
+  },
+  "kanban": {
+    "title": "Board",
+    "overdueOnly": "Overdue only",
+    "loadError": "Could not load the board.",
+    "empty": "No tickets",
+    "more": "{{n}} more not shown — narrow the filters",
+    "assignees": "{{n}} assigned",
+    "due": "Due",
+    "overdue": "Overdue since",
+    "moveTo": "Move to",
+    "errors": {
+      "conflict": "Someone else changed this ticket. The board was refreshed.",
+      "forbidden": "You are not allowed to move this ticket.",
+      "invalid": "This status change is not allowed.",
+      "generic": "The ticket could not be moved."
+    }
+  },
+  "reports": {
+    "title": "Reports",
+    "export": "Export CSV",
+    "kind": {
+      "Tickets": "Tickets",
+      "Agents": "Agents",
+      "Categories": "Categories",
+      "Customers": "Customers"
+    },
+    "truncated": "Export limited to the first 10,000 rows.",
+    "exportError": "The export failed.",
+    "loadError": "Could not load the report.",
+    "timezone": "Days are calculated in {{tz}}.",
+    "created": "Tickets created",
+    "avgResolution": "Avg resolution time",
+    "median": "Median",
+    "cycles": "{{n}} completed cycles",
+    "openOverdue": "{{n}} open tickets overdue now",
+    "reopenRate": "Reopen rate",
+    "reopenDetail": "{{a}} of {{b}} resolved cycles reopened · {{c}} reopen events",
+    "byStatus": "Tickets by status",
+    "byPriority": "Tickets by priority",
+    "categories": "Category distribution",
+    "agents": "Agent performance",
+    "agentsNote": "Resolved = tickets whose Resolve action was performed by the person.",
+    "workload": "Current workload",
+    "resolvedBy": "Resolved",
+    "customers": "Customer analysis",
+    "tickets": "Tickets",
+    "open": "Open",
+    "resolved": "Resolved",
+    "overdue": "Overdue"
+  },
+  "customers": {
+    "title": "Customers",
+    "name": "Name",
+    "email": "Email",
+    "phone": "Phone",
+    "add": "Add customer",
+    "empty": "No customers found.",
+    "loadError": "Could not load customers.",
+    "saveError": "The customer could not be saved.",
+    "duplicate": "A customer with this email already exists."
+  },
+  "team": {
+    "title": "Team",
+    "name": "Name",
+    "role": "Role",
+    "loadError": "Could not load the team."
+  },
+  "invitations": {
+    "title": "Invitations",
+    "send": "Send invitation",
+    "revoke": "Revoke",
+    "empty": "No pending invitations.",
+    "sent": "Invitation sent.",
+    "duplicate": "A pending invitation or membership already exists.",
+    "error": "The invitation action failed."
   }
 }

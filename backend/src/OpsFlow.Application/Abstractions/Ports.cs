@@ -13,12 +13,20 @@ public sealed record UserSummary(Guid Id, string Email, string DisplayName, bool
 
 public interface IUserDirectory
 {
-    Task<IReadOnlyDictionary<Guid, UserSummary>> GetAsync(IReadOnlyCollection<Guid> userIds, CancellationToken cancellationToken);
+    Task<IReadOnlyDictionary<Guid, UserSummary>> GetAsync(
+        IReadOnlyCollection<Guid> userIds,
+        CancellationToken cancellationToken
+    );
 }
 
 public interface IEmailService
 {
-    Task SendAsync(string recipient, string subject, string body, CancellationToken cancellationToken);
+    Task SendAsync(
+        string recipient,
+        string subject,
+        string body,
+        CancellationToken cancellationToken
+    );
 }
 
 public sealed class AppOptions

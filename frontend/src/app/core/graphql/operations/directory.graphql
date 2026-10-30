@@ -1,0 +1,25 @@
+query Customers($search: String, $isActive: Boolean, $page: Int, $pageSize: Int) {
+  customers(search: $search, isActive: $isActive, page: $page, pageSize: $pageSize) {
+    page
+    pageSize
+    totalCount
+    items { id name email phone isActive createdAtUtc }
+  }
+}
+
+query TeamMembers($page: Int, $pageSize: Int) {
+  teamMembers(page: $page, pageSize: $pageSize) {
+    page
+    pageSize
+    totalCount
+    items { id userId email displayName role isActive createdAtUtc }
+  }
+}
+
+query TicketSlaHistory($ticketId: UUID!) {
+  ticketSla(ticketId: $ticketId) {
+    cycles {
+      id cycleNumber reason startedAtUtc responseDueAtUtc resolutionDueAtUtc firstResponseAtUtc resolvedAtUtc responseState resolutionState
+    }
+  }
+}

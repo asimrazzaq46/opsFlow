@@ -42,7 +42,10 @@ public sealed class RealtimeConnectionRegistry
         }
     }
 
-    internal IReadOnlyList<(string ConnectionId, string Group)> Memberships(string userId, string? group)
+    internal IReadOnlyList<(string ConnectionId, string Group)> Memberships(
+        string userId,
+        string? group
+    )
     {
         List<(string, string)> result = [];
         foreach (var (connectionId, entry) in _connections)
@@ -54,7 +57,11 @@ public sealed class RealtimeConnectionRegistry
 
             lock (entry.Groups)
             {
-                result.AddRange(entry.Groups.Where(g => group is null || g == group).Select(g => (connectionId, g)));
+                result.AddRange(
+                    entry
+                        .Groups.Where(g => group is null || g == group)
+                        .Select(g => (connectionId, g))
+                );
             }
         }
 
@@ -62,9 +69,16 @@ public sealed class RealtimeConnectionRegistry
     }
 }
 
-internal sealed class RealtimeGroupManager(RealtimeConnectionRegistry registry, IHubContext<RealtimeHub> hub) : IRealtimeGroupManager
+internal sealed class RealtimeGroupManager(
+    RealtimeConnectionRegistry registry,
+    IHubContext<RealtimeHub> hub
+) : IRealtimeGroupManager
 {
-    public async Task RevokeAsync(string userId, string group, CancellationToken cancellationToken = default)
+    public async Task RevokeAsync(
+        string userId,
+        string group,
+        CancellationToken cancellationToken = default
+    )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(userId);
         ArgumentException.ThrowIfNullOrWhiteSpace(group);
@@ -77,7 +91,10 @@ internal sealed class RealtimeGroupManager(RealtimeConnectionRegistry registry, 
         await RemoveAsync(registry.Memberships(userId, null), cancellationToken);
     }
 
-    private async Task RemoveAsync(IReadOnlyList<(string ConnectionId, string Group)> memberships, CancellationToken cancellationToken)
+    private async Task RemoveAsync(
+        IReadOnlyList<(string ConnectionId, string Group)> memberships,
+        CancellationToken cancellationToken
+    )
     {
         foreach (var (connectionId, group) in memberships)
         {
