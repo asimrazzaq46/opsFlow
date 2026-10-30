@@ -5731,7 +5731,9 @@
           "TicketResolved",
           "TicketReopened",
           "MessageReceived",
-          "NoteAdded"
+          "NoteAdded",
+          "SlaWarning",
+          "SlaBreached"
         ]
       },
       "OrganizationDto": {

@@ -224,6 +224,7 @@ public class TenantIsolationTests(ApiFactory factory) : IClassFixture<ApiFactory
         var unfiltered = model.GetEntityTypes()
             .Where(t => typeof(ITenantOwned).IsAssignableFrom(t.ClrType))
             .Where(t => t.GetDeclaredQueryFilters().Count == 0)
+            .Where(t => t.ClrType != typeof(OpsFlow.Domain.Outbox.OutboxMessage)) // deliberate: the dispatcher claims across tenants, then runs each event in its own tenant scope
             .Select(t => t.ClrType.Name);
 
         Assert.Empty(unfiltered);

@@ -100,7 +100,6 @@ public sealed partial class TicketService(IOpsFlowDbContext db, TicketAccess acc
 
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
-        await notifications.FlushAsync();
         LogCreated(logger, ticket.Id, ticket.TenantId);
         return await GetAsync(ticket.Id, ct);
     }

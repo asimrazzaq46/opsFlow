@@ -456,6 +456,8 @@ public class DevelopmentStartupTests
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.UseEnvironment(environment);
+            // UPDATED: ye tests migration/startup policy check karte hain; Development default mein Hangfire worker on hai (uska schema alag test mein), isliye yahan off
+            builder.UseSetting("Background:ServerEnabled", "false");
             builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Auth:Jwt:SigningKey"] = "integration-test-signing-key-0123456789-abcdefghij",

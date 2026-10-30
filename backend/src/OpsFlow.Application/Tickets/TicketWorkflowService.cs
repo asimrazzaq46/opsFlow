@@ -71,7 +71,6 @@ public sealed partial class TicketWorkflowService(IOpsFlowDbContext db, TicketAc
         await notifications.StageAsync(ticket, target == TicketStatus.Resolved ? NotificationType.TicketResolved : NotificationType.TicketStatusChanged, actor.UserId, $"status:{ticketId}:{ticket.Version}", toStaff: true, toCustomer: true, detail: target.ToString(), ct: ct);
         await SaveAsync(ct);
         await transaction.CommitAsync(ct);
-        await notifications.FlushAsync();
         LogChanged(logger, ticketId, old, target);
         return await tickets.GetAsync(ticketId, ct);
     }
@@ -116,7 +115,6 @@ public sealed partial class TicketWorkflowService(IOpsFlowDbContext db, TicketAc
         await notifications.StageAsync(ticket, NotificationType.TicketReopened, actor.UserId, $"reopen:{ticketId}:{ticket.Version}", toStaff: true, toCustomer: true, detail: next.ToString(), ct: ct);
         await SaveAsync(ct);
         await transaction.CommitAsync(ct);
-        await notifications.FlushAsync();
         LogChanged(logger, ticketId, old, next);
         return await tickets.GetAsync(ticketId, ct);
     }
@@ -143,7 +141,7 @@ public sealed partial class TicketWorkflowService(IOpsFlowDbContext db, TicketAc
         {
             throw AppException.Conflict("The ticket was changed by someone else.", "Reload the ticket and retry.");
         }
-        catch (DbUpdateException ex) when (db.IsUniqueViolation(ex, UniqueConstraintKind.ActiveSlaCycle) || db.IsUniqueViolation(ex, UniqueConstraintKind.ActivitySequence) || db.IsUniqueViolation(ex, UniqueConstraintKind.NotificationDedup)) // UPDATED: concurrent writers ka activity-sequence clash bhi conflict hai, 500 nahi
+        catch (DbUpdateException ex) when (db.IsUniqueViolation(ex, UniqueConstraintKind.ActiveSlaCycle) || db.IsUniqueViolation(ex, UniqueConstraintKind.ActivitySequence) || db.IsUniqueViolation(ex, UniqueConstraintKind.NotificationDedup) || db.IsUniqueViolation(ex, UniqueConstraintKind.OutboxDedup)) // UPDATED: concurrent writers ka activity-sequence clash bhi conflict hai, 500 nahi
         {
             throw AppException.Conflict("The ticket was changed by someone else.", "Reload the ticket and retry.");
         }

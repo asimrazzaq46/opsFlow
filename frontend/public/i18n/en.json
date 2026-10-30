@@ -107,7 +107,13 @@
       "TicketResolved": "Resolved: {{subject}}",
       "TicketReopened": "Reopened: {{subject}}",
       "MessageReceived": "New message on {{subject}}",
-      "NoteAdded": "New internal note on {{subject}}"
+      "NoteAdded": "New internal note on {{subject}}",
+      "SlaWarning": "SLA deadline approaching: {{subject}}",
+      "SlaBreached": "SLA breached: {{subject}}"
+    },
+    "slaKinds": {
+      "FirstResponse": "first response",
+      "Resolution": "resolution"
     }
   },
   "realtime": {

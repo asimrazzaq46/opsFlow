@@ -49,7 +49,9 @@ public sealed class HubClient : IAsyncDisposable
 {
     private readonly ConcurrentQueue<(string Name, JsonElement Payload)> _events = new();
 
-    private HubClient(HubConnection connection) => Connection = connection;
+    private readonly ApiFactory _factory;
+
+    private HubClient(HubConnection connection, ApiFactory factory) => (Connection, _factory) = (connection, factory);
 
     public HubConnection Connection { get; }
 
@@ -71,7 +73,7 @@ public sealed class HubClient : IAsyncDisposable
                 }
             })
             .Build();
-        var client = new HubClient(connection);
+        var client = new HubClient(connection, factory);
         connection.On<string, JsonElement>("Receive", (name, payload) => client._events.Enqueue((name, payload.Clone())));
         return client;
     }
@@ -83,6 +85,7 @@ public sealed class HubClient : IAsyncDisposable
         var until = DateTime.UtcNow.AddMilliseconds(timeoutMs);
         while (DateTime.UtcNow < until)
         {
+            await _factory.DrainOutboxAsync(); // live pushes now come from the outbox dispatcher (the Hangfire worker is not running in tests)
             if (_events.Any(match))
             {
                 return true;

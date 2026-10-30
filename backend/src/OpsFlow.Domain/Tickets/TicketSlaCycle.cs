@@ -32,6 +32,12 @@ public sealed class TicketSlaCycle : ITenantOwned
     /// <summary>Completion instant of the resolution target; null while the cycle is active.</summary>
     public DateTime? ResolvedAtUtc { get; private set; }
 
+    // UPDATED: Milestone 4 - idempotency markers of the SLA monitor (set once, atomically; never cleared). A breach marker is a persisted record, the state itself stays derived from the instants above.
+    public DateTime? ResponseWarnedAtUtc { get; private set; }
+    public DateTime? ResponseBreachedAtUtc { get; private set; }
+    public DateTime? ResolutionWarnedAtUtc { get; private set; }
+    public DateTime? ResolutionBreachedAtUtc { get; private set; }
+
     public bool IsActive => ResolvedAtUtc is null;
 
     public static TicketSlaCycle Start(Ticket ticket, int cycleNumber, SlaCycleReason reason, SlaPolicy policy, DateTime nowUtc) => new()

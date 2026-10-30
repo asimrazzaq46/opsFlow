@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using OpsFlow.Application.Abstractions;
+using OpsFlow.Application.Outbox;
 using OpsFlow.Domain.Tickets;
 
 namespace OpsFlow.Application.Tenants;
@@ -58,7 +59,7 @@ public static class TenantDefaults
 }
 
 /// <summary>Explicit, idempotent initialization of tenants created before these defaults existed (e.g. OpsFlow Demo).</summary>
-public sealed partial class TenantDefaultsService(IOpsFlowDbContext db, ITenantContext tenantContext, TimeProvider clock, ILogger<TenantDefaultsService> logger)
+public sealed partial class TenantDefaultsService(IOpsFlowDbContext db, ITenantContext tenantContext, ITenantCache cache, OutboxWriter outbox, TimeProvider clock, ILogger<TenantDefaultsService> logger)
 {
     /// <summary>
     /// Concurrent initializations of one tenant are SERIALIZED by first taking the tenant row lock (the update lasts until the
@@ -81,11 +82,36 @@ public sealed partial class TenantDefaultsService(IOpsFlowDbContext db, ITenantC
             return 0;
         }
 
+        // UPDATED: cache sirf tab invalidate hota hai jab categories/SLA policies sach mein add hui (settings/counter cached nahi)
+        var categoriesChanged = CategoryNamesMissing(categories);
+        var policiesChanged = TenantDefaults.SlaTargets.Keys.Any(p => !priorities.Contains(p));
+        if (categoriesChanged)
+        {
+            outbox.StageCacheInvalidation(tenantId, CacheResources.Categories);
+        }
+
+        if (policiesChanged)
+        {
+            outbox.StageCacheInvalidation(tenantId, CacheResources.SlaPolicies);
+        }
+
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
+        if (categoriesChanged)
+        {
+            await cache.InvalidateAsync(tenantId, CacheResources.Categories, CancellationToken.None); // commit ke baad; outbox event backstop hai
+        }
+
+        if (policiesChanged)
+        {
+            await cache.InvalidateAsync(tenantId, CacheResources.SlaPolicies, CancellationToken.None);
+        }
+
         LogInitialized(logger, tenantId, added);
         return added;
     }
+
+    private static bool CategoryNamesMissing(HashSet<string> existing) => TenantDefaults.CategoryNames.Any(n => !existing.Contains(TicketCategory.Normalize(n)));
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Tenant {TenantId} defaults initialized ({Added} records)")]
     private static partial void LogInitialized(ILogger logger, Guid tenantId, int added);

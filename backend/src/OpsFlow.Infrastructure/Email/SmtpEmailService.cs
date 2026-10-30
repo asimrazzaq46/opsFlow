@@ -17,6 +17,9 @@ public sealed class SmtpOptions
     public string? Password { get; set; }
     public string FromAddress { get; set; } = "noreply@opsflow.local";
     public string FromName { get; set; } = "OpsFlow";
+
+    /// <summary>UPDATED: upper bound of ONE send (connect + transfer). Keep it well below Outbox:LeaseSeconds.</summary>
+    public int TimeoutSeconds { get; set; } = 30;
 }
 
 internal sealed class SmtpEmailService(IOptions<SmtpOptions> options) : IEmailService
@@ -24,7 +27,8 @@ internal sealed class SmtpEmailService(IOptions<SmtpOptions> options) : IEmailSe
     public async Task SendAsync(string recipient, string subject, string body, CancellationToken cancellationToken)
     {
         var o = options.Value;
-        using var client = new SmtpClient(o.Host, o.Port) { EnableSsl = o.EnableSsl };
+        var timeout = TimeSpan.FromSeconds(Math.Clamp(o.TimeoutSeconds, 1, 300));
+        using var client = new SmtpClient(o.Host, o.Port) { EnableSsl = o.EnableSsl, Timeout = (int)timeout.TotalMilliseconds };
         if (!string.IsNullOrEmpty(o.UserName))
         {
             client.Credentials = new NetworkCredential(o.UserName, o.Password);
@@ -35,6 +39,16 @@ internal sealed class SmtpEmailService(IOptions<SmtpOptions> options) : IEmailSe
             Subject = subject,
             Body = body,
         };
-        await client.SendMailAsync(message, cancellationToken);
+        // UPDATED: SmtpClient.Timeout async sends par bharosemand nahi: apna deadline token (host shutdown phir bhi OperationCanceled)
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(timeout);
+        try
+        {
+            await client.SendMailAsync(message, deadline.Token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException($"SMTP send exceeded {timeout.TotalSeconds:0} s.");
+        }
     }
 }

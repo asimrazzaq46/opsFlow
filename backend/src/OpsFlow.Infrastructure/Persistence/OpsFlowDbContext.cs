@@ -7,6 +7,7 @@ using OpsFlow.Domain.Common;
 using OpsFlow.Domain.Customers;
 using OpsFlow.Domain.Invitations;
 using OpsFlow.Domain.Notifications;
+using OpsFlow.Domain.Outbox;
 using OpsFlow.Domain.Tenants;
 using OpsFlow.Domain.Tickets;
 using OpsFlow.Domain.Users;
@@ -38,6 +39,8 @@ public sealed class OpsFlowDbContext(DbContextOptions<OpsFlowDbContext> options,
     public DbSet<TicketNote> TicketNotes => Set<TicketNote>();
     public DbSet<TicketAttachment> TicketAttachments => Set<TicketAttachment>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    // UPDATED: Milestone 4 - no query filter on purpose: the dispatcher claims across tenants and then runs each event inside its own tenant scope; writes stay tenant-guarded by SaveChanges
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     // Evaluated per query by EF; null (no tenant resolved) matches nothing, so tenant data fails closed.
     private Guid? CurrentTenantId => tenantContext.TenantId;
@@ -85,6 +88,7 @@ public sealed class OpsFlowDbContext(DbContextOptions<OpsFlowDbContext> options,
             UniqueConstraintKind.MessageClientId => ("IX_TicketMessages_ClientMessageId", "TicketMessages.ClientMessageId"),
             UniqueConstraintKind.NoteClientId => ("IX_TicketNotes_ClientNoteId", "TicketNotes.ClientNoteId"),
             UniqueConstraintKind.NotificationDedup => ("IX_Notifications_TenantId_UserId_DedupKey", "Notifications.DedupKey"),
+            UniqueConstraintKind.OutboxDedup => ("IX_OutboxMessages_TenantId_DedupKey", "OutboxMessages.DedupKey"),
             _ => throw new ArgumentOutOfRangeException(nameof(constraint)),
         };
 

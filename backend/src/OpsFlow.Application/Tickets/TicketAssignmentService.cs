@@ -67,7 +67,6 @@ public sealed partial class TicketAssignmentService(IOpsFlowDbContext db, Ticket
             try
             {
                 await db.SaveChangesAsync(ct);
-                await notifications.FlushAsync();
                 LogAssigned(logger, ticketId, agents.Count);
                 return await tickets.GetAsync(ticketId, ct);
             }
@@ -75,7 +74,7 @@ public sealed partial class TicketAssignmentService(IOpsFlowDbContext db, Ticket
             {
                 db.ChangeTracker.Clear(); // lost a race: retry re-reads the ticket, the assignments and the actor's authorization
             }
-            catch (DbUpdateException ex) when (db.IsUniqueViolation(ex, UniqueConstraintKind.ActivitySequence) || db.IsUniqueViolation(ex, UniqueConstraintKind.NotificationDedup)) // UPDATED: same-version race notification dedup par bhi takrata hai
+            catch (DbUpdateException ex) when (db.IsUniqueViolation(ex, UniqueConstraintKind.ActivitySequence) || db.IsUniqueViolation(ex, UniqueConstraintKind.NotificationDedup) || db.IsUniqueViolation(ex, UniqueConstraintKind.OutboxDedup)) // UPDATED: same-version race notification dedup par bhi takrata hai
             {
                 db.ChangeTracker.Clear(); // same race, reported by the timeline's unique sequence first
             }
@@ -121,14 +120,13 @@ public sealed partial class TicketAssignmentService(IOpsFlowDbContext db, Ticket
             try
             {
                 await db.SaveChangesAsync(ct);
-                await notifications.FlushAsync();
                 return await tickets.GetAsync(ticketId, ct);
             }
             catch (DbUpdateConcurrencyException)
             {
                 db.ChangeTracker.Clear();
             }
-            catch (DbUpdateException ex) when (db.IsUniqueViolation(ex, UniqueConstraintKind.ActivitySequence) || db.IsUniqueViolation(ex, UniqueConstraintKind.NotificationDedup)) // UPDATED: same-version race notification dedup par bhi takrata hai
+            catch (DbUpdateException ex) when (db.IsUniqueViolation(ex, UniqueConstraintKind.ActivitySequence) || db.IsUniqueViolation(ex, UniqueConstraintKind.NotificationDedup) || db.IsUniqueViolation(ex, UniqueConstraintKind.OutboxDedup)) // UPDATED: same-version race notification dedup par bhi takrata hai
             {
                 db.ChangeTracker.Clear();
             }
