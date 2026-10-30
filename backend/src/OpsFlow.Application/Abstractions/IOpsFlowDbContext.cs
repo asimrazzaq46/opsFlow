@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Storage;
 using OpsFlow.Domain.Customers;
 using OpsFlow.Domain.Invitations;
+using OpsFlow.Domain.Notifications;
 using OpsFlow.Domain.Tickets;
 using OpsFlow.Domain.Tenants;
 using OpsFlow.Domain.Users;
@@ -27,6 +28,10 @@ public interface IOpsFlowDbContext
     DbSet<TicketSlaCycle> TicketSlaCycles { get; }
     DbSet<TenantSettings> Settings { get; }
     DbSet<TenantTicketCounter> TicketCounters { get; }
+    DbSet<TicketMessage> TicketMessages { get; }
+    DbSet<TicketNote> TicketNotes { get; }
+    DbSet<TicketAttachment> TicketAttachments { get; }
+    DbSet<Notification> Notifications { get; }
     ChangeTracker ChangeTracker { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 

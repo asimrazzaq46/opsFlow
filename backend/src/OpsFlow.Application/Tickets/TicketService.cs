@@ -3,13 +3,15 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using OpsFlow.Application.Abstractions;
 using OpsFlow.Application.Common;
+using OpsFlow.Application.Notifications;
+using OpsFlow.Domain.Notifications;
 using OpsFlow.Domain.Tenants;
 using OpsFlow.Domain.Tickets;
 
 namespace OpsFlow.Application.Tickets;
 
 /// <summary>Ticket creation, reading (list/detail/activity/SLA) and field updates. Status changes and assignments live in their own services.</summary>
-public sealed partial class TicketService(IOpsFlowDbContext db, TicketAccess access, ITenantContext tenantContext, TimeProvider clock, ILogger<TicketService> logger)
+public sealed partial class TicketService(IOpsFlowDbContext db, TicketAccess access, ITenantContext tenantContext, NotificationService notifications, TimeProvider clock, ILogger<TicketService> logger)
 {
     private const int MaxPageSize = 100;
 
@@ -88,8 +90,17 @@ public sealed partial class TicketService(IOpsFlowDbContext db, TicketAccess acc
             db.TicketActivities.Add(ticket.Record(TicketActivityType.StatusChanged, actor.UserId, now, TicketStatus.Open.ToString(), TicketStatus.Assigned.ToString()));
         }
 
+        // UPDATED: notifications usi transaction mein persist hoti hain; live push commit ke baad
+        await notifications.StageAsync(ticket, NotificationType.TicketCreated, actor.UserId, $"created:{ticket.Id}", toStaff: true, toCustomer: false, ct: ct);
+        if (assignees.Count > 0)
+        {
+            var assigneeUsers = await db.Memberships.AsNoTracking().Where(m => assignees.Contains(m.Id)).Select(m => m.UserId).ToListAsync(ct);
+            await notifications.StageAsync(ticket, NotificationType.TicketAssigned, actor.UserId, $"assigned:{ticket.Id}:create", toStaff: false, toCustomer: false, alsoUsers: assigneeUsers, ct: ct);
+        }
+
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
+        await notifications.FlushAsync();
         LogCreated(logger, ticket.Id, ticket.TenantId);
         return await GetAsync(ticket.Id, ct);
     }

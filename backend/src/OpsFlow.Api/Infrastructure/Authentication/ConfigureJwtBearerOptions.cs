@@ -6,6 +6,7 @@ using Microsoft.IdentityModel.Tokens;
 using OpsFlow.Api.Infrastructure.Errors;
 using OpsFlow.Application.Auth;
 using OpsFlow.Infrastructure.Security;
+using OpsFlow.Realtime;
 
 namespace OpsFlow.Api.Infrastructure.Authentication;
 
@@ -13,7 +14,7 @@ namespace OpsFlow.Api.Infrastructure.Authentication;
 /// JWT bearer validation. The token proves WHO and WHICH SESSION only; on every request the database is asked whether
 /// that session, user and auth version are still valid, and tenant access is decided separately by the membership policies.
 /// </summary>
-internal sealed class ConfigureJwtBearerOptions(IOptions<AuthOptions> auth, TimeProvider clock) : IConfigureNamedOptions<JwtBearerOptions>
+internal sealed class ConfigureJwtBearerOptions(IOptions<AuthOptions> auth, IOptions<RealtimeOptions> realtime, TimeProvider clock) : IConfigureNamedOptions<JwtBearerOptions>
 {
     public void Configure(JwtBearerOptions options) => Configure(JwtBearerDefaults.AuthenticationScheme, options);
 
@@ -28,7 +29,22 @@ internal sealed class ConfigureJwtBearerOptions(IOptions<AuthOptions> auth, Time
         options.RequireHttpsMetadata = false; // no metadata endpoint is used; the key is local
         options.SaveToken = false;
         options.TokenValidationParameters = JwtTokenValidation.Parameters(auth.Value.Jwt, clock);
-        options.Events = new JwtBearerEvents { OnTokenValidated = ValidateSessionAsync, OnChallenge = RecordChallengeCode };
+        // UPDATED: SignalR WebSocket header nahi bhej sakta - sirf hub path par query access_token qubool; baqi validation bilkul wahi (access type + DB session)
+        var hubPath = realtime.Value.HubPath;
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                if (string.IsNullOrEmpty(context.Token) && context.HttpContext.HubAccessToken(hubPath) is { } token)
+                {
+                    context.Token = token;
+                }
+
+                return Task.CompletedTask;
+            },
+            OnTokenValidated = ValidateSessionAsync,
+            OnChallenge = RecordChallengeCode,
+        };
     }
 
     // UPDATED: 401 body (StatusCodePages) mein stable code: token missing / expired / invalid. Default challenge (WWW-Authenticate) barqarar.

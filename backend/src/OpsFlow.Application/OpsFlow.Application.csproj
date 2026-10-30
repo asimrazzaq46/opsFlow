@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\OpsFlow.Domain\OpsFlow.Domain.csproj" />
+    <ProjectReference Include="..\OpsFlow.Realtime\OpsFlow.Realtime.csproj" />
   </ItemGroup>
 
 </Project>

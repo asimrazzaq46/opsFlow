@@ -6,6 +6,7 @@ using OpsFlow.Application.Common;
 using OpsFlow.Domain.Common;
 using OpsFlow.Domain.Customers;
 using OpsFlow.Domain.Invitations;
+using OpsFlow.Domain.Notifications;
 using OpsFlow.Domain.Tenants;
 using OpsFlow.Domain.Tickets;
 using OpsFlow.Domain.Users;
@@ -32,6 +33,11 @@ public sealed class OpsFlowDbContext(DbContextOptions<OpsFlowDbContext> options,
     public DbSet<TicketSlaCycle> TicketSlaCycles => Set<TicketSlaCycle>();
     public DbSet<TenantSettings> Settings => Set<TenantSettings>();
     public DbSet<TenantTicketCounter> TicketCounters => Set<TenantTicketCounter>();
+    // UPDATED: Milestone 3 - chat, internal notes, attachments, notifications
+    public DbSet<TicketMessage> TicketMessages => Set<TicketMessage>();
+    public DbSet<TicketNote> TicketNotes => Set<TicketNote>();
+    public DbSet<TicketAttachment> TicketAttachments => Set<TicketAttachment>();
+    public DbSet<Notification> Notifications => Set<Notification>();
 
     // Evaluated per query by EF; null (no tenant resolved) matches nothing, so tenant data fails closed.
     private Guid? CurrentTenantId => tenantContext.TenantId;
@@ -54,6 +60,10 @@ public sealed class OpsFlowDbContext(DbContextOptions<OpsFlowDbContext> options,
         modelBuilder.Entity<TicketSlaCycle>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
         modelBuilder.Entity<TenantSettings>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
         modelBuilder.Entity<TenantTicketCounter>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<TicketMessage>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<TicketNote>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<TicketAttachment>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<Notification>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
     }
 
     // Only the expected unique constraint is recognised; every other DbUpdateException must propagate.
@@ -72,6 +82,9 @@ public sealed class OpsFlowDbContext(DbContextOptions<OpsFlowDbContext> options,
             UniqueConstraintKind.OpenAssignment => ("IX_TicketAssignments_TicketId_MembershipId", "TicketAssignments.MembershipId"),
             UniqueConstraintKind.ActiveSlaCycle => ("IX_TicketSlaCycles_TicketId", "TicketSlaCycles.TicketId"),
             UniqueConstraintKind.ActivitySequence => ("IX_TicketActivities_TicketId_Sequence", "TicketActivities.Sequence"),
+            UniqueConstraintKind.MessageClientId => ("IX_TicketMessages_ClientMessageId", "TicketMessages.ClientMessageId"),
+            UniqueConstraintKind.NoteClientId => ("IX_TicketNotes_ClientNoteId", "TicketNotes.ClientNoteId"),
+            UniqueConstraintKind.NotificationDedup => ("IX_Notifications_TenantId_UserId_DedupKey", "Notifications.DedupKey"),
             _ => throw new ArgumentOutOfRangeException(nameof(constraint)),
         };
 

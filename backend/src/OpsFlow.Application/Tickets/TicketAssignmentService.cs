@@ -2,6 +2,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using OpsFlow.Application.Abstractions;
 using OpsFlow.Application.Common;
+using OpsFlow.Application.Notifications;
+using OpsFlow.Domain.Notifications;
 using OpsFlow.Domain.Tickets;
 using OpsFlow.Domain.Users;
 
@@ -12,7 +14,7 @@ namespace OpsFlow.Application.Tickets;
 /// the tenant OwnerChangeStamp is read first and rotated in the same transaction (same protocol as membership/invitation changes),
 /// so an actor demoted/suspended mid-request cannot commit. Assignment rows are closed, never deleted, so history is preserved.
 /// </summary>
-public sealed partial class TicketAssignmentService(IOpsFlowDbContext db, TicketAccess access, TicketService tickets, TimeProvider clock, ILogger<TicketAssignmentService> logger)
+public sealed partial class TicketAssignmentService(IOpsFlowDbContext db, TicketAccess access, TicketService tickets, NotificationService notifications, TimeProvider clock, ILogger<TicketAssignmentService> logger)
 {
     private const int MaxAttempts = 3;
 
@@ -53,10 +55,19 @@ public sealed partial class TicketAssignmentService(IOpsFlowDbContext db, Ticket
                 ticket.Touch(now);
             }
 
+            // UPDATED: naye assignees ko TicketAssigned; Open->Assigned par customer ko status notification (staffing details nahi)
+            var agentUsers = await db.Memberships.AsNoTracking().Where(m => agents.Contains(m.Id)).Select(m => m.UserId).ToListAsync(ct);
+            await notifications.StageAsync(ticket, NotificationType.TicketAssigned, actor.UserId, $"assigned:{ticketId}:{ticket.Version}", toStaff: false, toCustomer: false, alsoUsers: agentUsers, ct: ct);
+            if (ticket.Status == TicketStatus.Assigned)
+            {
+                await notifications.StageAsync(ticket, NotificationType.TicketStatusChanged, actor.UserId, $"status:{ticketId}:{ticket.Version}", toStaff: false, toCustomer: true, detail: nameof(TicketStatus.Assigned), ct: ct);
+            }
+
             tenant.RotateOwnerChangeStamp();
             try
             {
                 await db.SaveChangesAsync(ct);
+                await notifications.FlushAsync();
                 LogAssigned(logger, ticketId, agents.Count);
                 return await tickets.GetAsync(ticketId, ct);
             }
@@ -64,7 +75,7 @@ public sealed partial class TicketAssignmentService(IOpsFlowDbContext db, Ticket
             {
                 db.ChangeTracker.Clear(); // lost a race: retry re-reads the ticket, the assignments and the actor's authorization
             }
-            catch (DbUpdateException ex) when (db.IsUniqueViolation(ex, UniqueConstraintKind.ActivitySequence))
+            catch (DbUpdateException ex) when (db.IsUniqueViolation(ex, UniqueConstraintKind.ActivitySequence) || db.IsUniqueViolation(ex, UniqueConstraintKind.NotificationDedup)) // UPDATED: same-version race notification dedup par bhi takrata hai
             {
                 db.ChangeTracker.Clear(); // same race, reported by the timeline's unique sequence first
             }
@@ -104,17 +115,20 @@ public sealed partial class TicketAssignmentService(IOpsFlowDbContext db, Ticket
             assignment.Unassign(actor.MembershipId, now);
             db.TicketActivities.Add(ticket.Record(TicketActivityType.AgentUnassigned, actor.UserId, now, relatedId: membershipId));
             ticket.Touch(now);
+            var removedUser = await db.Memberships.AsNoTracking().Where(m => m.Id == membershipId).Select(m => m.UserId).SingleAsync(ct);
+            await notifications.StageAsync(ticket, NotificationType.TicketUnassigned, actor.UserId, $"unassigned:{ticketId}:{ticket.Version}", toStaff: false, toCustomer: false, alsoUsers: [removedUser], ct: ct);
             tenant.RotateOwnerChangeStamp();
             try
             {
                 await db.SaveChangesAsync(ct);
+                await notifications.FlushAsync();
                 return await tickets.GetAsync(ticketId, ct);
             }
             catch (DbUpdateConcurrencyException)
             {
                 db.ChangeTracker.Clear();
             }
-            catch (DbUpdateException ex) when (db.IsUniqueViolation(ex, UniqueConstraintKind.ActivitySequence))
+            catch (DbUpdateException ex) when (db.IsUniqueViolation(ex, UniqueConstraintKind.ActivitySequence) || db.IsUniqueViolation(ex, UniqueConstraintKind.NotificationDedup)) // UPDATED: same-version race notification dedup par bhi takrata hai
             {
                 db.ChangeTracker.Clear();
             }

@@ -1,9 +1,117 @@
 {
-  "shell": { "language": "Language", "toggleTheme": "Toggle dark/light theme" },
-  "health": { "checking": "Checking API…", "online": "API online", "offline": "API offline" },
+  "shell": {
+    "language": "Language",
+    "toggleTheme": "Toggle dark/light theme"
+  },
+  "health": {
+    "checking": "Checking API…",
+    "online": "API online",
+    "offline": "API offline"
+  },
   "home": {
     "eyebrow": "Multi-tenant service operations",
     "title": "OpsFlow",
     "subtitle": "Tickets, teams and customers in one secure workspace. The foundation is up and running."
+  },
+  "common": {
+    "loading": "Loading…",
+    "retry": "Retry",
+    "previous": "Previous",
+    "next": "Next"
+  },
+  "nav": {
+    "tickets": "Tickets"
+  },
+  "auth": {
+    "signIn": "Sign in",
+    "email": "Email",
+    "password": "Password",
+    "submit": "Sign in",
+    "signOut": "Sign out",
+    "invalid": "Sign-in failed. Check your email and password."
+  },
+  "tenant": {
+    "label": "Workspace",
+    "none": "No workspace available."
+  },
+  "tickets": {
+    "title": "Tickets",
+    "empty": "There are no tickets yet.",
+    "loadError": "Could not load tickets.",
+    "back": "All tickets",
+    "paging": "Ticket pages",
+    "status": {
+      "Open": "Open",
+      "Assigned": "Assigned",
+      "InProgress": "In progress",
+      "OnHold": "On hold",
+      "Resolved": "Resolved",
+      "Closed": "Closed"
+    },
+    "priority": {
+      "Low": "Low",
+      "Medium": "Medium",
+      "High": "High",
+      "Urgent": "Urgent"
+    }
+  },
+  "chat": {
+    "title": "Conversation",
+    "empty": "No messages yet.",
+    "label": "Write a message",
+    "send": "Send",
+    "sending": "Sending…",
+    "sendError": "The message could not be sent. Retrying will not create a duplicate.",
+    "error": "Could not load messages.",
+    "loadOlder": "Load older messages",
+    "you": "You",
+    "supportTeam": "Support team"
+  },
+  "notes": {
+    "title": "Internal notes",
+    "hint": "Visible to staff only. Customers never see these notes.",
+    "empty": "No internal notes yet.",
+    "label": "Add an internal note",
+    "add": "Add note",
+    "error": "Could not load notes.",
+    "saveError": "The note could not be saved."
+  },
+  "attachments": {
+    "title": "Attachments",
+    "empty": "No attachments.",
+    "upload": "Upload a file",
+    "allowed": "Allowed: png, jpg, jpeg, gif, pdf, txt, docx, xlsx. Maximum 10 MB.",
+    "internal": "Internal only (hidden from customers)",
+    "internalBadge": "Internal",
+    "download": "Download",
+    "error": "Could not load attachments.",
+    "badType": "This file type is not allowed.",
+    "tooLarge": "The file is larger than 10 MB.",
+    "uploadError": "The upload failed.",
+    "downloadError": "The download failed."
+  },
+  "notifications": {
+    "title": "Notifications",
+    "bell": "Notifications, {{count}} unread",
+    "unreadCount": "{{count}} unread notifications",
+    "unread": "Unread",
+    "markAll": "Mark all as read",
+    "empty": "You have no notifications.",
+    "loadMore": "Load more",
+    "error": "Could not load notifications.",
+    "types": {
+      "TicketCreated": "New ticket {{subject}}",
+      "TicketAssigned": "Assigned to you: {{subject}}",
+      "TicketUnassigned": "Removed from {{subject}}",
+      "TicketStatusChanged": "Status changed: {{subject}}",
+      "TicketResolved": "Resolved: {{subject}}",
+      "TicketReopened": "Reopened: {{subject}}",
+      "MessageReceived": "New message on {{subject}}",
+      "NoteAdded": "New internal note on {{subject}}"
+    }
+  },
+  "realtime": {
+    "reconnecting": "Reconnecting to live updates…",
+    "disconnected": "Live updates are offline. Retrying…"
   }
 }

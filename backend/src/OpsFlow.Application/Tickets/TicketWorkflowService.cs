@@ -2,6 +2,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using OpsFlow.Application.Abstractions;
 using OpsFlow.Application.Common;
+using OpsFlow.Application.Notifications;
+using OpsFlow.Domain.Notifications;
 using OpsFlow.Domain.Tenants;
 using OpsFlow.Domain.Tickets;
 
@@ -12,7 +14,7 @@ namespace OpsFlow.Application.Tickets;
 /// finalization on resolve and a NEW SLA cycle on reopen. Every change persists status, SLA cycle and timeline together and is
 /// guarded by the ticket Version concurrency token, so simultaneous transitions/reopens never overwrite each other.
 /// </summary>
-public sealed partial class TicketWorkflowService(IOpsFlowDbContext db, TicketAccess access, TicketService tickets, TimeProvider clock, ILogger<TicketWorkflowService> logger)
+public sealed partial class TicketWorkflowService(IOpsFlowDbContext db, TicketAccess access, TicketService tickets, NotificationService notifications, TimeProvider clock, ILogger<TicketWorkflowService> logger)
 {
     private DateTime Now => clock.GetUtcNow().UtcDateTime;
 
@@ -65,8 +67,11 @@ public sealed partial class TicketWorkflowService(IOpsFlowDbContext db, TicketAc
             db.TicketActivities.Add(ticket.Record(TicketActivityType.StatusChanged, actor.UserId, now, old.ToString(), target.ToString()));
         }
 
+        // UPDATED: status/resolve notification usi commit mein (staff + customer, actor ke baghair)
+        await notifications.StageAsync(ticket, target == TicketStatus.Resolved ? NotificationType.TicketResolved : NotificationType.TicketStatusChanged, actor.UserId, $"status:{ticketId}:{ticket.Version}", toStaff: true, toCustomer: true, detail: target.ToString(), ct: ct);
         await SaveAsync(ct);
         await transaction.CommitAsync(ct);
+        await notifications.FlushAsync();
         LogChanged(logger, ticketId, old, target);
         return await tickets.GetAsync(ticketId, ct);
     }
@@ -108,8 +113,10 @@ public sealed partial class TicketWorkflowService(IOpsFlowDbContext db, TicketAc
         db.TicketActivities.Add(ticket.Record(TicketActivityType.Reopened, actor.UserId, now, old.ToString(), next.ToString()));
         db.TicketActivities.Add(ticket.Record(TicketActivityType.SlaCycleStarted, null, now, newValue: cycle.CycleNumber.ToString(System.Globalization.CultureInfo.InvariantCulture), relatedId: cycle.Id));
 
+        await notifications.StageAsync(ticket, NotificationType.TicketReopened, actor.UserId, $"reopen:{ticketId}:{ticket.Version}", toStaff: true, toCustomer: true, detail: next.ToString(), ct: ct);
         await SaveAsync(ct);
         await transaction.CommitAsync(ct);
+        await notifications.FlushAsync();
         LogChanged(logger, ticketId, old, next);
         return await tickets.GetAsync(ticketId, ct);
     }
@@ -136,7 +143,7 @@ public sealed partial class TicketWorkflowService(IOpsFlowDbContext db, TicketAc
         {
             throw AppException.Conflict("The ticket was changed by someone else.", "Reload the ticket and retry.");
         }
-        catch (DbUpdateException ex) when (db.IsUniqueViolation(ex, UniqueConstraintKind.ActiveSlaCycle) || db.IsUniqueViolation(ex, UniqueConstraintKind.ActivitySequence)) // UPDATED: concurrent writers ka activity-sequence clash bhi conflict hai, 500 nahi
+        catch (DbUpdateException ex) when (db.IsUniqueViolation(ex, UniqueConstraintKind.ActiveSlaCycle) || db.IsUniqueViolation(ex, UniqueConstraintKind.ActivitySequence) || db.IsUniqueViolation(ex, UniqueConstraintKind.NotificationDedup)) // UPDATED: concurrent writers ka activity-sequence clash bhi conflict hai, 500 nahi
         {
             throw AppException.Conflict("The ticket was changed by someone else.", "Reload the ticket and retry.");
         }

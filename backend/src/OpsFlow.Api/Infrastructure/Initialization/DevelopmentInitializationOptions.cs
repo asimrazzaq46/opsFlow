@@ -8,6 +8,15 @@ public sealed class DevelopmentInitializationOptions
     public bool Enabled { get; set; }
 }
 
+// UPDATED: Development startup par maujooda (already generated) migrations khud apply karne ka explicit switch
+public sealed class DatabaseStartupOptions
+{
+    public const string SectionName = "Database";
+
+    /// <summary>Applies PENDING migrations at startup; honoured ONLY in the Development environment. Never generates migrations.</summary>
+    public bool AutoApplyMigrationsOnStartup { get; set; }
+}
+
 public sealed class DevelopmentSeedOptions
 {
     public const string SectionName = "DevelopmentSeed";

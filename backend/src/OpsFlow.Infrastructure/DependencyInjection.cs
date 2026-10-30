@@ -3,6 +3,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using OpsFlow.Application.Abstractions;
 using OpsFlow.Application.Auth;
+using OpsFlow.Application.Tickets;
+using OpsFlow.Infrastructure.Storage;
 using OpsFlow.Infrastructure.Security;
 using OpsFlow.Infrastructure.Email;
 using OpsFlow.Infrastructure.Persistence;
@@ -23,6 +25,10 @@ public static class DependencyInjection
         services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
         services.AddSingleton<ITokenService, TokenService>(); // UPDATED: access + refresh JWT ki ek service
         services.AddScoped<ISessionValidator, SessionValidator>();
+
+        // UPDATED: attachments - private local storage (provider abstraction: IAttachmentStorage)
+        services.Configure<AttachmentOptions>(configuration.GetSection(AttachmentOptions.SectionName));
+        services.AddSingleton<IAttachmentStorage, LocalAttachmentStorage>();
 
         services.Configure<SmtpOptions>(configuration.GetSection(SmtpOptions.SectionName));
         services.AddSingleton<IEmailService, SmtpEmailService>();

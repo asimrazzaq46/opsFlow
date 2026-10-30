@@ -1,9 +1,117 @@
 {
-  "shell": { "language": "Lingua", "toggleTheme": "Cambia tema chiaro/scuro" },
-  "health": { "checking": "Verifica API…", "online": "API online", "offline": "API offline" },
+  "shell": {
+    "language": "Lingua",
+    "toggleTheme": "Cambia tema chiaro/scuro"
+  },
+  "health": {
+    "checking": "Verifica API…",
+    "online": "API online",
+    "offline": "API offline"
+  },
   "home": {
     "eyebrow": "Operazioni di servizio multi-tenant",
     "title": "OpsFlow",
     "subtitle": "Ticket, team e clienti in un unico spazio di lavoro sicuro. Le fondamenta sono pronte."
+  },
+  "common": {
+    "loading": "Caricamento…",
+    "retry": "Riprova",
+    "previous": "Precedente",
+    "next": "Successiva"
+  },
+  "nav": {
+    "tickets": "Ticket"
+  },
+  "auth": {
+    "signIn": "Accedi",
+    "email": "Email",
+    "password": "Password",
+    "submit": "Accedi",
+    "signOut": "Esci",
+    "invalid": "Accesso non riuscito. Controlla email e password."
+  },
+  "tenant": {
+    "label": "Spazio di lavoro",
+    "none": "Nessuno spazio di lavoro disponibile."
+  },
+  "tickets": {
+    "title": "Ticket",
+    "empty": "Non ci sono ancora ticket.",
+    "loadError": "Impossibile caricare i ticket.",
+    "back": "Tutti i ticket",
+    "paging": "Pagine dei ticket",
+    "status": {
+      "Open": "Aperto",
+      "Assigned": "Assegnato",
+      "InProgress": "In lavorazione",
+      "OnHold": "In attesa",
+      "Resolved": "Risolto",
+      "Closed": "Chiuso"
+    },
+    "priority": {
+      "Low": "Bassa",
+      "Medium": "Media",
+      "High": "Alta",
+      "Urgent": "Urgente"
+    }
+  },
+  "chat": {
+    "title": "Conversazione",
+    "empty": "Ancora nessun messaggio.",
+    "label": "Scrivi un messaggio",
+    "send": "Invia",
+    "sending": "Invio…",
+    "sendError": "Impossibile inviare il messaggio. Riprovare non crea duplicati.",
+    "error": "Impossibile caricare i messaggi.",
+    "loadOlder": "Carica messaggi precedenti",
+    "you": "Tu",
+    "supportTeam": "Team di supporto"
+  },
+  "notes": {
+    "title": "Note interne",
+    "hint": "Visibili solo allo staff. I clienti non vedono mai queste note.",
+    "empty": "Ancora nessuna nota interna.",
+    "label": "Aggiungi una nota interna",
+    "add": "Aggiungi nota",
+    "error": "Impossibile caricare le note.",
+    "saveError": "Impossibile salvare la nota."
+  },
+  "attachments": {
+    "title": "Allegati",
+    "empty": "Nessun allegato.",
+    "upload": "Carica un file",
+    "allowed": "Consentiti: png, jpg, jpeg, gif, pdf, txt, docx, xlsx. Massimo 10 MB.",
+    "internal": "Solo interno (nascosto ai clienti)",
+    "internalBadge": "Interno",
+    "download": "Scarica",
+    "error": "Impossibile caricare gli allegati.",
+    "badType": "Questo tipo di file non è consentito.",
+    "tooLarge": "Il file supera i 10 MB.",
+    "uploadError": "Caricamento non riuscito.",
+    "downloadError": "Download non riuscito."
+  },
+  "notifications": {
+    "title": "Notifiche",
+    "bell": "Notifiche, {{count}} non lette",
+    "unreadCount": "{{count}} notifiche non lette",
+    "unread": "Non letta",
+    "markAll": "Segna tutte come lette",
+    "empty": "Non hai notifiche.",
+    "loadMore": "Carica altre",
+    "error": "Impossibile caricare le notifiche.",
+    "types": {
+      "TicketCreated": "Nuovo ticket {{subject}}",
+      "TicketAssigned": "Assegnato a te: {{subject}}",
+      "TicketUnassigned": "Rimosso da {{subject}}",
+      "TicketStatusChanged": "Stato modificato: {{subject}}",
+      "TicketResolved": "Risolto: {{subject}}",
+      "TicketReopened": "Riaperto: {{subject}}",
+      "MessageReceived": "Nuovo messaggio su {{subject}}",
+      "NoteAdded": "Nuova nota interna su {{subject}}"
+    }
+  },
+  "realtime": {
+    "reconnecting": "Riconnessione agli aggiornamenti live…",
+    "disconnected": "Aggiornamenti live offline. Nuovo tentativo…"
   }
 }

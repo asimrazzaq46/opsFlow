@@ -31,6 +31,7 @@ public enum TicketActivityType
     Reopened,
     SlaCycleStarted,
     SlaCycleCompleted,
+    AttachmentAdded, // UPDATED: staff-only timeline entry (file name kabhi copy nahi hota)
 }
 
 public enum SlaCycleReason

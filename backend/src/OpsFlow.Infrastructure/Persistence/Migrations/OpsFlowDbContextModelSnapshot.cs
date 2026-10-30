@@ -140,6 +140,62 @@ namespace OpsFlow.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OpsFlow.Domain.Notifications.Notification", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DedupKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Detail")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("ReadAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TicketId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("TenantId", "TicketId");
+
+                    b.HasIndex("TenantId", "UserId")
+                        .HasFilter("\"ReadAtUtc\" IS NULL");
+
+                    b.HasIndex("TenantId", "UserId", "DedupKey")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "UserId", "CreatedAtUtc", "Id");
+
+                    b.ToTable("Notifications", (string)null);
+                });
+
             modelBuilder.Entity("OpsFlow.Domain.Tenants.Membership", b =>
                 {
                     b.Property<Guid>("Id")
@@ -324,6 +380,9 @@ namespace OpsFlow.Infrastructure.Persistence.Migrations
                         .HasMaxLength(4000)
                         .HasColumnType("character varying(4000)");
 
+                    b.Property<int>("MessageSequence")
+                        .HasColumnType("integer");
+
                     b.Property<long>("Number")
                         .HasColumnType("bigint");
 
@@ -482,6 +541,64 @@ namespace OpsFlow.Infrastructure.Persistence.Migrations
                     b.ToTable("TicketAssignments", (string)null);
                 });
 
+            modelBuilder.Entity("OpsFlow.Domain.Tickets.TicketAttachment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<bool>("IsInternal")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TicketId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UploadedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StorageKey")
+                        .IsUnique();
+
+                    b.HasIndex("UploadedByUserId");
+
+                    b.HasIndex("TenantId", "TicketId", "CreatedAtUtc", "Id");
+
+                    b.ToTable("TicketAttachments", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_TicketAttachments_Size", "\"SizeBytes\" > 0");
+                        });
+                });
+
             modelBuilder.Entity("OpsFlow.Domain.Tickets.TicketCategory", b =>
                 {
                     b.Property<Guid>("Id")
@@ -515,6 +632,101 @@ namespace OpsFlow.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("TicketCategories", (string)null);
+                });
+
+            modelBuilder.Entity("OpsFlow.Domain.Tickets.TicketMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ClientMessageId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("SenderIsStaff")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("SenderUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TicketId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SenderUserId");
+
+                    b.HasIndex("TicketId", "Sequence")
+                        .IsUnique();
+
+                    b.HasIndex(new[] { "TenantId", "TicketId", "SenderUserId", "ClientMessageId" }, "IX_TicketMessages_ClientMessageId")
+                        .IsUnique();
+
+                    b.ToTable("TicketMessages", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_TicketMessages_Content", "length(trim(\"Content\")) > 0");
+
+                            t.HasCheckConstraint("CK_TicketMessages_Sequence", "\"Sequence\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("OpsFlow.Domain.Tickets.TicketNote", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AuthorUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ClientNoteId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TicketId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AuthorUserId");
+
+                    b.HasIndex("TicketId", "Sequence")
+                        .IsUnique();
+
+                    b.HasIndex(new[] { "TenantId", "TicketId", "AuthorUserId", "ClientNoteId" }, "IX_TicketNotes_ClientNoteId")
+                        .IsUnique();
+
+                    b.ToTable("TicketNotes", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_TicketNotes_Content", "length(trim(\"Content\")) > 0");
+
+                            t.HasCheckConstraint("CK_TicketNotes_Sequence", "\"Sequence\" > 0");
+                        });
                 });
 
             modelBuilder.Entity("OpsFlow.Domain.Tickets.TicketSlaCycle", b =>
@@ -795,6 +1007,28 @@ namespace OpsFlow.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("OpsFlow.Domain.Notifications.Notification", b =>
+                {
+                    b.HasOne("OpsFlow.Domain.Tenants.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpsFlow.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpsFlow.Domain.Tickets.Ticket", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "TicketId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("OpsFlow.Domain.Tenants.Membership", b =>
                 {
                     b.HasOne("OpsFlow.Domain.Tenants.Tenant", null)
@@ -922,11 +1156,77 @@ namespace OpsFlow.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
                 });
 
+            modelBuilder.Entity("OpsFlow.Domain.Tickets.TicketAttachment", b =>
+                {
+                    b.HasOne("OpsFlow.Domain.Tenants.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpsFlow.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("UploadedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpsFlow.Domain.Tickets.Ticket", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "TicketId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("OpsFlow.Domain.Tickets.TicketCategory", b =>
                 {
                     b.HasOne("OpsFlow.Domain.Tenants.Tenant", null)
                         .WithMany()
                         .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OpsFlow.Domain.Tickets.TicketMessage", b =>
+                {
+                    b.HasOne("OpsFlow.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("SenderUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpsFlow.Domain.Tenants.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpsFlow.Domain.Tickets.Ticket", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "TicketId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OpsFlow.Domain.Tickets.TicketNote", b =>
+                {
+                    b.HasOne("OpsFlow.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("AuthorUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpsFlow.Domain.Tenants.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpsFlow.Domain.Tickets.Ticket", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "TicketId")
+                        .HasPrincipalKey("TenantId", "Id")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
