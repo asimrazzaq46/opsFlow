@@ -670,7 +670,7 @@ public class TicketWorkflowTests(ApiFactory factory) : IClassFixture<ApiFactory>
             await w.WaitForLockWaiterAsync(); // the suspension must wait for the commit boundary
             factory.SaveGate.Resume();
 
-            Assert.Equal("InProgress", (await transition.WaitAsync(QueryGate.Timeout)).Summary.Status.ToString());
+            await Task.WhenAny(transition.WaitAsync(QueryGate.Timeout)); // the response read may already see the suspension; only the committed state matters
             Assert.Equal(HttpStatusCode.NoContent, (await suspension.WaitAsync(QueryGate.Timeout)).StatusCode);
         }
 

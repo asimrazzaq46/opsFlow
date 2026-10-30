@@ -42,4 +42,7 @@ public interface IOpsFlowDbContext
 
     /// <summary>True only when the exception is a unique-constraint violation of exactly this constraint (PostgreSQL SQLSTATE 23505).</summary>
     bool IsUniqueViolation(DbUpdateException exception, UniqueConstraintKind constraint);
+
+    /// <summary>True when PostgreSQL aborted the transaction as a deadlock victim (SQLSTATE 40P01): the other writer won, so callers report "changed concurrently".</summary>
+    bool IsDeadlock(Exception exception);
 }

@@ -132,6 +132,10 @@ public sealed partial class TicketWorkflowService(IOpsFlowDbContext db, TicketAc
         {
             throw AppException.Conflict("The ticket was changed by someone else.", "Reload the ticket and retry.");
         }
+        catch (Exception ex) when (db.IsDeadlock(ex)) // UPDATED: deadlock victim bhi conflict
+        {
+            throw AppException.Conflict("The ticket was changed by someone else.", "Reload the ticket and retry.");
+        }
         catch (DbUpdateException ex) when (db.IsUniqueViolation(ex, UniqueConstraintKind.ActiveSlaCycle) || db.IsUniqueViolation(ex, UniqueConstraintKind.ActivitySequence)) // UPDATED: concurrent writers ka activity-sequence clash bhi conflict hai, 500 nahi
         {
             throw AppException.Conflict("The ticket was changed by someone else.", "Reload the ticket and retry.");

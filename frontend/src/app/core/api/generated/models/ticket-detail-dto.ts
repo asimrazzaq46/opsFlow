@@ -6,7 +6,7 @@ import { SlaCycleDto } from '../models/sla-cycle-dto';
 import { TicketSummaryDto } from '../models/ticket-summary-dto';
 export interface TicketDetailDto {
   assignees: (Array<AssigneeDto> | null);
-  createdByUserId: string;
+  createdByUserId: (string | null);
   currentSla: (null | SlaCycleDto);
   description: string;
   summary: TicketSummaryDto;

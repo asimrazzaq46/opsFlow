@@ -324,6 +324,10 @@ public sealed partial class TicketService(IOpsFlowDbContext db, TicketAccess acc
             {
                 throw AppException.Conflict("The ticket was changed by someone else.", "Reload the ticket and retry.");
             }
+            catch (Exception ex) when (db.IsDeadlock(ex)) // UPDATED: deadlock victim bhi conflict
+            {
+                throw AppException.Conflict("The ticket was changed by someone else.", "Reload the ticket and retry.");
+            }
         }
 
         return await GetAsync(id, ct);

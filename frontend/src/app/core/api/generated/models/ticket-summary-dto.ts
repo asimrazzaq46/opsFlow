@@ -11,6 +11,7 @@ export interface TicketSummaryDto {
   customerId: (string | null);
   customerName: (string | null);
   displayNumber: string;
+  eligibleAssigneeCount: (number | string | null);
   id: string;
   isOverdue: (boolean | null);
   number: (number | string);

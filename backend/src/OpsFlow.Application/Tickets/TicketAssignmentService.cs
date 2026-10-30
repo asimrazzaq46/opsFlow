@@ -118,6 +118,10 @@ public sealed partial class TicketAssignmentService(IOpsFlowDbContext db, Ticket
             {
                 db.ChangeTracker.Clear();
             }
+            catch (Exception ex) when (db.IsDeadlock(ex))
+            {
+                db.ChangeTracker.Clear(); // UPDATED: deadlock victim retry karta hai
+            }
         }
 
         throw AppException.Conflict("The ticket was changed concurrently.", "Please retry.");

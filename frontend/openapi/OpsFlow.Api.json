@@ -3113,7 +3113,10 @@
             "type": "string"
           },
           "createdByUserId": {
-            "type": "string",
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "uuid"
           },
           "assignees": {
@@ -3175,6 +3178,7 @@
           "Open",
           "Finished",
           "Overdue",
+          "Unstaffed",
           null
         ]
       },
@@ -3205,6 +3209,7 @@
           "resolvedAtUtc",
           "version",
           "assigneeCount",
+          "eligibleAssigneeCount",
           "resolutionDueAtUtc",
           "isOverdue"
         ],
@@ -3278,6 +3283,15 @@
             "format": "int32"
           },
           "assigneeCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "eligibleAssigneeCount": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "null",

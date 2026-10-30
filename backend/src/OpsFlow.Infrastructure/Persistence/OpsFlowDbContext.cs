@@ -85,6 +85,20 @@ public sealed class OpsFlowDbContext(DbContextOptions<OpsFlowDbContext> options,
         };
     }
 
+    // UPDATED: concurrent ticket writers ka deadlock victim 500 nahi, conflict hai
+    public bool IsDeadlock(Exception exception)
+    {
+        for (var e = exception; e is not null; e = e.InnerException)
+        {
+            if (e is PostgresException { SqlState: PostgresErrorCodes.DeadlockDetected })
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default) => Database.BeginTransactionAsync(cancellationToken);
 
     // UPDATED: actor/assignee rows par FOR SHARE lock (transaction ke end tak) - authorization commit boundary tak valid rahe
