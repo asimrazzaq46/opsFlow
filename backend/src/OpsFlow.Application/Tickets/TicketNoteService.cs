@@ -2,9 +2,10 @@ using Microsoft.EntityFrameworkCore;
 using OpsFlow.Application.Abstractions;
 using OpsFlow.Application.Common;
 using OpsFlow.Application.Notifications;
+using OpsFlow.Application.Outbox;
+using OpsFlow.Domain.Outbox;
 using OpsFlow.Domain.Notifications;
 using OpsFlow.Domain.Tickets;
-using OpsFlow.Realtime;
 
 namespace OpsFlow.Application.Tickets;
 
@@ -12,7 +13,7 @@ namespace OpsFlow.Application.Tickets;
 /// Staff-only internal notes. Every method rejects Customers on the CURRENT database role (not only at the controller), notes live in
 /// their own table, and neither the realtime payload nor the notification carries content to anyone but staff who may see the ticket.
 /// </summary>
-public sealed class TicketNoteService(IOpsFlowDbContext db, TicketAccess access, TicketAudience audience, NotificationService notifications, IRealtimePublisher publisher, ITenantContext tenantContext, TimeProvider clock)
+public sealed class TicketNoteService(IOpsFlowDbContext db, TicketAccess access, NotificationService notifications, TicketNoteMapper mapper, OutboxWriter outbox, TimeProvider clock)
 {
     private const int MaxPageSize = 100;
 
@@ -45,13 +46,14 @@ public sealed class TicketNoteService(IOpsFlowDbContext db, TicketAccess access,
         var sequence = await access.NextMessageSequenceAsync(ticketId, ct);
         var note = TicketNote.Create(ticket.TenantId, ticketId, sequence, actor.UserId, cmd.Content, cmd.ClientNoteId, clock.GetUtcNow().UtcDateTime);
         db.TicketNotes.Add(note);
+        outbox.Stage(ticket.TenantId, OutboxEvents.TicketNoteCreated, ticketId, new TicketNoteEvent(ticketId, note.Id), $"note:{note.Id}", OutboxChannels.Realtime); // UPDATED: staff push outbox se
         await notifications.StageAsync(ticket, NotificationType.NoteAdded, actor.UserId, $"note:{note.Id}", toStaff: true, toCustomer: false, ct: ct);
         try
         {
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
         }
-        catch (DbUpdateException ex) when (db.IsUniqueViolation(ex, UniqueConstraintKind.NoteClientId))
+        catch (DbUpdateException ex) when (db.IsUniqueViolation(ex, UniqueConstraintKind.NoteClientId) || db.IsUniqueViolation(ex, UniqueConstraintKind.OutboxDedup))
         {
             return null;
         }
@@ -60,12 +62,8 @@ public sealed class TicketNoteService(IOpsFlowDbContext db, TicketAccess access,
             throw AppException.Conflict("The ticket was changed by someone else.", "Please retry.");
         }
 
-        // UPDATED: commit ke baad ka kaam request cancel hone par bhi poora ho (CancellationToken.None)
-        await notifications.FlushAsync();
-        var staff = await audience.StaffAsync(ticket.Id, ticket.CreatedByUserId, CancellationToken.None);
-        var dto = (await MapAsync([note], CancellationToken.None))[0];
-        await publisher.NotifyUsersAsync(staff.ConvertAll(u => u.ToString()), new TicketNoteCreated(tenantContext.TenantId!.Value, ticketId, dto), CancellationToken.None);
-        return new WriteResult<TicketNoteDto>(dto, true);
+        // UPDATED: commit ho chuka; staff push outbox dispatcher karta hai
+        return new WriteResult<TicketNoteDto>((await MapAsync([note], CancellationToken.None))[0], true);
     }
 
     public async Task<PagedResult<TicketNoteDto>> ListAsync(Guid ticketId, int page, int pageSize, CancellationToken ct)
@@ -92,7 +90,13 @@ public sealed class TicketNoteService(IOpsFlowDbContext db, TicketAccess access,
         }
     }
 
-    private async Task<List<TicketNoteDto>> MapAsync(IReadOnlyCollection<TicketNote> notes, CancellationToken ct)
+    private Task<List<TicketNoteDto>> MapAsync(IReadOnlyCollection<TicketNote> notes, CancellationToken ct) => mapper.MapAsync(notes, ct);
+}
+
+/// <summary>Maps stored notes (staff only) with the author's display name.</summary>
+public sealed class TicketNoteMapper(IOpsFlowDbContext db)
+{
+    public async Task<List<TicketNoteDto>> MapAsync(IReadOnlyCollection<TicketNote> notes, CancellationToken ct)
     {
         var ids = notes.Select(n => n.AuthorUserId).Distinct().ToList();
         var names = await db.Users.AsNoTracking().Where(u => ids.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.DisplayName, ct);

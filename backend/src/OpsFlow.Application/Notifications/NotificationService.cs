@@ -1,26 +1,26 @@
 using Microsoft.EntityFrameworkCore;
 using OpsFlow.Application.Abstractions;
 using OpsFlow.Application.Common;
+using OpsFlow.Application.Outbox;
+using Microsoft.Extensions.Options;
+using OpsFlow.Domain.Outbox;
 using OpsFlow.Application.Tickets;
 using OpsFlow.Domain.Notifications;
 using OpsFlow.Domain.Tickets;
-using OpsFlow.Realtime;
 
 namespace OpsFlow.Application.Notifications;
 
 /// <summary>
-/// Persistent notifications. Writers call <see cref="StageAsync"/> BEFORE their SaveChanges (so the rows commit atomically with the
-/// ticket change and the unique DedupKey makes retries harmless) and <see cref="FlushAsync"/> AFTER the commit to push them live.
-/// Readers only ever touch the caller's own rows.
+/// Persistent notifications. Writers call <see cref="StageAsync"/> BEFORE their SaveChanges: the notification rows AND their outbox events
+/// commit atomically with the ticket change (the unique DedupKeys make retries harmless); the outbox dispatcher pushes/e-mails them after
+/// the commit (StageAsync returns the number of recipients; 0 = nothing was staged). Readers only ever touch the caller's own rows.
 /// </summary>
-public sealed class NotificationService(IOpsFlowDbContext db, TicketAudience audience, ICurrentUser currentUser, ITenantContext tenantContext, IRealtimePublisher publisher, TimeProvider clock)
+public sealed class NotificationService(IOpsFlowDbContext db, TicketAudience audience, ICurrentUser currentUser, ITenantContext tenantContext, OutboxWriter outbox, IOptions<OutboxOptions> outboxOptions, TimeProvider clock)
 {
     private const int MaxPageSize = 100;
 
-    private readonly List<Notification> _pending = [];
-
     /// <summary>Adds notification rows for the ticket's current audience (minus the actor) plus any explicit users. Content is never copied.</summary>
-    public async Task StageAsync(Ticket ticket, NotificationType type, Guid actorUserId, string dedupKey, bool toStaff, bool toCustomer, IEnumerable<Guid>? alsoUsers = null, string? detail = null, CancellationToken ct = default)
+    public async Task<int> StageAsync(Ticket ticket, NotificationType type, Guid actorUserId, string dedupKey, bool toStaff, bool toCustomer, IEnumerable<Guid>? alsoUsers = null, string? detail = null, CancellationToken ct = default)
     {
         HashSet<Guid> recipients = [.. alsoUsers ?? []];
         if (toStaff)
@@ -36,7 +36,7 @@ public sealed class NotificationService(IOpsFlowDbContext db, TicketAudience aud
         recipients.Remove(actorUserId);
         if (recipients.Count == 0)
         {
-            return;
+            return 0; // UPDATED: caller ko 0 milta hai (SLA monitor diagnostic log karta hai); khali notification kabhi nahi banti
         }
 
         var prefix = await db.Settings.AsNoTracking().Select(s => s.TicketNumberPrefix).SingleOrDefaultAsync(ct) ?? TenantSettings.DefaultTicketPrefix;
@@ -46,21 +46,12 @@ public sealed class NotificationService(IOpsFlowDbContext db, TicketAudience aud
         {
             var notification = Notification.Create(ticket.TenantId, userId, type, ticket.Id, subject, detail, dedupKey, now);
             db.Notifications.Add(notification);
-            _pending.Add(notification);
+            // UPDATED: live push/e-mail ab outbox ke zariye (isi commit mein), direct publish nahi
+            var channels = OutboxChannels.Realtime | (outboxOptions.Value.EmailNotificationTypes.Contains(type) ? OutboxChannels.Email : OutboxChannels.None);
+            outbox.Stage(ticket.TenantId, OutboxEvents.NotificationCreated, ticket.Id, new NotificationEvent(notification.Id), $"notif:{userId}:{dedupKey}", channels);
         }
-    }
 
-    /// <summary>Pushes the committed notifications to their owners. Best effort: clients re-sync from the history endpoint after a reconnect.</summary>
-    public async Task FlushAsync()
-    {
-        // sirf wo rows jo wakai commit hui (Unchanged); retry mein discard hui rows kabhi publish nahi hoti
-        var committed = db.ChangeTracker.Entries<Notification>().Where(e => e.State == EntityState.Unchanged).Select(e => e.Entity).ToHashSet();
-        var batch = _pending.Where(committed.Contains).ToList();
-        _pending.Clear();
-        foreach (var n in batch)
-        {
-            await publisher.NotifyUserAsync(n.UserId.ToString(), new NotificationCreated(ToDto(n)));
-        }
+        return recipients.Count;
     }
 
     public async Task<PagedResult<NotificationDto>> ListAsync(bool unreadOnly, int page, int pageSize, CancellationToken ct)
@@ -102,5 +93,5 @@ public sealed class NotificationService(IOpsFlowDbContext db, TicketAudience aud
         return db.Notifications.Where(n => n.UserId == userId && n.TenantId == tenantContext.TenantId);
     }
 
-    private static NotificationDto ToDto(Notification n) => new(n.Id, n.TenantId, n.Type, n.TicketId, n.Subject, n.Detail, n.CreatedAtUtc, n.ReadAtUtc is not null);
+    public static NotificationDto ToDto(Notification n) => new(n.Id, n.TenantId, n.Type, n.TicketId, n.Subject, n.Detail, n.CreatedAtUtc, n.ReadAtUtc is not null);
 }

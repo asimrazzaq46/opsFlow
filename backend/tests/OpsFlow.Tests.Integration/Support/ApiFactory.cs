@@ -13,6 +13,7 @@ using Npgsql;
 using Testcontainers.PostgreSql;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using OpsFlow.Application.Abstractions;
+using OpsFlow.Application.Outbox;
 using OpsFlow.Infrastructure.Persistence;
 
 namespace OpsFlow.Tests.Integration.Support;
@@ -23,10 +24,31 @@ public sealed class FakeEmailService : IEmailService
 {
     private readonly ConcurrentQueue<SentEmail> _sent = new();
 
-    public Task SendAsync(string recipient, string subject, string body, CancellationToken cancellationToken)
+    /// <summary>Test switch: simulates an SMTP outage.</summary>
+    public bool Unavailable { get => Volatile.Read(ref _unavailable); set => Volatile.Write(ref _unavailable, value); }
+
+    private bool _unavailable;
+
+    /// <summary>Test hook: runs inside every send (e.g. to advance the clock like a slow SMTP server).</summary>
+    public Action<string>? OnSend { get; set; }
+
+    /// <summary>Test switch: every send takes this long.</summary>
+    public TimeSpan Delay { get; set; }
+
+    public async Task SendAsync(string recipient, string subject, string body, CancellationToken cancellationToken)
     {
+        OnSend?.Invoke(recipient);
+        if (Delay > TimeSpan.Zero)
+        {
+            await Task.Delay(Delay, cancellationToken);
+        }
+
+        if (Unavailable)
+        {
+            throw new IOException("SMTP unavailable (simulated)");
+        }
+
         _sent.Enqueue(new SentEmail(recipient, subject, body));
-        return Task.CompletedTask;
     }
 
     public SentEmail Last(string to, string bodyContains) =>
@@ -199,6 +221,8 @@ public class ApiFactory : WebApplicationFactory<Program>
     private string DbPath => Path.Combine(Path.GetTempPath(), _dbName + ".db");
     private readonly string? _postgresConnectionString = TestDatabase.UsePostgres ? TestDatabase.CreatePostgresDatabase($"opsflow_test_{Guid.NewGuid():N}") : null;
 
+    public string? PostgresConnectionString => _postgresConnectionString;
+
     public FakeEmailService Emails { get; } = new();
     public QueryGate Gate { get; } = new();
     public TestClock Clock { get; } = new();
@@ -247,6 +271,22 @@ public class ApiFactory : WebApplicationFactory<Program>
         using var scope = host.Services.CreateScope();
         scope.ServiceProvider.GetRequiredService<OpsFlowDbContext>().Database.EnsureCreated();
         return host;
+    }
+
+    /// <summary>Runs the outbox dispatcher until nothing is due any more (what the Hangfire worker does in production).</summary>
+    public async Task<int> DrainOutboxAsync()
+    {
+        var total = 0;
+        while (true)
+        {
+            using var scope = Services.CreateScope();
+            var processed = await scope.ServiceProvider.GetRequiredService<OutboxDispatcher>().DispatchAsync(CancellationToken.None);
+            total += processed;
+            if (processed == 0)
+            {
+                return total;
+            }
+        }
     }
 
     public ApiClient CreateApiClient() => new(CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = false }));

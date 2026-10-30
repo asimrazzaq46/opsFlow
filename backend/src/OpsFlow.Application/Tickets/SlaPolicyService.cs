@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using OpsFlow.Application.Abstractions;
 using OpsFlow.Application.Common;
 using OpsFlow.Application.Memberships;
+using OpsFlow.Application.Outbox;
 using OpsFlow.Domain.Tenants;
 using OpsFlow.Domain.Tickets;
 
@@ -10,7 +11,7 @@ namespace OpsFlow.Application.Tickets;
 public sealed record SlaPolicyDto(Guid Id, TicketPriority Priority, int ResponseMinutes, int ResolutionMinutes, bool IsActive);
 
 /// <summary>Tenant SLA policies (calendar-time minutes). Staff can read them; Owners/Managers manage them. Existing cycles keep their snapshot.</summary>
-public sealed class SlaPolicyService(IOpsFlowDbContext db, ActorAccess actor, TimeProvider clock)
+public sealed class SlaPolicyService(IOpsFlowDbContext db, ActorAccess actor, ITenantCache cache, OutboxWriter outbox, TimeProvider clock)
 {
     public async Task<IReadOnlyList<SlaPolicyDto>> ListAsync(CancellationToken ct)
     {
@@ -19,8 +20,10 @@ public sealed class SlaPolicyService(IOpsFlowDbContext db, ActorAccess actor, Ti
             throw AppException.Forbidden("Customers cannot view SLA policies.");
         }
 
-        return await db.SlaPolicies.AsNoTracking().OrderBy(p => p.Priority == TicketPriority.Urgent ? 4 : p.Priority == TicketPriority.High ? 3 : p.Priority == TicketPriority.Medium ? 2 : 1)
-            .ThenBy(p => p.Id).Select(p => new SlaPolicyDto(p.Id, p.Priority, p.ResponseMinutes, p.ResolutionMinutes, p.IsActive)).ToListAsync(ct);
+        // UPDATED: staff-only data, role check upar ho chuka; tenant-wide cache-aside
+        return await cache.GetOrCreateAsync<List<SlaPolicyDto>>(actor.TenantId, CacheResources.SlaPolicies,
+            c => db.SlaPolicies.AsNoTracking().OrderBy(p => p.Priority == TicketPriority.Urgent ? 4 : p.Priority == TicketPriority.High ? 3 : p.Priority == TicketPriority.Medium ? 2 : 1)
+                .ThenBy(p => p.Id).Select(p => new SlaPolicyDto(p.Id, p.Priority, p.ResponseMinutes, p.ResolutionMinutes, p.IsActive)).ToListAsync(c), ct);
     }
 
     public async Task<SlaPolicyDto> CreateAsync(TicketPriority priority, int responseMinutes, int resolutionMinutes, CancellationToken ct)
@@ -28,8 +31,10 @@ public sealed class SlaPolicyService(IOpsFlowDbContext db, ActorAccess actor, Ti
         await using var transaction = await actor.BeginManagerAsync("Only Owners and Managers can manage SLA policies.", ct); // UPDATED: authorization commit tak valid
         var policy = Build(() => SlaPolicy.Create(actor.TenantId, priority, responseMinutes, resolutionMinutes, clock.GetUtcNow().UtcDateTime));
         db.SlaPolicies.Add(policy);
+        outbox.StageCacheInvalidation(actor.TenantId, CacheResources.SlaPolicies);
         await SaveAsync(ct);
         await transaction.CommitAsync(ct);
+        await cache.InvalidateAsync(actor.TenantId, CacheResources.SlaPolicies, CancellationToken.None);
         return ToDto(policy);
     }
 
@@ -42,8 +47,10 @@ public sealed class SlaPolicyService(IOpsFlowDbContext db, ActorAccess actor, Ti
             policy.UpdateTargets(responseMinutes, resolutionMinutes, clock.GetUtcNow().UtcDateTime);
             return policy;
         });
+        outbox.StageCacheInvalidation(actor.TenantId, CacheResources.SlaPolicies);
         await SaveAsync(ct);
         await transaction.CommitAsync(ct);
+        await cache.InvalidateAsync(actor.TenantId, CacheResources.SlaPolicies, CancellationToken.None);
         return ToDto(policy);
     }
 
@@ -58,8 +65,10 @@ public sealed class SlaPolicyService(IOpsFlowDbContext db, ActorAccess actor, Ti
         }
 
         policy.SetActive(isActive, clock.GetUtcNow().UtcDateTime);
+        outbox.StageCacheInvalidation(actor.TenantId, CacheResources.SlaPolicies);
         await SaveAsync(ct);
         await transaction.CommitAsync(ct);
+        await cache.InvalidateAsync(actor.TenantId, CacheResources.SlaPolicies, CancellationToken.None);
     }
 
     private static T Build<T>(Func<T> factory)

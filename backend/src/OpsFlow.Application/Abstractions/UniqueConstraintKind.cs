@@ -17,4 +17,5 @@ public enum UniqueConstraintKind
     MessageClientId,
     NoteClientId,
     NotificationDedup,
+    OutboxDedup,
 }

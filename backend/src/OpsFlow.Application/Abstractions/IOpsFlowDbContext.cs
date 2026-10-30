@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 using OpsFlow.Domain.Customers;
 using OpsFlow.Domain.Invitations;
 using OpsFlow.Domain.Notifications;
+using OpsFlow.Domain.Outbox;
 using OpsFlow.Domain.Tickets;
 using OpsFlow.Domain.Tenants;
 using OpsFlow.Domain.Users;
@@ -32,6 +33,7 @@ public interface IOpsFlowDbContext
     DbSet<TicketNote> TicketNotes { get; }
     DbSet<TicketAttachment> TicketAttachments { get; }
     DbSet<Notification> Notifications { get; }
+    DbSet<OutboxMessage> OutboxMessages { get; } // UPDATED: Milestone 4 - transactional outbox
     ChangeTracker ChangeTracker { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 

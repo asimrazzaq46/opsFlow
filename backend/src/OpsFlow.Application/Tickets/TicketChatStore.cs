@@ -2,6 +2,8 @@ using Microsoft.EntityFrameworkCore;
 using OpsFlow.Application.Abstractions;
 using OpsFlow.Application.Common;
 using OpsFlow.Application.Notifications;
+using OpsFlow.Application.Outbox;
+using OpsFlow.Domain.Outbox;
 using OpsFlow.Domain.Notifications;
 using OpsFlow.Domain.Tickets;
 using OpsFlow.Realtime.Chat;
@@ -10,11 +12,11 @@ namespace OpsFlow.Application.Tickets;
 
 /// <summary>
 /// OpsFlow's side of the generic chat pipeline (conversation id = ticket id). Authorization comes from the database (ticket visibility,
-/// active membership), the sender must be the authenticated caller, and every committed message produces one delivery per audience:
+/// active membership), the sender must be the authenticated caller, and the dispatcher delivers one view per audience:
 /// staff get the full view, the linked customer a view without staff identities. Persistence, sequence, idempotency, SLA first response and
-/// notification rows are ONE authorized transaction; the realtime push happens afterwards (best effort) in <see cref="ChatService{TMessage}"/>.
+/// notification rows AND the outbox event are ONE authorized transaction; the realtime push is done afterwards by the outbox dispatcher.
 /// </summary>
-public sealed class TicketChatStore(IOpsFlowDbContext db, TicketAccess access, TicketAudience audience, NotificationService notifications, TicketMessageMapper mapper, ITenantContext tenantContext, TimeProvider clock)
+public sealed class TicketChatStore(IOpsFlowDbContext db, TicketAccess access, NotificationService notifications, TicketMessageMapper mapper, OutboxWriter outbox, TimeProvider clock)
     : IChatConversationAuthorizer, IChatMessageStore<TicketMessageDto>
 {
     public async ValueTask<bool> IsAllowedAsync(ChatUser user, string conversationId, ChatOperation operation, CancellationToken cancellationToken)
@@ -78,13 +80,14 @@ public sealed class TicketChatStore(IOpsFlowDbContext db, TicketAccess access, T
                 .ExecuteUpdateAsync(s => s.SetProperty(c => c.FirstResponseAtUtc, (DateTime?)now), ct);
         }
 
+        outbox.Stage(ticket.TenantId, OutboxEvents.TicketMessageCreated, ticketId, new TicketMessageEvent(ticketId, message.Id), $"chat:{message.Id}", OutboxChannels.Realtime); // UPDATED: live push outbox se
         await notifications.StageAsync(ticket, NotificationType.MessageReceived, actor.UserId, $"msg:{message.Id}", toStaff: actor.IsCustomer, toCustomer: !actor.IsCustomer, ct: ct);
         try
         {
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
         }
-        catch (DbUpdateException ex) when (db.IsUniqueViolation(ex, UniqueConstraintKind.MessageClientId))
+        catch (DbUpdateException ex) when (db.IsUniqueViolation(ex, UniqueConstraintKind.MessageClientId) || db.IsUniqueViolation(ex, UniqueConstraintKind.OutboxDedup))
         {
             return null;
         }
@@ -93,25 +96,10 @@ public sealed class TicketChatStore(IOpsFlowDbContext db, TicketAccess access, T
             throw AppException.Conflict("The ticket was changed by someone else.", "Please retry.");
         }
 
-        // UPDATED: commit ho chuka - ab request cancel hone par bhi push/response ka kaam poora hona chahiye (CancellationToken.None)
-        await notifications.FlushAsync();
-        return new ChatAppendResult<TicketMessageDto>((await mapper.MapAsync([message], actor.IsCustomer, CancellationToken.None))[0], false, await DeliveriesAsync(ticket, message, CancellationToken.None));
+        // UPDATED: deliveries khali: realtime push outbox dispatcher karta hai (duplicate direct publish nahi)
+        return new ChatAppendResult<TicketMessageDto>((await mapper.MapAsync([message], actor.IsCustomer, CancellationToken.None))[0], false, []);
     }
 
-    // Recipients are recomputed from the database AFTER the commit; each audience gets its own view of the message.
-    private async Task<IReadOnlyList<ChatDelivery>> DeliveriesAsync(Ticket ticket, TicketMessage message, CancellationToken ct)
-    {
-        var tenantId = tenantContext.TenantId!.Value;
-        List<ChatDelivery> deliveries = [];
-        var staff = await audience.StaffAsync(ticket.Id, ticket.CreatedByUserId, ct);
-        deliveries.Add(new ChatDelivery(staff.ConvertAll(u => u.ToString()), new TicketMessageCreated(tenantId, ticket.Id, (await mapper.MapAsync([message], false, ct))[0])));
-        if (await audience.CustomerAsync(ticket.CustomerId, ct) is { } customer)
-        {
-            deliveries.Add(new ChatDelivery([customer.ToString()], new TicketMessageCreated(tenantId, ticket.Id, (await mapper.MapAsync([message], true, ct))[0])));
-        }
-
-        return deliveries;
-    }
 }
 
 /// <summary>Maps stored messages to the audience's view (customers never receive staff identities).</summary>

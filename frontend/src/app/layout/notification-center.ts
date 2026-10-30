@@ -5,6 +5,10 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { NotificationDto } from '../core/api/generated/models';
 import { NotificationService } from '../core/notifications/notification.service';
 
+/** UPDATED: SLA notifications carry an SLA kind (FirstResponse/Resolution) as detail, every other type a ticket status. */
+export const notificationDetailKey = (n: Pick<NotificationDto, 'type' | 'detail'>): string =>
+  (n.type === 'SlaWarning' || n.type === 'SlaBreached' ? 'notifications.slaKinds.' : 'tickets.status.') + (n.detail ?? '');
+
 @Component({
   selector: 'app-notification-center',
   imports: [TranslatePipe, DatePipe],
@@ -53,7 +57,7 @@ import { NotificationService } from '../core/notifications/notification.service'
                     <span class="min-w-0 text-sm" [class.font-semibold]="!n.isRead">
                       {{ 'notifications.types.' + n.type | translate: { subject: n.subject } }}
                       @if (n.detail) {
-                        <span class="text-muted">({{ 'tickets.status.' + n.detail | translate }})</span>
+                        <span class="text-muted">({{ detailKey(n) | translate }})</span>
                       }
                       <time class="block text-xs text-muted" [attr.datetime]="n.createdAtUtc">{{ n.createdAtUtc | date: 'short' }}</time>
                     </span>
@@ -76,6 +80,8 @@ export class NotificationCenter {
   protected readonly notifications = inject(NotificationService);
   private readonly router = inject(Router);
   protected readonly open = signal(false);
+
+  protected readonly detailKey = notificationDetailKey;
 
   protected toggle(): void {
     this.open.update((v) => !v);

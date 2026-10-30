@@ -1,6 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using OpsFlow.Application.Outbox;
+using OpsFlow.Infrastructure.Background;
+using OpsFlow.Infrastructure.Caching;
 using OpsFlow.Application.Abstractions;
 using OpsFlow.Application.Auth;
 using OpsFlow.Application.Tickets;
@@ -32,6 +36,30 @@ public static class DependencyInjection
 
         services.Configure<SmtpOptions>(configuration.GetSection(SmtpOptions.SectionName));
         services.AddSingleton<IEmailService, SmtpEmailService>();
+
+        // UPDATED: Milestone 4 - outbox/SLA/background options, jobs and the optional Redis application cache
+        services.Configure<OutboxOptions>(configuration.GetSection(OutboxOptions.SectionName));
+        services.Configure<SlaOptions>(configuration.GetSection(SlaOptions.SectionName));
+        services.Configure<BackgroundOptions>(configuration.GetSection(BackgroundOptions.SectionName));
+        services.AddScoped<OutboxDispatchJob>();
+        services.AddScoped<SlaScanJob>();
+        services.AddScoped<OutboxMaintenanceJob>();
+        services.Configure<CacheOptions>(configuration.GetSection(CacheOptions.SectionName));
+        if (configuration[$"{CacheOptions.SectionName}:{nameof(CacheOptions.RedisConnectionString)}"] is { Length: > 0 } redis && !string.IsNullOrWhiteSpace(redis))
+        {
+            // UPDATED: galat Cache:RedisConnectionString startup par saaf error deta hai (production config chhupti nahi); runtime outages phir bhi DB par fallback karte hain
+            try
+            {
+                _ = RedisTenantCache.BuildConfiguration(redis);
+            }
+            catch (ArgumentException ex)
+            {
+                throw new InvalidOperationException("Cache:RedisConnectionString is not a valid Redis connection string (expected e.g. '127.0.0.1:6380' or 'host:6379,password=...,ssl=true').", ex);
+            }
+
+            services.Replace(ServiceDescriptor.Singleton<ITenantCache, RedisTenantCache>());
+        }
+
         return services;
     }
 }

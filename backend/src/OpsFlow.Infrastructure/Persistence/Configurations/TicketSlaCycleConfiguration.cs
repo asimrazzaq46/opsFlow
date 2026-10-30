@@ -27,5 +27,8 @@ internal sealed class TicketSlaCycleConfiguration : IEntityTypeConfiguration<Tic
         b.HasIndex(c => new { c.TicketId, c.CycleNumber }).IsUnique();
         b.HasIndex(c => c.TicketId).IsUnique().HasFilter("\"ResolvedAtUtc\" IS NULL"); // never two ACTIVE cycles (concurrent reopen)
         b.HasIndex(c => new { c.TenantId, c.ResolutionDueAtUtc }).HasFilter("\"ResolvedAtUtc\" IS NULL"); // overdue queries
+        // UPDATED: Milestone 4 - SLA monitor scans only cycles whose deadline work is still open
+        b.HasIndex(c => c.ResolutionDueAtUtc).HasFilter("\"ResolutionBreachedAtUtc\" IS NULL").HasDatabaseName("IX_TicketSlaCycles_ResolutionMonitor");
+        b.HasIndex(c => c.ResponseDueAtUtc).HasFilter("\"ResponseBreachedAtUtc\" IS NULL AND \"ResponseDueAtUtc\" IS NOT NULL").HasDatabaseName("IX_TicketSlaCycles_ResponseMonitor");
     }
 }

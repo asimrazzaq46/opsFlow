@@ -196,6 +196,89 @@ namespace OpsFlow.Infrastructure.Persistence.Migrations
                     b.ToTable("Notifications", (string)null);
                 });
 
+            modelBuilder.Entity("OpsFlow.Domain.Outbox.OutboxMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AggregateId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("ClaimToken")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ClaimedUntilUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("CompletedChannels")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CorrelationId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DedupKey")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<int>("EventVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime>("NextAttemptAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime?>("ProcessedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("RequiredChannels")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAtUtc")
+                        .HasFilter("\"Status\" = 'DeadLetter'");
+
+                    b.HasIndex("ProcessedAtUtc")
+                        .HasFilter("\"Status\" = 'Completed'");
+
+                    b.HasIndex("NextAttemptAtUtc", "ClaimedUntilUtc")
+                        .HasFilter("\"Status\" IN ('Pending','RetryScheduled','Claimed')");
+
+                    b.HasIndex("TenantId", "DedupKey")
+                        .IsUnique();
+
+                    b.ToTable("OutboxMessages", (string)null);
+                });
+
             modelBuilder.Entity("OpsFlow.Domain.Tenants.Membership", b =>
                 {
                     b.Property<Guid>("Id")
@@ -745,13 +828,22 @@ namespace OpsFlow.Infrastructure.Persistence.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<DateTime?>("ResolutionBreachedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTime>("ResolutionDueAtUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("ResolutionMinutes")
                         .HasColumnType("integer");
 
+                    b.Property<DateTime?>("ResolutionWarnedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTime?>("ResolvedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("ResponseBreachedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime?>("ResponseDueAtUtc")
@@ -759,6 +851,9 @@ namespace OpsFlow.Infrastructure.Persistence.Migrations
 
                     b.Property<int>("ResponseMinutes")
                         .HasColumnType("integer");
+
+                    b.Property<DateTime?>("ResponseWarnedAtUtc")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("SlaPolicyId")
                         .HasColumnType("uuid");
@@ -773,6 +868,14 @@ namespace OpsFlow.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ResolutionDueAtUtc")
+                        .HasDatabaseName("IX_TicketSlaCycles_ResolutionMonitor")
+                        .HasFilter("\"ResolutionBreachedAtUtc\" IS NULL");
+
+                    b.HasIndex("ResponseDueAtUtc")
+                        .HasDatabaseName("IX_TicketSlaCycles_ResponseMonitor")
+                        .HasFilter("\"ResponseBreachedAtUtc\" IS NULL AND \"ResponseDueAtUtc\" IS NOT NULL");
 
                     b.HasIndex("TicketId")
                         .IsUnique()
@@ -1025,6 +1128,15 @@ namespace OpsFlow.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("TenantId", "TicketId")
                         .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OpsFlow.Domain.Outbox.OutboxMessage", b =>
+                {
+                    b.HasOne("OpsFlow.Domain.Tenants.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
