@@ -116,4 +116,74 @@ public class PostgresSchemaTests(ApiFactory factory) : IClassFixture<ApiFactory>
 
         Assert.Equal("timestamp with time zone", Assert.Single(types));
     }
+
+    // ---- Milestone 2 tables: tenant-consistent composite FKs, uniqueness and check constraints as PostgreSQL enforces them ----
+
+    private static string InsertTicket(Guid tenantId, long number, Guid categoryId, Guid createdBy, string status = "Open") =>
+        $"INSERT INTO \"Tickets\" (\"Id\",\"TenantId\",\"Number\",\"Title\",\"Description\",\"Priority\",\"CategoryId\",\"CreatedByUserId\",\"Status\",\"CreatedAtUtc\",\"UpdatedAtUtc\",\"Version\",\"ActivitySequence\",\"CycleCount\") VALUES ('{Guid.NewGuid()}','{tenantId}',{number},'t','d','Low','{categoryId}','{createdBy}','{status}',NOW(),NOW(),1,0,0)";
+
+    private static string InsertAssignment(Guid tenantId, Guid ticketId, Guid membershipId, Guid byMembershipId) =>
+        $"INSERT INTO \"TicketAssignments\" (\"Id\",\"TenantId\",\"TicketId\",\"MembershipId\",\"AssignedByMembershipId\",\"AssignedAtUtc\") VALUES ('{Guid.NewGuid()}','{tenantId}','{ticketId}','{membershipId}','{byMembershipId}',NOW())";
+
+    private static string InsertCycle(Guid tenantId, Guid ticketId, Guid policyId, int number, bool finished = false) =>
+        $"INSERT INTO \"TicketSlaCycles\" (\"Id\",\"TenantId\",\"TicketId\",\"CycleNumber\",\"Reason\",\"SlaPolicyId\",\"ResponseMinutes\",\"ResolutionMinutes\",\"StartedAtUtc\",\"ResolutionDueAtUtc\",\"ResolvedAtUtc\") VALUES ('{Guid.NewGuid()}','{tenantId}','{ticketId}',{number},'Reopened','{policyId}',60,120,NOW(),NOW(),{(finished ? "NOW()" : "NULL")})";
+
+    [PostgresOnlyFact]
+    public async Task Tickets_cannot_reference_another_tenants_category_or_duplicate_a_number()
+    {
+        var a = await TicketWorld.CreateAsync(factory);
+        var b = await TicketWorld.CreateAsync(factory);
+        var ticket = await a.CreateTicketAsync(a.Manager);
+
+        Assert.Equal(ForeignKeyViolation, await SqlStateAsync(InsertTicket(a.Org.Id, 900, b.CategoryId, a.Owner.UserId))); // composite (TenantId, CategoryId)
+        Assert.Equal(UniqueViolation, await SqlStateAsync(InsertTicket(a.Org.Id, ticket.Summary.Number, a.CategoryId, a.Owner.UserId))); // (TenantId, Number)
+        Assert.Equal(CheckViolation, await SqlStateAsync(InsertTicket(a.Org.Id, 901, a.CategoryId, a.Owner.UserId, "Banished")));
+        Assert.Equal(CheckViolation, await SqlStateAsync(InsertTicket(a.Org.Id, 0, a.CategoryId, a.Owner.UserId)));
+    }
+
+    [PostgresOnlyFact]
+    public async Task Assignments_enforce_same_tenant_agents_and_a_single_active_row_per_agent()
+    {
+        var a = await TicketWorld.CreateAsync(factory);
+        var b = await TicketWorld.CreateAsync(factory);
+        var ticket = await a.CreateTicketAsync(a.Manager, new { title = "Assigned", description = "d", categoryId = a.CategoryId, assigneeMembershipIds = new[] { a.Agent1Membership } });
+
+        Assert.Equal(ForeignKeyViolation, await SqlStateAsync(InsertAssignment(a.Org.Id, ticket.Id, b.Agent1Membership, a.ManagerMembership))); // agent of another tenant
+        Assert.Equal(ForeignKeyViolation, await SqlStateAsync(InsertAssignment(b.Org.Id, ticket.Id, b.Agent1Membership, b.ManagerMembership))); // ticket of another tenant
+        Assert.Equal(UniqueViolation, await SqlStateAsync(InsertAssignment(a.Org.Id, ticket.Id, a.Agent1Membership, a.ManagerMembership))); // partial unique: one ACTIVE row
+    }
+
+    [PostgresOnlyFact]
+    public async Task A_ticket_can_never_have_two_active_sla_cycles_or_a_cycle_of_another_tenants_policy()
+    {
+        var a = await TicketWorld.CreateAsync(factory);
+        var b = await TicketWorld.CreateAsync(factory);
+        var ticket = await a.CreateTicketAsync(a.Manager);
+        var activeCycle = (await a.SlaAsync(ticket.Id)).Current!;
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpsFlowDbContext>();
+        var policyOfA = await db.SlaPolicies.IgnoreQueryFilters().Where(p => p.TenantId == a.Org.Id).Select(p => p.Id).FirstAsync();
+        var policyOfB = await db.SlaPolicies.IgnoreQueryFilters().Where(p => p.TenantId == b.Org.Id).Select(p => p.Id).FirstAsync();
+
+        Assert.Equal(UniqueViolation, await SqlStateAsync(InsertCycle(a.Org.Id, ticket.Id, policyOfA, 2))); // second ACTIVE cycle (partial unique index)
+        Assert.Equal(UniqueViolation, await SqlStateAsync(InsertCycle(a.Org.Id, ticket.Id, policyOfA, activeCycle.CycleNumber))); // duplicate cycle number
+        Assert.Equal(ForeignKeyViolation, await SqlStateAsync(InsertCycle(a.Org.Id, ticket.Id, policyOfB, 3, finished: true))); // composite (TenantId, SlaPolicyId)
+    }
+
+    [PostgresOnlyFact]
+    public async Task Customer_links_and_category_names_are_unique_per_tenant_in_the_database()
+    {
+        var a = await TicketWorld.CreateAsync(factory);
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpsFlowDbContext>();
+        var contact = await db.Customers.IgnoreQueryFilters().FirstAsync(c => c.TenantId == a.Org.Id);
+
+        string Customer(string email, Guid? user) =>
+            $"INSERT INTO \"Customers\" (\"Id\",\"TenantId\",\"Name\",\"Email\",\"NormalizedEmail\",\"UserId\",\"IsActive\",\"CreatedAtUtc\",\"UpdatedAtUtc\") VALUES ('{Guid.NewGuid()}','{a.Org.Id}','n','{email}','{email}',{(user is null ? "NULL" : $"'{user}'")},TRUE,NOW(),NOW())";
+
+        Assert.Equal(UniqueViolation, await SqlStateAsync(Customer(contact.NormalizedEmail, null)));
+        Assert.Equal(UniqueViolation, await SqlStateAsync(Customer($"other-{Guid.NewGuid():N}@example.com", contact.UserId))); // one contact per linked user
+        Assert.Equal(UniqueViolation, await SqlStateAsync(
+            $"INSERT INTO \"TicketCategories\" (\"Id\",\"TenantId\",\"Name\",\"NormalizedName\",\"IsActive\",\"CreatedAtUtc\",\"UpdatedAtUtc\") VALUES ('{Guid.NewGuid()}','{a.Org.Id}','general','general',TRUE,NOW(),NOW())"));
+    }
 }

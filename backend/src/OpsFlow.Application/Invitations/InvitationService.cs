@@ -31,7 +31,7 @@ public sealed partial class InvitationService(
 
     /// <summary>Permission matrix: Owners manage invitations of any staff role; Managers only Agent invitations.</summary>
     private static bool CanManage(TenantRole actorRole, TenantRole invitedRole) =>
-        actorRole == TenantRole.TenantOwner || (actorRole == TenantRole.Manager && invitedRole == TenantRole.Agent);
+        actorRole == TenantRole.TenantOwner || (actorRole == TenantRole.Manager && invitedRole is TenantRole.Agent or TenantRole.Customer);
 
     /// <summary>
     /// The inviter's role is read from the database NOW (membership + user must be active), the tenant stamp is read first and
@@ -39,10 +39,6 @@ public sealed partial class InvitationService(
     /// </summary>
     public async Task<InvitationDto> CreateAsync(string address, TenantRole role, CancellationToken ct)
     {
-        if (!role.IsStaff())
-        {
-            throw AppException.BadRequest("Only staff roles can be invited.");
-        }
 
         var tenantId = tenantContext.TenantId!.Value;
         var normalized = Invitation.Normalize(address);
@@ -53,7 +49,7 @@ public sealed partial class InvitationService(
             var actorRole = await actor.RequireActiveRoleAsync(ct);
             if (!CanManage(actorRole, role))
             {
-                throw AppException.Forbidden(actorRole == TenantRole.Manager ? "You can only invite Agents." : "You are not allowed to invite members.");
+                throw AppException.Forbidden(actorRole == TenantRole.Manager ? "You can only invite Agents and Customers." : "You are not allowed to invite members.");
             }
 
             var now = clock.GetUtcNow().UtcDateTime;

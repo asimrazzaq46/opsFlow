@@ -194,15 +194,21 @@ public class InvitationTests(ApiFactory factory) : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task Invitation_cannot_target_the_customer_role_and_listing_hides_tokens()
+    public async Task Customer_invitations_follow_the_matrix_and_listing_hides_tokens()
     {
         var (owner, org) = await NewTenantAsync();
+        var manager = await ApiClient.AddMemberAsync(factory, owner, org.Id, "Manager");
+        var agent = await ApiClient.AddMemberAsync(factory, owner, org.Id, "Agent");
 
-        var customer = await owner.PostAsync($"/api/v1/tenants/{org.Id}/invitations", new { email = "c@example.com", role = "Customer" });
-        await InviteAsync(owner, org.Id, $"listed-{Guid.NewGuid():N}@example.com");
+        // UPDATED: Customer role ab invite ho sakta hai: Owner/Manager ke liye, Agent ke liye nahi
+        var byOwner = await owner.PostAsync($"/api/v1/tenants/{org.Id}/invitations", new { email = $"c1-{Guid.NewGuid():N}@example.com", role = "Customer" });
+        var byManager = await manager.PostAsync($"/api/v1/tenants/{org.Id}/invitations", new { email = $"c2-{Guid.NewGuid():N}@example.com", role = "Customer" });
+        var byAgent = await agent.PostAsync($"/api/v1/tenants/{org.Id}/invitations", new { email = $"c3-{Guid.NewGuid():N}@example.com", role = "Customer" });
         var list = await owner.GetAsync($"/api/v1/tenants/{org.Id}/invitations");
 
-        Assert.Equal(HttpStatusCode.BadRequest, customer.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, byOwner.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, byManager.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, byAgent.StatusCode);
         Assert.DoesNotContain("token", (await list.Content.ReadAsStringAsync()), StringComparison.OrdinalIgnoreCase);
     }
 

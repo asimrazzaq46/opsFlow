@@ -35,8 +35,8 @@ public class DomainTests
     }
 
     [Fact]
-    public void Invitation_rejects_customer_role() =>
-        Assert.Throws<ArgumentException>(() => NewInvitation(TenantRole.Customer));
+    public void Invitation_rejects_unknown_roles_but_allows_customers() =>
+        Assert.Throws<ArgumentException>(() => NewInvitation((TenantRole)99)); // UPDATED: Customer invitations ab allowed hain
 
     [Fact]
     public void Membership_active_owner_rules()

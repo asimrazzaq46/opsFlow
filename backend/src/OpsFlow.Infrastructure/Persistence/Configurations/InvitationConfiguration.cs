@@ -10,7 +10,7 @@ internal sealed class InvitationConfiguration : IEntityTypeConfiguration<Invitat
 {
     public void Configure(EntityTypeBuilder<Invitation> b)
     {
-        b.ToTable("Invitations", t => t.HasCheckConstraint("CK_Invitations_Role", "\"Role\" IN ('TenantOwner','Manager','Agent')"));
+        b.ToTable("Invitations", t => t.HasCheckConstraint("CK_Invitations_Role", "\"Role\" IN ('TenantOwner','Manager','Agent','Customer')"));
         b.HasKey(i => i.Id);
         b.Property(i => i.Id).ValueGeneratedNever();
         b.Property(i => i.Email).HasMaxLength(256).IsRequired();

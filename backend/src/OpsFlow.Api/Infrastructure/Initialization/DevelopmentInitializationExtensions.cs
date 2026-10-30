@@ -10,6 +10,7 @@ internal static class DevelopmentInitializationExtensions
         if (environment.IsDevelopment() && configuration.GetValue<bool>($"{DevelopmentInitializationOptions.SectionName}:Enabled"))
         {
             services.AddScoped<IDevelopmentSeeder, DevelopmentAdminSeeder>();
+            services.AddScoped<IDevelopmentSeeder, DevelopmentTenantDefaultsSeeder>(); // UPDATED: demo tenant ke ticket defaults
             services.AddHostedService<DevelopmentInitializer>();
         }
 

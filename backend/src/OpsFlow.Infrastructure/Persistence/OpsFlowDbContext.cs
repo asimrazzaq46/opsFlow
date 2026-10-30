@@ -4,8 +4,10 @@ using Npgsql;
 using OpsFlow.Application.Abstractions;
 using OpsFlow.Application.Common;
 using OpsFlow.Domain.Common;
+using OpsFlow.Domain.Customers;
 using OpsFlow.Domain.Invitations;
 using OpsFlow.Domain.Tenants;
+using OpsFlow.Domain.Tickets;
 using OpsFlow.Domain.Users;
 
 namespace OpsFlow.Infrastructure.Persistence;
@@ -21,6 +23,15 @@ public sealed class OpsFlowDbContext(DbContextOptions<OpsFlowDbContext> options,
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<Membership> Memberships => Set<Membership>();
     public DbSet<Invitation> Invitations => Set<Invitation>();
+    public DbSet<Customer> Customers => Set<Customer>();
+    public DbSet<TicketCategory> TicketCategories => Set<TicketCategory>();
+    public DbSet<Ticket> Tickets => Set<Ticket>();
+    public DbSet<TicketAssignment> TicketAssignments => Set<TicketAssignment>();
+    public DbSet<TicketActivity> TicketActivities => Set<TicketActivity>();
+    public DbSet<SlaPolicy> SlaPolicies => Set<SlaPolicy>();
+    public DbSet<TicketSlaCycle> TicketSlaCycles => Set<TicketSlaCycle>();
+    public DbSet<TenantSettings> Settings => Set<TenantSettings>();
+    public DbSet<TenantTicketCounter> TicketCounters => Set<TenantTicketCounter>();
 
     // Evaluated per query by EF; null (no tenant resolved) matches nothing, so tenant data fails closed.
     private Guid? CurrentTenantId => tenantContext.TenantId;
@@ -33,6 +44,16 @@ public sealed class OpsFlowDbContext(DbContextOptions<OpsFlowDbContext> options,
         modelBuilder.Entity<Tenant>().HasQueryFilter(t => t.Id == CurrentTenantId);
         modelBuilder.Entity<Membership>().HasQueryFilter(m => m.TenantId == CurrentTenantId);
         modelBuilder.Entity<Invitation>().HasQueryFilter(i => i.TenantId == CurrentTenantId);
+        // UPDATED: Milestone 2 ke tenant-owned entities - har ek par automatic tenant filter (tenant na ho to koi row nahi)
+        modelBuilder.Entity<Customer>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<TicketCategory>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<Ticket>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<TicketAssignment>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<TicketActivity>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<SlaPolicy>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<TicketSlaCycle>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<TenantSettings>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<TenantTicketCounter>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
     }
 
     // Only the expected unique constraint is recognised; every other DbUpdateException must propagate.
@@ -44,6 +65,13 @@ public sealed class OpsFlowDbContext(DbContextOptions<OpsFlowDbContext> options,
             UniqueConstraintKind.TenantSlug => ("IX_Tenants_Slug", "Tenants.Slug"),
             UniqueConstraintKind.MembershipUser => ("IX_Memberships_TenantId_UserId", "Memberships.UserId"),
             UniqueConstraintKind.OpenInvitation => ("IX_Invitations_TenantId_NormalizedEmail", "Invitations.NormalizedEmail"),
+            UniqueConstraintKind.CustomerEmail => ("IX_Customers_TenantId_NormalizedEmail", "Customers.NormalizedEmail"),
+            UniqueConstraintKind.CustomerUser => ("IX_Customers_TenantId_UserId", "Customers.UserId"),
+            UniqueConstraintKind.CategoryName => ("IX_TicketCategories_TenantId_NormalizedName", "TicketCategories.NormalizedName"),
+            UniqueConstraintKind.SlaPolicyPriority => ("IX_SlaPolicies_TenantId_Priority", "SlaPolicies.Priority"),
+            UniqueConstraintKind.OpenAssignment => ("IX_TicketAssignments_TicketId_MembershipId", "TicketAssignments.MembershipId"),
+            UniqueConstraintKind.ActiveSlaCycle => ("IX_TicketSlaCycles_TicketId", "TicketSlaCycles.TicketId"),
+            UniqueConstraintKind.ActivitySequence => ("IX_TicketActivities_TicketId_Sequence", "TicketActivities.Sequence"),
             _ => throw new ArgumentOutOfRangeException(nameof(constraint)),
         };
 

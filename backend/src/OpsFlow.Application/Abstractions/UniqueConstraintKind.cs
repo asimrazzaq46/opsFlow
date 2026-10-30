@@ -7,4 +7,11 @@ public enum UniqueConstraintKind
     TenantSlug,
     MembershipUser,
     OpenInvitation,
+    CustomerEmail,
+    CustomerUser,
+    CategoryName,
+    SlaPolicyPriority,
+    OpenAssignment,
+    ActiveSlaCycle,
+    ActivitySequence,
 }

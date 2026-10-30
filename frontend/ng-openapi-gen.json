@@ -3,5 +3,6 @@
   "input": "openapi/OpsFlow.Api.json",
   "output": "src/app/core/api/generated",
   "skipJsonSuffix": true,
-  "promises": false
+  "promises": false,
+  "ignoreUnusedModels": false
 }

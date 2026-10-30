@@ -33,9 +33,10 @@ public sealed class Invitation : ITenantOwned
 
     public static Invitation Create(Guid tenantId, string email, TenantRole role, string tokenHash, Guid invitedByMembershipId, DateTime nowUtc, TimeSpan lifetime)
     {
-        if (!role.IsStaff())
+        // UPDATED: Customer role bhi invite ho sakta hai (customer-linked ticket workflow ke liye); sirf roles ki range check hoti hai
+        if (!Enum.IsDefined(role))
         {
-            throw new ArgumentException("Only staff roles can be invited.", nameof(role));
+            throw new ArgumentException("Unknown role.", nameof(role));
         }
 
         return new Invitation

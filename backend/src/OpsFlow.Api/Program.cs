@@ -52,6 +52,10 @@ if (app.Environment.IsDevelopment())
 app.MapHealthEndpoints();
 app.MapAuthEndpoints();
 app.MapOrganizationEndpoints();
+// UPDATED: Milestone 2 endpoints
+app.MapCustomerEndpoints();
+app.MapTenantConfigEndpoints();
+app.MapTicketEndpoints();
 
 app.Run();
 

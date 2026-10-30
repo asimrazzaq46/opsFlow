@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using OpsFlow.Application.Abstractions;
 using OpsFlow.Application.Common;
+using OpsFlow.Application.Tenants;
 using OpsFlow.Domain.Tenants;
 
 namespace OpsFlow.Application.Organizations;
@@ -24,6 +25,7 @@ public sealed partial class OrganizationService(IOpsFlowDbContext db, ITenantCon
         using var scope = tenantContext.Begin(tenantId);
         db.Tenants.Add(Tenant.Create(tenantId, name, slug, now));
         db.Memberships.Add(Membership.Create(tenantId, userId, TenantRole.TenantOwner, now));
+        TenantDefaults.AddAll(db, tenantId, now); // UPDATED: settings, ticket counter, default categories aur SLA policies usi atomic SaveChanges mein
         try
         {
             await db.SaveChangesAsync(ct);

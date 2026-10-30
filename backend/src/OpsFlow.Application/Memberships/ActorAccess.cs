@@ -13,6 +13,8 @@ namespace OpsFlow.Application.Memberships;
 /// </summary>
 public sealed class ActorAccess(IOpsFlowDbContext db, ITenantContext tenantContext)
 {
+    public Guid TenantId => tenantContext.TenantId!.Value;
+
     public async Task<TenantRole> RequireActiveRoleAsync(CancellationToken ct)
     {
         var actorId = tenantContext.MembershipId;
