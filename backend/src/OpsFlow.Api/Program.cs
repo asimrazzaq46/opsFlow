@@ -1,7 +1,9 @@
 using System.Text.Json.Serialization;
 using OpsFlow.Api.Endpoints;
 using OpsFlow.Api.Infrastructure;
+using OpsFlow.Api.Infrastructure.Errors;
 using OpsFlow.Api.Infrastructure.Initialization;
+using OpsFlow.Api.Infrastructure.OpenApi;
 using OpsFlow.Application;
 using OpsFlow.Application.Abstractions;
 using OpsFlow.Infrastructure;
@@ -15,10 +17,10 @@ if (!builder.Environment.IsDevelopment())
 }
 
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
-builder.Services.AddProblemDetails();
+builder.Services.AddProblemDetails(ProblemDetailsSetup.Configure); // UPDATED: har error body mein code + traceId
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddValidation();
-builder.Services.AddOpenApi();
+builder.Services.AddOpsFlowOpenApi(); // UPDATED: Bearer security scheme + endpoint documentation
 
 builder.Services.Configure<AppOptions>(builder.Configuration.GetSection(AppOptions.SectionName));
 builder.Services.AddApplication();

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using OpsFlow.Api.Infrastructure;
+using OpsFlow.Api.Infrastructure.OpenApi;
 using OpsFlow.Application.Abstractions;
 using OpsFlow.Application.Auth;
 using OpsFlow.Domain.Users;
@@ -14,22 +15,60 @@ internal static class AuthEndpoints
         var group = app.MapGroup("/api/v1/auth").WithTags("Auth").RequireRateLimiting(RateLimitPolicies.Sensitive);
 
         // Anonymous: identity comes from credentials, a one-time link token, or the refresh token in the JSON body.
-        group.MapPost("/register", Register).WithName("Register").AllowAnonymous();
-        group.MapPost("/confirm-email", ConfirmEmail).WithName("ConfirmEmail").AllowAnonymous();
-        group.MapPost("/resend-confirmation", ResendConfirmation).WithName("ResendConfirmation").AllowAnonymous();
-        group.MapPost("/login", Login).WithName("Login").AllowAnonymous();
-        group.MapPost("/refresh", Refresh).WithName("RefreshSession").AllowAnonymous();
-        group.MapPost("/logout", Logout).WithName("Logout").AllowAnonymous();
-        group.MapPost("/forgot-password", ForgotPassword).WithName("ForgotPassword").AllowAnonymous();
-        group.MapPost("/reset-password", ResetPassword).WithName("ResetPassword").AllowAnonymous();
+        group.MapPost("/register", Register).WithName("Register")
+            .WithSummary("Register account")
+            .WithDescription("Anonymous. Creates an account and sends an email-verification link. Always answers 202 so existing and new emails are indistinguishable.")
+            .AllowAnonymous();
+        group.MapPost("/confirm-email", ConfirmEmail).WithName("ConfirmEmail")
+            .WithSummary("Confirm email address")
+            .WithDescription("Anonymous. Consumes the single-use verification token from the email link.")
+            .AllowAnonymous();
+        group.MapPost("/resend-confirmation", ResendConfirmation).WithName("ResendConfirmation")
+            .WithSummary("Resend verification email")
+            .WithDescription("Anonymous. Sends a new verification link when the account exists and is unverified; always answers 202.")
+            .AllowAnonymous();
+        group.MapPost("/login", Login).WithName("Login")
+            .WithSummary("Authenticate user")
+            .WithDescription("Anonymous. Validates user credentials and returns a JWT access token (15 minutes) and a JWT refresh token (7 days). Failures are one generic 401; repeated failures lock the account temporarily.")
+            .AllowAnonymous();
+        group.MapPost("/refresh", Refresh).WithName("RefreshSession")
+            .WithSummary("Refresh authentication tokens")
+            .WithDescription("Anonymous. Validates and rotates a refresh JWT sent in the JSON body and returns a new token pair. Each refresh token works exactly once: a replay revokes the session, and a racing duplicate within the grace window gets 409 without a new token.")
+            .ProducesConflict()
+            .AllowAnonymous();
+        group.MapPost("/logout", Logout).WithName("Logout")
+            .WithSummary("Sign out this session")
+            .WithDescription("Anonymous. Revokes the session that owns the supplied refresh token. Unknown tokens are ignored.")
+            .AllowAnonymous();
+        group.MapPost("/forgot-password", ForgotPassword).WithName("ForgotPassword")
+            .WithSummary("Request password reset")
+            .WithDescription("Anonymous. Sends a reset link when the account exists; always answers 202.")
+            .AllowAnonymous();
+        group.MapPost("/reset-password", ResetPassword).WithName("ResetPassword")
+            .WithSummary("Reset password")
+            .WithDescription("Anonymous. Sets a new password with the single-use reset token and revokes every session of the user.")
+            .AllowAnonymous();
 
         // Bearer access token required.
-        group.MapGet("/me", Me).WithName("GetCurrentUser");
-        group.MapPost("/logout-all", LogoutAll).WithName("LogoutAll");
-        group.MapGet("/sessions", ListSessions).WithName("ListSessions");
-        group.MapDelete("/sessions/{sessionId:guid}", RevokeSession).WithName("RevokeSession");
-        group.MapPost("/change-password", ChangePassword).WithName("ChangePassword");
-        group.MapPost("/deactivate", Deactivate).WithName("DeactivateAccount");
+        group.MapGet("/me", Me).WithName("GetCurrentUser")
+            .WithSummary("Get current user")
+            .WithDescription("Returns the profile of the authenticated user.");
+        group.MapPost("/logout-all", LogoutAll).WithName("LogoutAll")
+            .WithSummary("Sign out everywhere")
+            .WithDescription("Revokes every session (device) of the authenticated user.");
+        group.MapGet("/sessions", ListSessions).WithName("ListSessions")
+            .WithSummary("List active sessions")
+            .WithDescription("Returns the authenticated user's active sessions; the current one is flagged.");
+        group.MapDelete("/sessions/{sessionId:guid}", RevokeSession).WithName("RevokeSession")
+            .WithSummary("Revoke a session")
+            .WithDescription("Revokes one of the authenticated user's own sessions.");
+        group.MapPost("/change-password", ChangePassword).WithName("ChangePassword")
+            .WithSummary("Change password")
+            .WithDescription("Changes the password, revokes all sessions and returns a brand-new token pair for this device.");
+        group.MapPost("/deactivate", Deactivate).WithName("DeactivateAccount")
+            .WithSummary("Deactivate account")
+            .WithDescription("Deactivates the authenticated account after password confirmation and revokes all sessions. The last active Owner of a tenant cannot deactivate.")
+            .ProducesConflict();
         return app;
     }
 

@@ -10,9 +10,21 @@ import { RequestBuilder } from '../../request-builder';
 import { PagedResultOfTicketActivityDto } from '../../models/paged-result-of-ticket-activity-dto';
 
 export interface ListTicketActivity$Params {
+
+/**
+ * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
+ */
   tenantId: string;
   ticketId: string;
+
+/**
+ * 1-based page number (clamped to a safe range).
+ */
   page?: (number | string);
+
+/**
+ * Items per page (capped by the endpoint).
+ */
   pageSize?: (number | string);
 }
 

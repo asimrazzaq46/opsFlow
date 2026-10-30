@@ -29,6 +29,7 @@ export type { PagedResultOfCustomerDto } from './models/paged-result-of-customer
 export type { PagedResultOfMemberDto } from './models/paged-result-of-member-dto';
 export type { PagedResultOfTicketActivityDto } from './models/paged-result-of-ticket-activity-dto';
 export type { PagedResultOfTicketSummaryDto } from './models/paged-result-of-ticket-summary-dto';
+export type { ProblemResponse } from './models/problem-response';
 export type { RefreshRequest } from './models/refresh-request';
 export type { RegisterRequest } from './models/register-request';
 export type { ReopenRequest } from './models/reopen-request';
@@ -53,3 +54,4 @@ export type { TransitionRequest } from './models/transition-request';
 export type { UpdateSlaPolicyRequest } from './models/update-sla-policy-request';
 export type { UpdateTicketRequest } from './models/update-ticket-request';
 export type { UserInfo } from './models/user-info';
+export type { ValidationProblemResponse } from './models/validation-problem-response';

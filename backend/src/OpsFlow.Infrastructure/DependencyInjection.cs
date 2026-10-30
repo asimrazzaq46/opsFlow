@@ -21,7 +21,7 @@ public static class DependencyInjection
         services.AddScoped<IUserDirectory, UserDirectory>();
         // UPDATED: custom auth primitives (hasher, JWT, per-request session check)
         services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
-        services.AddSingleton<IAccessTokenService, JwtAccessTokenService>();
+        services.AddSingleton<ITokenService, TokenService>(); // UPDATED: access + refresh JWT ki ek service
         services.AddScoped<ISessionValidator, SessionValidator>();
 
         services.Configure<SmtpOptions>(configuration.GetSection(SmtpOptions.SectionName));

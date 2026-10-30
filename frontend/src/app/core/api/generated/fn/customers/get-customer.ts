@@ -10,6 +10,10 @@ import { RequestBuilder } from '../../request-builder';
 import { CustomerDto } from '../../models/customer-dto';
 
 export interface GetCustomer$Params {
+
+/**
+ * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
+ */
   tenantId: string;
   customerId: string;
 }

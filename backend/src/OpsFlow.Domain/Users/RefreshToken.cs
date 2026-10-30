@@ -1,6 +1,6 @@
 namespace OpsFlow.Domain.Users;
 
-/// <summary>Opaque rotating refresh token. Only its SHA-256 hash is stored; each token can be used exactly once.</summary>
+/// <summary>Rotating refresh token (a signed JWT on the wire). Only the SHA-256 hash of the JWT is stored; each token can be used exactly once.</summary>
 public sealed class RefreshToken
 {
     private RefreshToken()

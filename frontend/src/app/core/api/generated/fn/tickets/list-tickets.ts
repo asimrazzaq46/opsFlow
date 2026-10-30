@@ -13,6 +13,10 @@ import { TicketState } from '../../models/ticket-state';
 import { TicketStatus } from '../../models/ticket-status';
 
 export interface ListTickets$Params {
+
+/**
+ * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
+ */
   tenantId: string;
   Status?: Array<TicketStatus>;
   Priority?: TicketPriority;

@@ -10,6 +10,10 @@ import { RequestBuilder } from '../../request-builder';
 import { SetStatusRequest } from '../../models/set-status-request';
 
 export interface SetTicketCategoryStatus$Params {
+
+/**
+ * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
+ */
   tenantId: string;
   categoryId: string;
       body: SetStatusRequest

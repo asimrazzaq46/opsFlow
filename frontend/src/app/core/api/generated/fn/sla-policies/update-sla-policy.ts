@@ -11,6 +11,10 @@ import { SlaPolicyDto } from '../../models/sla-policy-dto';
 import { UpdateSlaPolicyRequest } from '../../models/update-sla-policy-request';
 
 export interface UpdateSlaPolicy$Params {
+
+/**
+ * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
+ */
   tenantId: string;
   policyId: string;
       body: UpdateSlaPolicyRequest

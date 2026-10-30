@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using OpsFlow.Api.Infrastructure;
+using OpsFlow.Api.Infrastructure.OpenApi;
 using OpsFlow.Application.Common;
 using OpsFlow.Application.Customers;
 
@@ -11,11 +12,23 @@ internal static class CustomerEndpoints
     {
         var g = app.MapGroup("/api/v1/tenants/{tenantId:guid}/customers").WithTags("Customers").RequireAuthorization(AuthPolicies.TenantManager);
 
-        g.MapGet("/", List).WithName("ListCustomers");
-        g.MapPost("/", Create).WithName("CreateCustomer");
-        g.MapGet("/{customerId:guid}", Get).WithName("GetCustomer");
-        g.MapPut("/{customerId:guid}", Update).WithName("UpdateCustomer");
-        g.MapPut("/{customerId:guid}/status", SetStatus).WithName("SetCustomerStatus");
+        g.MapGet("/", List).WithName("ListCustomers")
+            .WithSummary("List customers")
+            .WithDescription("Returns the tenant's customer contacts, paged, with optional search. Requires the Owner or Manager role in the tenant.");
+        g.MapPost("/", Create).WithName("CreateCustomer")
+            .WithSummary("Create customer")
+            .WithDescription("Creates a customer contact (not a login account). Requires the Owner or Manager role in the tenant.")
+            .ProducesConflict();
+        g.MapGet("/{customerId:guid}", Get).WithName("GetCustomer")
+            .WithSummary("Get customer")
+            .WithDescription("Returns one customer contact. Requires the Owner or Manager role in the tenant.");
+        g.MapPut("/{customerId:guid}", Update).WithName("UpdateCustomer")
+            .WithSummary("Update customer")
+            .WithDescription("Updates a customer contact. Requires the Owner or Manager role in the tenant.")
+            .ProducesConflict();
+        g.MapPut("/{customerId:guid}/status", SetStatus).WithName("SetCustomerStatus")
+            .WithSummary("Activate or deactivate customer")
+            .WithDescription("Changes whether the customer can be selected for new tickets; history is kept. Requires the Owner or Manager role in the tenant.");
         return app;
     }
 

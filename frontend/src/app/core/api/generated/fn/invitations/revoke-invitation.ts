@@ -9,6 +9,10 @@ import { RequestBuilder } from '../../request-builder';
 
 
 export interface RevokeInvitation$Params {
+
+/**
+ * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
+ */
   tenantId: string;
   invitationId: string;
 }

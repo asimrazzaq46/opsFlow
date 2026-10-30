@@ -11,6 +11,10 @@ import { CreateSlaPolicyRequest } from '../../models/create-sla-policy-request';
 import { SlaPolicyDto } from '../../models/sla-policy-dto';
 
 export interface CreateSlaPolicy$Params {
+
+/**
+ * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
+ */
   tenantId: string;
       body: CreateSlaPolicyRequest
 }

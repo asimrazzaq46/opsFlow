@@ -10,6 +10,10 @@ import { RequestBuilder } from '../../request-builder';
 import { TicketDetailDto } from '../../models/ticket-detail-dto';
 
 export interface UnassignTicketAgent$Params {
+
+/**
+ * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
+ */
   tenantId: string;
   ticketId: string;
   membershipId: string;

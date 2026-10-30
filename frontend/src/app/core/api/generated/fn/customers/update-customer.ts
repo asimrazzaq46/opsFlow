@@ -11,6 +11,10 @@ import { CustomerDto } from '../../models/customer-dto';
 import { CustomerRequest } from '../../models/customer-request';
 
 export interface UpdateCustomer$Params {
+
+/**
+ * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
+ */
   tenantId: string;
   customerId: string;
       body: CustomerRequest

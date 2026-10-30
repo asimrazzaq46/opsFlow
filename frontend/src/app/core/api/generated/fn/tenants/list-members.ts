@@ -10,8 +10,20 @@ import { RequestBuilder } from '../../request-builder';
 import { PagedResultOfMemberDto } from '../../models/paged-result-of-member-dto';
 
 export interface ListMembers$Params {
+
+/**
+ * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
+ */
   tenantId: string;
+
+/**
+ * 1-based page number (clamped to a safe range).
+ */
   page?: (number | string);
+
+/**
+ * Items per page (capped by the endpoint).
+ */
   pageSize?: (number | string);
 }
 

@@ -11,6 +11,10 @@ import { TicketDetailDto } from '../../models/ticket-detail-dto';
 import { UpdateTicketRequest } from '../../models/update-ticket-request';
 
 export interface UpdateTicket$Params {
+
+/**
+ * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
+ */
   tenantId: string;
   ticketId: string;
       body: UpdateTicketRequest

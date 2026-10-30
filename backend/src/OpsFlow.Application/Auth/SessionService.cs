@@ -16,7 +16,7 @@ public sealed record SessionInfo(Guid Id, string? UserAgent, DateTime CreatedAtU
 public sealed partial class SessionService(
     IOpsFlowDbContext db,
     IPasswordHasher hasher,
-    IAccessTokenService accessTokens,
+    ITokenService tokenService, // UPDATED: access + refresh JWT ek hi service se
     IOptions<AuthOptions> options,
     TimeProvider clock,
     ILogger<SessionService> logger)
@@ -74,10 +74,17 @@ public sealed partial class SessionService(
             throw InvalidRefresh();
         }
 
+        // UPDATED: pehle JWT (signature/issuer/audience/expiry/algorithm/type), phir DB se hash + ownership
+        var claims = await tokenService.ValidateRefreshTokenAsync(rawToken) ?? throw InvalidRefresh();
         var now = Now;
         var hash = SecureToken.Hash(rawToken);
         var token = await db.RefreshTokens.SingleOrDefaultAsync(t => t.TokenHash == hash, ct) ?? throw InvalidRefresh();
         var session = await db.UserSessions.SingleAsync(s => s.Id == token.SessionId, ct);
+        if (session.Id != claims.SessionId || session.UserId != claims.UserId)
+        {
+            throw InvalidRefresh();
+        }
+
         var user = await db.Users.SingleAsync(u => u.Id == session.UserId, ct);
 
         if (token.UsedAtUtc is { } usedAt)
@@ -92,9 +99,9 @@ public sealed partial class SessionService(
 
         token.MarkUsed(now);
         session.Touch(now);
-        var (raw, newHash) = SecureToken.Generate();
         var expires = Earliest(now.AddDays(options.Value.RefreshToken.LifetimeDays), session.ExpiresAtUtc);
-        db.RefreshTokens.Add(RefreshToken.Issue(session.Id, newHash, now, expires));
+        var raw = tokenService.CreateRefreshToken(user.Id, session.Id, now, expires);
+        db.RefreshTokens.Add(RefreshToken.Issue(session.Id, SecureToken.Hash(raw), now, expires));
 
         try
         {
@@ -110,7 +117,7 @@ public sealed partial class SessionService(
             throw await ReuseAsync(session, winnerUsedAt ?? now, Now, ct); // UPDATED: fresh Now - request stall hui ho to purana timestamp galat grace deta
         }
 
-        var access = accessTokens.Issue(user.Id, session.Id, user.AuthVersion, now);
+        var access = tokenService.CreateAccessToken(user.Id, session.Id, user.AuthVersion, now);
         return (new SessionTokens(access.Token, access.ExpiresAtUtc, raw, expires, session.Id), user);
     }
 
@@ -166,12 +173,12 @@ public sealed partial class SessionService(
     {
         var settings = options.Value.RefreshToken;
         var session = UserSession.Start(user.Id, userAgent, now, TimeSpan.FromDays(settings.MaxSessionDays));
-        var (raw, hash) = SecureToken.Generate();
         var expires = Earliest(now.AddDays(settings.LifetimeDays), session.ExpiresAtUtc);
+        var raw = tokenService.CreateRefreshToken(user.Id, session.Id, now, expires);
         db.UserSessions.Add(session);
-        db.RefreshTokens.Add(RefreshToken.Issue(session.Id, hash, now, expires));
+        db.RefreshTokens.Add(RefreshToken.Issue(session.Id, SecureToken.Hash(raw), now, expires));
 
-        var access = accessTokens.Issue(user.Id, session.Id, user.AuthVersion, now);
+        var access = tokenService.CreateAccessToken(user.Id, session.Id, user.AuthVersion, now);
         return new SessionTokens(access.Token, access.ExpiresAtUtc, raw, expires, session.Id);
     }
 
@@ -194,7 +201,7 @@ public sealed partial class SessionService(
     {
         if (now - usedAt <= TimeSpan.FromSeconds(options.Value.RefreshToken.ReplayGraceSeconds))
         {
-            return AppException.Conflict("The refresh token was just used.", "Retry with the newest refresh token.");
+            return AppException.Conflict("The refresh token was just used.", "Retry with the newest refresh token.").WithCode("AUTH_REFRESH_TOKEN_IN_USE");
         }
 
         session.Revoke("refresh-token-reuse", now);
@@ -205,9 +212,9 @@ public sealed partial class SessionService(
 
     private static DateTime Earliest(DateTime a, DateTime b) => a < b ? a : b;
 
-    private static AppException InvalidCredentials() => AppException.Unauthorized("Invalid credentials or the account is not available.");
+    private static AppException InvalidCredentials() => AppException.Unauthorized("Invalid credentials or the account is not available.").WithCode("AUTH_INVALID_CREDENTIALS");
 
-    private static AppException InvalidRefresh() => AppException.Unauthorized("The session is invalid or has expired.");
+    private static AppException InvalidRefresh() => AppException.Unauthorized("The session is invalid or has expired.").WithCode("AUTH_INVALID_REFRESH_TOKEN");
 
     [LoggerMessage(Level = LogLevel.Information, Message = "User {UserId} started session {SessionId}")]
     private static partial void LogStarted(ILogger logger, Guid userId, Guid sessionId);

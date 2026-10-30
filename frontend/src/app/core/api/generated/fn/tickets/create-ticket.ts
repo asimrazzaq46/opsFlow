@@ -11,6 +11,10 @@ import { CreateTicketRequest } from '../../models/create-ticket-request';
 import { TicketDetailDto } from '../../models/ticket-detail-dto';
 
 export interface CreateTicket$Params {
+
+/**
+ * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
+ */
   tenantId: string;
       body: CreateTicketRequest
 }

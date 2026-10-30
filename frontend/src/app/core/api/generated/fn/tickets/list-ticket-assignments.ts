@@ -10,6 +10,10 @@ import { RequestBuilder } from '../../request-builder';
 import { AssignmentHistoryDto } from '../../models/assignment-history-dto';
 
 export interface ListTicketAssignments$Params {
+
+/**
+ * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
+ */
   tenantId: string;
   ticketId: string;
   includeHistory?: boolean;

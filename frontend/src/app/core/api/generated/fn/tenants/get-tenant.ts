@@ -10,6 +10,10 @@ import { RequestBuilder } from '../../request-builder';
 import { OrganizationDto } from '../../models/organization-dto';
 
 export interface GetTenant$Params {
+
+/**
+ * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
+ */
   tenantId: string;
 }
 

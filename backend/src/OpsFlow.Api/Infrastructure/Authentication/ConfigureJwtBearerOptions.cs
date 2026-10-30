@@ -2,6 +2,8 @@ using System.Security.Claims;
 using System.Globalization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
+using OpsFlow.Api.Infrastructure.Errors;
 using OpsFlow.Application.Auth;
 using OpsFlow.Infrastructure.Security;
 
@@ -26,13 +28,32 @@ internal sealed class ConfigureJwtBearerOptions(IOptions<AuthOptions> auth, Time
         options.RequireHttpsMetadata = false; // no metadata endpoint is used; the key is local
         options.SaveToken = false;
         options.TokenValidationParameters = JwtTokenValidation.Parameters(auth.Value.Jwt, clock);
-        options.Events = new JwtBearerEvents { OnTokenValidated = ValidateSessionAsync };
+        options.Events = new JwtBearerEvents { OnTokenValidated = ValidateSessionAsync, OnChallenge = RecordChallengeCode };
+    }
+
+    // UPDATED: 401 body (StatusCodePages) mein stable code: token missing / expired / invalid. Default challenge (WWW-Authenticate) barqarar.
+    private static Task RecordChallengeCode(JwtBearerChallengeContext context)
+    {
+        context.HttpContext.Items[ProblemDetailsSetup.CodeItem] = context.AuthenticateFailure switch
+        {
+            null => "AUTH_TOKEN_MISSING",
+            SecurityTokenExpiredException or SecurityTokenInvalidLifetimeException => "AUTH_TOKEN_EXPIRED", // custom LifetimeValidator => InvalidLifetime
+            _ => "AUTH_TOKEN_INVALID",
+        };
+        return Task.CompletedTask;
     }
 
     private static async Task ValidateSessionAsync(TokenValidatedContext context)
     {
         var principal = context.Principal;
-        if (!Guid.TryParse(principal?.FindFirstValue(AuthClaims.Subject), out var userId)
+        // UPDATED: refresh JWT (ya token_type ke baghair token) Bearer access token ke taur par reject
+        if (principal?.FindFirstValue(AuthClaims.TokenType) != AuthClaims.AccessTokenType)
+        {
+            context.Fail("Only access tokens can authenticate API requests.");
+            return;
+        }
+
+        if (!Guid.TryParse(principal.FindFirstValue(AuthClaims.Subject), out var userId)
             || !Guid.TryParse(principal.FindFirstValue(AuthClaims.SessionId), out var sessionId)
             || !int.TryParse(principal.FindFirstValue(AuthClaims.AuthVersion), NumberStyles.Integer, CultureInfo.InvariantCulture, out var authVersion))
         {

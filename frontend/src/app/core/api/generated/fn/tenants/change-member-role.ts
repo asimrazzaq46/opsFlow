@@ -10,6 +10,10 @@ import { RequestBuilder } from '../../request-builder';
 import { ChangeRoleRequest } from '../../models/change-role-request';
 
 export interface ChangeMemberRole$Params {
+
+/**
+ * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
+ */
   tenantId: string;
   membershipId: string;
       body: ChangeRoleRequest

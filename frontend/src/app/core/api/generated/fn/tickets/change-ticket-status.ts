@@ -11,6 +11,10 @@ import { TicketDetailDto } from '../../models/ticket-detail-dto';
 import { TransitionRequest } from '../../models/transition-request';
 
 export interface ChangeTicketStatus$Params {
+
+/**
+ * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
+ */
   tenantId: string;
   ticketId: string;
       body: TransitionRequest

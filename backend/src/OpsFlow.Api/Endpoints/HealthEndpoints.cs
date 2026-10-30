@@ -8,6 +8,8 @@ internal static class HealthEndpoints
             .WithTags("Health")
             .MapGet("/", () => TypedResults.Ok(new HealthResponse("Healthy", DateTimeOffset.UtcNow)))
             .WithName("GetHealth")
+                .WithSummary("Check service health")
+                .WithDescription("Anonymous liveness probe; returns the service status and server time.")
             .AllowAnonymous(); // UPDATED: fallback policy ke baad health endpoint public rehna chahiye
         return app;
     }

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using OpsFlow.Api.Infrastructure;
+using OpsFlow.Api.Infrastructure.OpenApi;
 using OpsFlow.Application.Common;
 using OpsFlow.Application.Tickets;
 
@@ -12,17 +13,45 @@ internal static class TicketEndpoints
         // Authorization (who sees/changes what) is enforced inside the services from the CURRENT database state, per role.
         var g = app.MapGroup("/api/v1/tenants/{tenantId:guid}/tickets").WithTags("Tickets").RequireAuthorization(AuthPolicies.TenantMember);
 
-        g.MapPost("/", Create).WithName("CreateTicket");
-        g.MapGet("/", List).WithName("ListTickets");
-        g.MapGet("/{ticketId:guid}", Get).WithName("GetTicket");
-        g.MapPut("/{ticketId:guid}", Update).WithName("UpdateTicket");
-        g.MapPost("/{ticketId:guid}/status", Transition).WithName("ChangeTicketStatus");
-        g.MapPost("/{ticketId:guid}/reopen", Reopen).WithName("ReopenTicket");
-        g.MapGet("/{ticketId:guid}/activity", Activity).WithName("ListTicketActivity");
-        g.MapGet("/{ticketId:guid}/sla", Sla).WithName("GetTicketSla");
-        g.MapGet("/{ticketId:guid}/assignments", Assignments).WithName("ListTicketAssignments");
-        g.MapPost("/{ticketId:guid}/assignments", Assign).WithName("AssignTicketAgents");
-        g.MapDelete("/{ticketId:guid}/assignments/{membershipId:guid}", Unassign).WithName("UnassignTicketAgent");
+        g.MapPost("/", Create).WithName("CreateTicket")
+            .WithSummary("Create service ticket")
+            .WithDescription("Creates a tenant-scoped service ticket, initializes its SLA cycle and records activity. Requires an active membership in the tenant; Customers only see their own tickets.")
+            .ProducesConflict();
+        g.MapGet("/", List).WithName("ListTickets")
+            .WithSummary("List tickets")
+            .WithDescription("Returns the tickets visible to the caller, with filters, sorting and capped paging; staff can filter state=Unstaffed. Requires an active membership in the tenant; Customers only see their own tickets.");
+        g.MapGet("/{ticketId:guid}", Get).WithName("GetTicket")
+            .WithSummary("Get ticket")
+            .WithDescription("Returns one visible ticket. Customers never receive assignees, SLA or staff identities. Requires an active membership in the tenant; Customers only see their own tickets.");
+        g.MapPut("/{ticketId:guid}", Update).WithName("UpdateTicket")
+            .WithSummary("Update ticket")
+            .WithDescription("Edits title, description, priority or category, guarded by the optimistic-concurrency version. Requires an active membership in the tenant; Customers only see their own tickets.")
+            .ProducesConflict();
+        g.MapPost("/{ticketId:guid}/status", Transition).WithName("ChangeTicketStatus")
+            .WithSummary("Change ticket status")
+            .WithDescription("Moves the ticket along the allowed workflow transitions. Requires an active membership in the tenant; Customers only see their own tickets.")
+            .ProducesConflict();
+        g.MapPost("/{ticketId:guid}/reopen", Reopen).WithName("ReopenTicket")
+            .WithSummary("Reopen ticket")
+            .WithDescription("Reopens a resolved or closed ticket and starts a new SLA cycle. Requires an active membership in the tenant; Customers only see their own tickets.")
+            .ProducesConflict();
+        g.MapGet("/{ticketId:guid}/activity", Activity).WithName("ListTicketActivity")
+            .WithSummary("List ticket activity")
+            .WithDescription("Returns the append-only ticket timeline, paged. Requires an Owner, Manager or Agent role in the tenant.");
+        g.MapGet("/{ticketId:guid}/sla", Sla).WithName("GetTicketSla")
+            .WithSummary("Get ticket SLA")
+            .WithDescription("Returns the current SLA cycle and the full cycle history. Requires an Owner, Manager or Agent role in the tenant.");
+        g.MapGet("/{ticketId:guid}/assignments", Assignments).WithName("ListTicketAssignments")
+            .WithSummary("List ticket assignments")
+            .WithDescription("Returns current assignees, or the complete history when includeHistory=True. Requires an Owner, Manager or Agent role in the tenant.");
+        g.MapPost("/{ticketId:guid}/assignments", Assign).WithName("AssignTicketAgents")
+            .WithSummary("Assign agents")
+            .WithDescription("Assigns one or more eligible agents to the ticket. Requires the Owner or Manager role in the tenant.")
+            .ProducesConflict();
+        g.MapDelete("/{ticketId:guid}/assignments/{membershipId:guid}", Unassign).WithName("UnassignTicketAgent")
+            .WithSummary("Unassign agent")
+            .WithDescription("Closes an agent's assignment (history is kept). The last eligible assignee cannot be removed while the status needs one. Requires the Owner or Manager role in the tenant.")
+            .ProducesConflict();
         return app;
     }
 

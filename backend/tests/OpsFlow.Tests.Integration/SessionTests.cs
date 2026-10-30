@@ -43,7 +43,7 @@ public class SessionTests(ApiFactory factory) : IClassFixture<ApiFactory>
 
         var claims = new JsonWebTokenHandler().ReadJsonWebToken(access).Claims.Select(c => c.Type).ToHashSet();
 
-        Assert.Subset(new HashSet<string> { "sub", "sid", "av", "jti", "iat", "nbf", "exp", "iss", "aud" }, claims);
+        Assert.Subset(new HashSet<string> { "sub", "sid", "av", "token_type", "jti", "iat", "nbf", "exp", "iss", "aud" }, claims);
         Assert.Contains("sid", claims);
     }
 
