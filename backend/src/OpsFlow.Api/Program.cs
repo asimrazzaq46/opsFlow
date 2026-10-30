@@ -5,6 +5,7 @@ using OpsFlow.Api.Infrastructure.OpenApi;
 using OpsFlow.Application;
 using OpsFlow.Application.Abstractions;
 using OpsFlow.Infrastructure;
+using OpsFlow.Realtime;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -21,6 +22,8 @@ builder.Services.AddOpsFlowOpenApi(); // Bearer security scheme + endpoint docum
 builder.Services.Configure<AppOptions>(builder.Configuration.GetSection(AppOptions.SectionName));
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+// UPDATED: Milestone 3 - reusable realtime library (Redis backplane sirf config se, warna in-process)
+builder.Services.AddRealtime(o => builder.Configuration.GetSection(RealtimeOptions.SectionName).Bind(o));
 builder.Services.AddApiSecurity(builder.Configuration, builder.Environment);
 builder.Services.AddDevelopmentInitialization(builder.Configuration, builder.Environment);
 
@@ -45,6 +48,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapControllers(); // UPDATED: saare endpoints Controllers/ se
+app.MapRealtimeHub(); // UPDATED: authenticated SignalR hub (/hubs/realtime)
 
 app.Run();
 

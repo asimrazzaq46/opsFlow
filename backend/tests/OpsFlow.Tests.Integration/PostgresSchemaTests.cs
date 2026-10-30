@@ -21,6 +21,12 @@ public class PostgresSchemaTests(ApiFactory factory) : IClassFixture<ApiFactory>
         return Assert.IsType<PostgresException>(ex is PostgresException ? ex : ex.InnerException).SqlState;
     }
 
+    private async Task ExecAsync(string sql)
+    {
+        using var scope = factory.Services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<OpsFlowDbContext>().Database.ExecuteSqlRawAsync(sql);
+    }
+
     private static string InsertMembership(Guid tenantId, Guid userId, string role) =>
         $"INSERT INTO \"Memberships\" (\"Id\",\"TenantId\",\"UserId\",\"Role\",\"Status\",\"CreatedAtUtc\",\"UpdatedAtUtc\") VALUES ('{Guid.NewGuid()}','{tenantId}','{userId}','{role}','Active',NOW(),NOW())";
 
@@ -120,7 +126,7 @@ public class PostgresSchemaTests(ApiFactory factory) : IClassFixture<ApiFactory>
     // ---- Milestone 2 tables: tenant-consistent composite FKs, uniqueness and check constraints as PostgreSQL enforces them ----
 
     private static string InsertTicket(Guid tenantId, long number, Guid categoryId, Guid createdBy, string status = "Open") =>
-        $"INSERT INTO \"Tickets\" (\"Id\",\"TenantId\",\"Number\",\"Title\",\"Description\",\"Priority\",\"CategoryId\",\"CreatedByUserId\",\"Status\",\"CreatedAtUtc\",\"UpdatedAtUtc\",\"Version\",\"ActivitySequence\",\"CycleCount\") VALUES ('{Guid.NewGuid()}','{tenantId}',{number},'t','d','Low','{categoryId}','{createdBy}','{status}',NOW(),NOW(),1,0,0)";
+        $"INSERT INTO \"Tickets\" (\"Id\",\"TenantId\",\"Number\",\"Title\",\"Description\",\"Priority\",\"CategoryId\",\"CreatedByUserId\",\"Status\",\"CreatedAtUtc\",\"UpdatedAtUtc\",\"Version\",\"ActivitySequence\",\"CycleCount\",\"MessageSequence\") VALUES ('{Guid.NewGuid()}','{tenantId}',{number},'t','d','Low','{categoryId}','{createdBy}','{status}',NOW(),NOW(),1,0,0,0)"; // UPDATED: naya MessageSequence column NOT NULL hai
 
     private static string InsertAssignment(Guid tenantId, Guid ticketId, Guid membershipId, Guid byMembershipId) =>
         $"INSERT INTO \"TicketAssignments\" (\"Id\",\"TenantId\",\"TicketId\",\"MembershipId\",\"AssignedByMembershipId\",\"AssignedAtUtc\") VALUES ('{Guid.NewGuid()}','{tenantId}','{ticketId}','{membershipId}','{byMembershipId}',NOW())";
@@ -185,5 +191,39 @@ public class PostgresSchemaTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(UniqueViolation, await SqlStateAsync(Customer($"other-{Guid.NewGuid():N}@example.com", contact.UserId))); // one contact per linked user
         Assert.Equal(UniqueViolation, await SqlStateAsync(
             $"INSERT INTO \"TicketCategories\" (\"Id\",\"TenantId\",\"Name\",\"NormalizedName\",\"IsActive\",\"CreatedAtUtc\",\"UpdatedAtUtc\") VALUES ('{Guid.NewGuid()}','{a.Org.Id}','general','general',TRUE,NOW(),NOW())"));
+    }
+
+    // ---- Milestone 3 tables ----
+
+    [PostgresOnlyFact]
+    public async Task Chat_notes_attachments_and_notifications_are_tenant_consistent_unique_and_checked()
+    {
+        var a = await TicketWorld.CreateAsync(factory);
+        var b = await TicketWorld.CreateAsync(factory);
+        var ticketA = await a.CreateTicketAsync(a.Customer);
+        var sender = a.Customer.UserId;
+        var client = Guid.NewGuid();
+
+        string Message(Guid tenant, Guid ticket, int seq, string content, Guid clientId) =>
+            $"INSERT INTO \"TicketMessages\" (\"Id\",\"TenantId\",\"TicketId\",\"Sequence\",\"SenderUserId\",\"SenderIsStaff\",\"Content\",\"ClientMessageId\",\"CreatedAtUtc\") VALUES ('{Guid.NewGuid()}','{tenant}','{ticket}',{seq},'{sender}',FALSE,'{content}','{clientId}',NOW())";
+        string Note(Guid tenant, Guid ticket, int seq, Guid clientId) =>
+            $"INSERT INTO \"TicketNotes\" (\"Id\",\"TenantId\",\"TicketId\",\"Sequence\",\"AuthorUserId\",\"Content\",\"ClientNoteId\",\"CreatedAtUtc\") VALUES ('{Guid.NewGuid()}','{tenant}','{ticket}',{seq},'{sender}','n','{clientId}',NOW())";
+        string Notification(Guid tenant, Guid ticket, string key) =>
+            $"INSERT INTO \"Notifications\" (\"Id\",\"TenantId\",\"UserId\",\"Type\",\"TicketId\",\"Subject\",\"DedupKey\",\"CreatedAtUtc\") VALUES ('{Guid.NewGuid()}','{tenant}','{sender}','NoteAdded','{ticket}','s','{key}',NOW())";
+
+        await ExecAsync(Message(a.Org.Id, ticketA.Id, 1, "hi", client));
+        Assert.Equal(UniqueViolation, await SqlStateAsync(Message(a.Org.Id, ticketA.Id, 1, "dup position", Guid.NewGuid())));
+        Assert.Equal(UniqueViolation, await SqlStateAsync(Message(a.Org.Id, ticketA.Id, 2, "dup client id", client)));
+        Assert.Equal(ForeignKeyViolation, await SqlStateAsync(Message(b.Org.Id, ticketA.Id, 3, "other tenant", Guid.NewGuid()))); // composite (TenantId, TicketId)
+        Assert.Equal(CheckViolation, await SqlStateAsync(Message(a.Org.Id, ticketA.Id, 4, " ", Guid.NewGuid())));
+        Assert.Equal(CheckViolation, await SqlStateAsync(Message(a.Org.Id, ticketA.Id, 0, "zero", Guid.NewGuid())));
+
+        await ExecAsync(Note(a.Org.Id, ticketA.Id, 1, client));
+        Assert.Equal(UniqueViolation, await SqlStateAsync(Note(a.Org.Id, ticketA.Id, 1, Guid.NewGuid())));
+        Assert.Equal(ForeignKeyViolation, await SqlStateAsync(Note(b.Org.Id, ticketA.Id, 2, Guid.NewGuid())));
+
+        await ExecAsync(Notification(a.Org.Id, ticketA.Id, "k1"));
+        Assert.Equal(UniqueViolation, await SqlStateAsync(Notification(a.Org.Id, ticketA.Id, "k1")));
+        Assert.Equal(ForeignKeyViolation, await SqlStateAsync(Notification(b.Org.Id, ticketA.Id, "k2")));
     }
 }

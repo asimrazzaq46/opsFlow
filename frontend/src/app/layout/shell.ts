@@ -1,13 +1,17 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
+import { RouterLink, RouterOutlet } from '@angular/router';
 import { TranslatePipe } from '@ngx-translate/core';
+import { AuthService } from '../core/auth/auth.service';
+import { TenantService } from '../core/auth/tenant.service';
+import { RealtimeService } from '../core/realtime/realtime.service';
+import { NotificationCenter } from './notification-center';
 import { ThemeService } from '../core/services/theme.service';
 import { LanguageService, SUPPORTED_LANGUAGES, Language } from '../i18n/language.service';
 import { HealthStatus } from '../shared/components/health-status';
 
 @Component({
   selector: 'app-shell',
-  imports: [RouterOutlet, TranslatePipe, HealthStatus],
+  imports: [RouterOutlet, RouterLink, TranslatePipe, HealthStatus, NotificationCenter],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="flex min-h-screen flex-col">
@@ -24,6 +28,24 @@ import { HealthStatus } from '../shared/components/health-status';
 
           <div class="flex items-center gap-2 sm:gap-3">
             <app-health-status class="hidden sm:inline-flex" />
+
+            <!-- UPDATED: login ke baad workspace picker, notification center aur sign-out -->
+            @if (auth.isAuthenticated()) {
+              <a routerLink="/tickets" class="hidden text-sm font-medium text-muted hover:text-fg sm:inline">{{ 'nav.tickets' | translate }}</a>
+              @if (tenant.organizations().length) {
+                <label class="sr-only" for="tenant-select">{{ 'tenant.label' | translate }}</label>
+                <select id="tenant-select" class="max-w-32 rounded-lg border border-border bg-card px-2 py-1 text-sm focus-visible:outline-2 focus-visible:outline-brand sm:max-w-48"
+                  (change)="selectTenant($event)">
+                  @for (o of tenant.organizations(); track o.id) {
+                    <option [value]="o.id" [selected]="o.id === tenant.tenantId()">{{ o.name }}</option>
+                  }
+                </select>
+              }
+              <app-notification-center />
+              <button type="button" class="rounded-lg border border-border px-2.5 py-1 text-xs font-semibold focus-visible:outline-2 focus-visible:outline-brand" (click)="auth.logout()">
+                {{ 'auth.signOut' | translate }}
+              </button>
+            }
 
             <div role="group" [attr.aria-label]="'shell.language' | translate" class="flex rounded-lg border border-border p-0.5">
               @for (lang of languages; track lang) {
@@ -51,6 +73,12 @@ import { HealthStatus } from '../shared/components/health-status';
         </div>
       </header>
 
+      @if (auth.isAuthenticated() && realtime.state() !== 'connected') {
+        <div role="status" class="bg-warning/20 px-4 py-1 text-center text-sm">
+          {{ (realtime.state() === 'disconnected' ? 'realtime.disconnected' : 'realtime.reconnecting') | translate }}
+        </div>
+      }
+
       <main class="mx-auto w-full max-w-6xl flex-1 px-4 py-10 sm:px-6 sm:py-16">
         <router-outlet />
       </main>
@@ -58,9 +86,16 @@ import { HealthStatus } from '../shared/components/health-status';
   `,
 })
 export class Shell {
+  protected readonly auth = inject(AuthService);
+  protected readonly tenant = inject(TenantService);
+  protected readonly realtime = inject(RealtimeService);
   protected readonly theme = inject(ThemeService);
   protected readonly language = inject(LanguageService);
   protected readonly languages = SUPPORTED_LANGUAGES;
+
+  protected selectTenant(event: Event): void {
+    this.tenant.select((event.target as HTMLSelectElement).value);
+  }
 
   protected setLanguage(lang: Language): void {
     this.language.set(lang);

@@ -4,9 +4,11 @@
     <Project Path="src/OpsFlow.Application/OpsFlow.Application.csproj" />
     <Project Path="src/OpsFlow.Domain/OpsFlow.Domain.csproj" />
     <Project Path="src/OpsFlow.Infrastructure/OpsFlow.Infrastructure.csproj" />
+    <Project Path="src/OpsFlow.Realtime/OpsFlow.Realtime.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/OpsFlow.Tests.Integration/OpsFlow.Tests.Integration.csproj" />
     <Project Path="tests/OpsFlow.Tests.Unit/OpsFlow.Tests.Unit.csproj" />
+    <Project Path="tests/OpsFlow.Realtime.Tests/OpsFlow.Realtime.Tests.csproj" />
   </Folder>
 </Solution>

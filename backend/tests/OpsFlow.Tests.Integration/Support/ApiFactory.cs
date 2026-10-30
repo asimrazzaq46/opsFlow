@@ -216,6 +216,7 @@ public class ApiFactory : WebApplicationFactory<Program>
             ["RateLimiting:SensitivePermitLimit"] = SensitivePermitLimit.ToString(System.Globalization.CultureInfo.InvariantCulture),
             ["Auth:Jwt:SigningKey"] = "integration-test-signing-key-0123456789-abcdefghij",
             ["Auth:Password:Iterations"] = "1000", // fast hashing for tests only; production enforces >= 210000
+            ["Database:AutoApplyMigrationsOnStartup"] = "false", // UPDATED: test hosts schema/DB ka control khud rakhte hain
         }));
         builder.ConfigureServices(services =>
         {

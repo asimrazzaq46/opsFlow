@@ -65,6 +65,18 @@ public sealed class TicketAccess(ActorAccess actorAccess, ICurrentUser currentUs
     public Task<bool> IsActiveAssigneeAsync(Guid ticketId, Guid membershipId, CancellationToken ct) =>
         db.TicketAssignments.AnyAsync(a => a.TicketId == ticketId && a.MembershipId == membershipId && a.UnassignedAtUtc == null, ct);
 
+    /// <summary>
+    /// UPDATED: messages/notes ka agla per-ticket sequence. ExecuteUpdate ticket row par lock leta hai (commit tak), is liye concurrent writers
+    /// serialize hote hain aur koi sequence do baar nahi milti; ticket Version/ActivitySequence ko nahi chhoota.
+    /// </summary>
+    public async Task<int> NextMessageSequenceAsync(Guid ticketId, CancellationToken ct)
+    {
+        var rows = await db.Tickets.Where(t => t.Id == ticketId).ExecuteUpdateAsync(s => s.SetProperty(t => t.MessageSequence, t => t.MessageSequence + 1), ct);
+        return rows == 1
+            ? await db.Tickets.AsNoTracking().Where(t => t.Id == ticketId).Select(t => t.MessageSequence).SingleAsync(ct)
+            : throw AppException.NotFound("Ticket not found.");
+    }
+
     /// <summary>Every agent must be an ACTIVE Agent membership of THIS tenant whose user account is active.</summary>
     public async Task<List<Guid>> RequireEligibleAgentsAsync(IReadOnlyCollection<Guid> membershipIds, CancellationToken ct)
     {

@@ -71,7 +71,7 @@ internal static class ApiSecurityExtensions
             }
 
             // UPDATED: Bearer-only API hai - credentials/cookies allow nahi kiye jate
-            p.WithOrigins(origins).WithMethods("GET", "POST", "PUT", "DELETE").WithHeaders("Authorization", "Content-Type");
+            p.WithOrigins(origins).WithMethods("GET", "POST", "PUT", "DELETE").WithHeaders("Authorization", "Content-Type", "X-Requested-With", "X-SignalR-User-Agent"); // UPDATED: SignalR negotiate headers
         }));
 
         services.AddScoped<IAuthorizationHandler, TenantRoleHandler>();

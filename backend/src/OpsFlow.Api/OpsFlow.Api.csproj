@@ -26,6 +26,7 @@
   <ItemGroup>
     <ProjectReference Include="..\OpsFlow.Application\OpsFlow.Application.csproj" />
     <ProjectReference Include="..\OpsFlow.Infrastructure\OpsFlow.Infrastructure.csproj" />
+    <ProjectReference Include="..\OpsFlow.Realtime\OpsFlow.Realtime.csproj" />
   </ItemGroup>
 
 </Project>

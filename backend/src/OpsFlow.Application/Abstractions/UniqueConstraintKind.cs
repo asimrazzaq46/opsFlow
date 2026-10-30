@@ -14,4 +14,7 @@ public enum UniqueConstraintKind
     OpenAssignment,
     ActiveSlaCycle,
     ActivitySequence,
+    MessageClientId,
+    NoteClientId,
+    NotificationDedup,
 }
