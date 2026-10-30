@@ -10,20 +10,20 @@ import { RequestBuilder } from '../../request-builder';
 import { SetStatusRequest } from '../../models/set-status-request';
 
 export interface SetCustomerStatus$Params {
+  customerId: string;
 
 /**
  * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
  */
   tenantId: string;
-  customerId: string;
       body: SetStatusRequest
 }
 
 export function setCustomerStatus(http: HttpClient, rootUrl: string, params: SetCustomerStatus$Params, context?: HttpContext): Observable<StrictHttpResponse<void>> {
   const rb = new RequestBuilder(rootUrl, setCustomerStatus.PATH, 'put');
   if (params) {
-    rb.path('tenantId', params.tenantId, {});
     rb.path('customerId', params.customerId, {});
+    rb.path('tenantId', params.tenantId, {});
     rb.body(params.body, 'application/json');
   }
 

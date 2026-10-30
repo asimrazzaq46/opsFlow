@@ -6,28 +6,6 @@
     "version": "v1"
   },
   "paths": {
-    "/api/v1/health": {
-      "get": {
-        "tags": [
-          "Health"
-        ],
-        "summary": "Check service health",
-        "description": "Anonymous liveness probe; returns the service status and server time.",
-        "operationId": "GetHealth",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HealthResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/auth/register": {
       "post": {
         "tags": [
@@ -767,24 +745,75 @@
         ]
       }
     },
-    "/api/v1/organizations": {
+    "/api/v1/tenants/{tenantId}/customers": {
       "get": {
         "tags": [
-          "Organizations"
+          "Customers"
         ],
-        "summary": "List user organizations",
-        "description": "Returns organizations where the authenticated user has an active membership.",
-        "operationId": "ListMyOrganizations",
+        "summary": "List customers",
+        "description": "Returns the tenant's customer contacts, paged, with optional search. Requires the Owner or Manager role in the tenant.",
+        "operationId": "ListCustomers",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "isActive",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "1-based page number (clamped to a safe range).",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "Items per page (capped by the endpoint).",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 25
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "path",
+            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/OrganizationDto"
-                  }
+                  "$ref": "#/components/schemas/PagedResultOfCustomerDto"
                 }
               }
             }
@@ -798,44 +827,9 @@
                 }
               }
             }
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      },
-      "post": {
-        "tags": [
-          "Organizations"
-        ],
-        "summary": "Create organization",
-        "description": "Creates a tenant with the caller as its first Owner and seeds the default ticket settings, categories and SLA policies.",
-        "operationId": "CreateOrganization",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateOrganizationRequest"
-              }
-            }
           },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "Created",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OrganizationDto"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing, expired or invalid Bearer access token.",
+          "403": {
+            "description": "The caller has no active membership with a sufficient role in this tenant.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -860,6 +854,390 @@
             "Bearer": [ ]
           }
         ]
+      },
+      "post": {
+        "tags": [
+          "Customers"
+        ],
+        "summary": "Create customer",
+        "description": "Creates a customer contact (not a login account). Requires the Owner or Manager role in the tenant.",
+        "operationId": "CreateCustomer",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid Bearer access token.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no active membership with a sufficient role in this tenant.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed; see `errors` for the offending fields.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/customers/{customerId}": {
+      "get": {
+        "tags": [
+          "Customers"
+        ],
+        "summary": "Get customer",
+        "description": "Returns one customer contact. Requires the Owner or Manager role in the tenant.",
+        "operationId": "GetCustomer",
+        "parameters": [
+          {
+            "name": "customerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "path",
+            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid Bearer access token.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no active membership with a sufficient role in this tenant.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The resource does not exist or is not visible to the caller.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Customers"
+        ],
+        "summary": "Update customer",
+        "description": "Updates a customer contact. Requires the Owner or Manager role in the tenant.",
+        "operationId": "UpdateCustomer",
+        "parameters": [
+          {
+            "name": "customerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "path",
+            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid Bearer access token.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no active membership with a sufficient role in this tenant.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed; see `errors` for the offending fields.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The resource does not exist or is not visible to the caller.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/customers/{customerId}/status": {
+      "put": {
+        "tags": [
+          "Customers"
+        ],
+        "summary": "Activate or deactivate customer",
+        "description": "Changes whether the customer can be selected for new tickets; history is kept. Requires the Owner or Manager role in the tenant.",
+        "operationId": "SetCustomerStatus",
+        "parameters": [
+          {
+            "name": "customerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "path",
+            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetStatusRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Missing, expired or invalid Bearer access token.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no active membership with a sufficient role in this tenant.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed; see `errors` for the offending fields.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The resource does not exist or is not visible to the caller.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Check service health",
+        "description": "Anonymous liveness probe; returns the service status and server time.",
+        "operationId": "GetHealth",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/invitations/accept": {
@@ -923,364 +1301,6 @@
           },
           "429": {
             "description": "Rate limit exceeded; retry later.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      }
-    },
-    "/api/v1/tenants/{tenantId}": {
-      "get": {
-        "tags": [
-          "Tenants"
-        ],
-        "summary": "Get organization",
-        "description": "Returns the tenant identified by the route and the caller's role in it. Requires an active membership in the tenant; Customers only see their own tickets.",
-        "operationId": "GetTenant",
-        "parameters": [
-          {
-            "name": "tenantId",
-            "in": "path",
-            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OrganizationDto"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing, expired or invalid Bearer access token.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "The caller has no active membership with a sufficient role in this tenant.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      }
-    },
-    "/api/v1/tenants/{tenantId}/members": {
-      "get": {
-        "tags": [
-          "Tenants"
-        ],
-        "summary": "List members",
-        "description": "Returns the tenant's memberships, paged (pageSize is capped). Requires an Owner, Manager or Agent role in the tenant.",
-        "operationId": "ListMembers",
-        "parameters": [
-          {
-            "name": "tenantId",
-            "in": "path",
-            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "description": "1-based page number (clamped to a safe range).",
-            "schema": {
-              "pattern": "^-?(?:0|[1-9]\\d*)$",
-              "type": [
-                "integer",
-                "string"
-              ],
-              "format": "int32",
-              "default": 1
-            }
-          },
-          {
-            "name": "pageSize",
-            "in": "query",
-            "description": "Items per page (capped by the endpoint).",
-            "schema": {
-              "pattern": "^-?(?:0|[1-9]\\d*)$",
-              "type": [
-                "integer",
-                "string"
-              ],
-              "format": "int32",
-              "default": 25
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PagedResultOfMemberDto"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing, expired or invalid Bearer access token.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "The caller has no active membership with a sufficient role in this tenant.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation failed; see `errors` for the offending fields.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      }
-    },
-    "/api/v1/tenants/{tenantId}/members/{membershipId}/role": {
-      "put": {
-        "tags": [
-          "Tenants"
-        ],
-        "summary": "Change member role",
-        "description": "Changes a member's role. A tenant always keeps at least one usable Owner. Requires the Owner role in the tenant.",
-        "operationId": "ChangeMemberRole",
-        "parameters": [
-          {
-            "name": "tenantId",
-            "in": "path",
-            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "membershipId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ChangeRoleRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": "No Content"
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing, expired or invalid Bearer access token.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "The caller has no active membership with a sufficient role in this tenant.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation failed; see `errors` for the offending fields.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "The resource does not exist or is not visible to the caller.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      }
-    },
-    "/api/v1/tenants/{tenantId}/members/{membershipId}/status": {
-      "put": {
-        "tags": [
-          "Tenants"
-        ],
-        "summary": "Activate or suspend member",
-        "description": "Activates or suspends a membership. A tenant always keeps at least one usable Owner. Requires the Owner role in the tenant.",
-        "operationId": "SetMemberStatus",
-        "parameters": [
-          {
-            "name": "tenantId",
-            "in": "path",
-            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "membershipId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SetStatusRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": "No Content"
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing, expired or invalid Bearer access token.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "The caller has no active membership with a sufficient role in this tenant.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation failed; see `errors` for the offending fields.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "The resource does not exist or is not visible to the caller.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1466,16 +1486,6 @@
         "operationId": "RevokeInvitation",
         "parameters": [
           {
-            "name": "tenantId",
-            "in": "path",
-            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
             "name": "invitationId",
             "in": "path",
             "required": true,
@@ -1483,6 +1493,16 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "tenantId",
+            "in": "path",
+            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -1537,507 +1557,14 @@
         ]
       }
     },
-    "/api/v1/tenants/{tenantId}/customers": {
+    "/api/v1/organizations": {
       "get": {
         "tags": [
-          "Customers"
+          "Organizations"
         ],
-        "summary": "List customers",
-        "description": "Returns the tenant's customer contacts, paged, with optional search. Requires the Owner or Manager role in the tenant.",
-        "operationId": "ListCustomers",
-        "parameters": [
-          {
-            "name": "tenantId",
-            "in": "path",
-            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "search",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "isActive",
-            "in": "query",
-            "schema": {
-              "type": "boolean"
-            }
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "description": "1-based page number (clamped to a safe range).",
-            "schema": {
-              "pattern": "^-?(?:0|[1-9]\\d*)$",
-              "type": [
-                "integer",
-                "string"
-              ],
-              "format": "int32",
-              "default": 1
-            }
-          },
-          {
-            "name": "pageSize",
-            "in": "query",
-            "description": "Items per page (capped by the endpoint).",
-            "schema": {
-              "pattern": "^-?(?:0|[1-9]\\d*)$",
-              "type": [
-                "integer",
-                "string"
-              ],
-              "format": "int32",
-              "default": 25
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PagedResultOfCustomerDto"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing, expired or invalid Bearer access token.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "The caller has no active membership with a sufficient role in this tenant.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation failed; see `errors` for the offending fields.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      },
-      "post": {
-        "tags": [
-          "Customers"
-        ],
-        "summary": "Create customer",
-        "description": "Creates a customer contact (not a login account). Requires the Owner or Manager role in the tenant.",
-        "operationId": "CreateCustomer",
-        "parameters": [
-          {
-            "name": "tenantId",
-            "in": "path",
-            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CustomerRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "Created",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomerDto"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing, expired or invalid Bearer access token.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "The caller has no active membership with a sufficient role in this tenant.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation failed; see `errors` for the offending fields.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      }
-    },
-    "/api/v1/tenants/{tenantId}/customers/{customerId}": {
-      "get": {
-        "tags": [
-          "Customers"
-        ],
-        "summary": "Get customer",
-        "description": "Returns one customer contact. Requires the Owner or Manager role in the tenant.",
-        "operationId": "GetCustomer",
-        "parameters": [
-          {
-            "name": "tenantId",
-            "in": "path",
-            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "customerId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomerDto"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing, expired or invalid Bearer access token.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "The caller has no active membership with a sufficient role in this tenant.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "The resource does not exist or is not visible to the caller.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      },
-      "put": {
-        "tags": [
-          "Customers"
-        ],
-        "summary": "Update customer",
-        "description": "Updates a customer contact. Requires the Owner or Manager role in the tenant.",
-        "operationId": "UpdateCustomer",
-        "parameters": [
-          {
-            "name": "tenantId",
-            "in": "path",
-            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "customerId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CustomerRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CustomerDto"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing, expired or invalid Bearer access token.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "The caller has no active membership with a sufficient role in this tenant.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation failed; see `errors` for the offending fields.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "The resource does not exist or is not visible to the caller.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      }
-    },
-    "/api/v1/tenants/{tenantId}/customers/{customerId}/status": {
-      "put": {
-        "tags": [
-          "Customers"
-        ],
-        "summary": "Activate or deactivate customer",
-        "description": "Changes whether the customer can be selected for new tickets; history is kept. Requires the Owner or Manager role in the tenant.",
-        "operationId": "SetCustomerStatus",
-        "parameters": [
-          {
-            "name": "tenantId",
-            "in": "path",
-            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "customerId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SetStatusRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": "No Content"
-          },
-          "401": {
-            "description": "Missing, expired or invalid Bearer access token.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "The caller has no active membership with a sufficient role in this tenant.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation failed; see `errors` for the offending fields.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "The resource does not exist or is not visible to the caller.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      }
-    },
-    "/api/v1/tenants/{tenantId}/ticket-categories": {
-      "get": {
-        "tags": [
-          "TicketCategories"
-        ],
-        "summary": "List ticket categories",
-        "description": "Returns active categories; Owners and Managers may include inactive ones. Requires an active membership in the tenant; Customers only see their own tickets.",
-        "operationId": "ListTicketCategories",
-        "parameters": [
-          {
-            "name": "tenantId",
-            "in": "path",
-            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "includeInactive",
-            "in": "query",
-            "schema": {
-              "type": "boolean",
-              "default": false
-            }
-          }
-        ],
+        "summary": "List user organizations",
+        "description": "Returns organizations where the authenticated user has an active membership.",
+        "operationId": "ListMyOrganizations",
         "responses": {
           "200": {
             "description": "OK",
@@ -2046,7 +1573,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/TicketCategoryDto"
+                    "$ref": "#/components/schemas/OrganizationDto"
                   }
                 }
               }
@@ -2061,26 +1588,6 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "The caller has no active membership with a sufficient role in this tenant.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation failed; see `errors` for the offending fields.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemResponse"
-                }
-              }
-            }
           }
         },
         "security": [
@@ -2091,28 +1598,16 @@
       },
       "post": {
         "tags": [
-          "TicketCategories"
+          "Organizations"
         ],
-        "summary": "Create ticket category",
-        "description": "Creates a category with a tenant-unique name. Requires the Owner or Manager role in the tenant.",
-        "operationId": "CreateTicketCategory",
-        "parameters": [
-          {
-            "name": "tenantId",
-            "in": "path",
-            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
+        "summary": "Create organization",
+        "description": "Creates a tenant with the caller as its first Owner and seeds the default ticket settings, categories and SLA policies.",
+        "operationId": "CreateOrganization",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CategoryRequest"
+                "$ref": "#/components/schemas/CreateOrganizationRequest"
               }
             }
           },
@@ -2124,17 +1619,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TicketCategoryDto"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
+                  "$ref": "#/components/schemas/OrganizationDto"
                 }
               }
             }
@@ -2149,221 +1634,12 @@
               }
             }
           },
-          "403": {
-            "description": "The caller has no active membership with a sufficient role in this tenant.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          },
           "400": {
             "description": "Validation failed; see `errors` for the offending fields.",
             "content": {
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ValidationProblemResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      }
-    },
-    "/api/v1/tenants/{tenantId}/ticket-categories/{categoryId}": {
-      "put": {
-        "tags": [
-          "TicketCategories"
-        ],
-        "summary": "Rename ticket category",
-        "description": "Renames a category; names stay unique per tenant. Requires the Owner or Manager role in the tenant.",
-        "operationId": "RenameTicketCategory",
-        "parameters": [
-          {
-            "name": "tenantId",
-            "in": "path",
-            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "categoryId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CategoryRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TicketCategoryDto"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing, expired or invalid Bearer access token.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "The caller has no active membership with a sufficient role in this tenant.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation failed; see `errors` for the offending fields.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "The resource does not exist or is not visible to the caller.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      }
-    },
-    "/api/v1/tenants/{tenantId}/ticket-categories/{categoryId}/status": {
-      "put": {
-        "tags": [
-          "TicketCategories"
-        ],
-        "summary": "Activate or deactivate category",
-        "description": "Deactivated categories cannot be used for new tickets; existing tickets keep them. Requires the Owner or Manager role in the tenant.",
-        "operationId": "SetTicketCategoryStatus",
-        "parameters": [
-          {
-            "name": "tenantId",
-            "in": "path",
-            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "categoryId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SetStatusRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": "No Content"
-          },
-          "401": {
-            "description": "Missing, expired or invalid Bearer access token.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "The caller has no active membership with a sufficient role in this tenant.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation failed; see `errors` for the offending fields.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "The resource does not exist or is not visible to the caller.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
                 }
               }
             }
@@ -2535,9 +1811,8 @@
         "operationId": "UpdateSlaPolicy",
         "parameters": [
           {
-            "name": "tenantId",
+            "name": "policyId",
             "in": "path",
-            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
             "required": true,
             "schema": {
               "type": "string",
@@ -2545,8 +1820,9 @@
             }
           },
           {
-            "name": "policyId",
+            "name": "tenantId",
             "in": "path",
+            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
             "required": true,
             "schema": {
               "type": "string",
@@ -2633,6 +1909,15 @@
         "operationId": "SetSlaPolicyStatus",
         "parameters": [
           {
+            "name": "policyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
             "name": "tenantId",
             "in": "path",
             "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
@@ -2641,10 +1926,359 @@
               "type": "string",
               "format": "uuid"
             }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetStatusRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid Bearer access token.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no active membership with a sufficient role in this tenant.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed; see `errors` for the offending fields.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The resource does not exist or is not visible to the caller.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}": {
+      "get": {
+        "tags": [
+          "Tenants"
+        ],
+        "summary": "Get organization",
+        "description": "Returns the tenant identified by the route and the caller's role in it. Requires an active membership in the tenant; Customers only see their own tickets.",
+        "operationId": "GetTenant",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid Bearer access token.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no active membership with a sufficient role in this tenant.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/members": {
+      "get": {
+        "tags": [
+          "Tenants"
+        ],
+        "summary": "List members",
+        "description": "Returns the tenant's memberships, paged (pageSize is capped). Requires an Owner, Manager or Agent role in the tenant.",
+        "operationId": "ListMembers",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "1-based page number (clamped to a safe range).",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 1
+            }
           },
           {
-            "name": "policyId",
+            "name": "pageSize",
+            "in": "query",
+            "description": "Items per page (capped by the endpoint).",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 25
+            }
+          },
+          {
+            "name": "tenantId",
             "in": "path",
+            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagedResultOfMemberDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid Bearer access token.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no active membership with a sufficient role in this tenant.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed; see `errors` for the offending fields.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/members/{membershipId}/role": {
+      "put": {
+        "tags": [
+          "Tenants"
+        ],
+        "summary": "Change member role",
+        "description": "Changes a member's role. A tenant always keeps at least one usable Owner. Requires the Owner role in the tenant.",
+        "operationId": "ChangeMemberRole",
+        "parameters": [
+          {
+            "name": "membershipId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "path",
+            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeRoleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid Bearer access token.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no active membership with a sufficient role in this tenant.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed; see `errors` for the offending fields.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The resource does not exist or is not visible to the caller.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/members/{membershipId}/status": {
+      "put": {
+        "tags": [
+          "Tenants"
+        ],
+        "summary": "Activate or suspend member",
+        "description": "Activates or suspends a membership. A tenant always keeps at least one usable Owner. Requires the Owner role in the tenant.",
+        "operationId": "SetMemberStatus",
+        "parameters": [
+          {
+            "name": "membershipId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "path",
+            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
             "required": true,
             "schema": {
               "type": "string",
@@ -2783,6 +2417,696 @@
         ]
       }
     },
+    "/api/v1/tenants/{tenantId}/tickets/{ticketId}/assignments": {
+      "get": {
+        "tags": [
+          "Tickets"
+        ],
+        "summary": "List ticket assignments",
+        "description": "Returns current assignees, or the complete history when includeHistory=True. Requires an Owner, Manager or Agent role in the tenant.",
+        "operationId": "ListTicketAssignments",
+        "parameters": [
+          {
+            "name": "ticketId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "includeHistory",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "path",
+            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AssignmentHistoryDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid Bearer access token.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no active membership with a sufficient role in this tenant.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed; see `errors` for the offending fields.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The resource does not exist or is not visible to the caller.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Tickets"
+        ],
+        "summary": "Assign agents",
+        "description": "Assigns one or more eligible agents to the ticket. Requires the Owner or Manager role in the tenant.",
+        "operationId": "AssignTicketAgents",
+        "parameters": [
+          {
+            "name": "ticketId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "path",
+            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignAgentsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketDetailDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid Bearer access token.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no active membership with a sufficient role in this tenant.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed; see `errors` for the offending fields.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The resource does not exist or is not visible to the caller.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/tickets/{ticketId}/assignments/{membershipId}": {
+      "delete": {
+        "tags": [
+          "Tickets"
+        ],
+        "summary": "Unassign agent",
+        "description": "Closes an agent's assignment (history is kept). The last eligible assignee cannot be removed while the status needs one. Requires the Owner or Manager role in the tenant.",
+        "operationId": "UnassignTicketAgent",
+        "parameters": [
+          {
+            "name": "ticketId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "membershipId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "path",
+            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketDetailDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid Bearer access token.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no active membership with a sufficient role in this tenant.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed; see `errors` for the offending fields.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The resource does not exist or is not visible to the caller.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/ticket-categories": {
+      "get": {
+        "tags": [
+          "TicketCategories"
+        ],
+        "summary": "List ticket categories",
+        "description": "Returns active categories; Owners and Managers may include inactive ones. Requires an active membership in the tenant; Customers only see their own tickets.",
+        "operationId": "ListTicketCategories",
+        "parameters": [
+          {
+            "name": "includeInactive",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "path",
+            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TicketCategoryDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid Bearer access token.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no active membership with a sufficient role in this tenant.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed; see `errors` for the offending fields.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "TicketCategories"
+        ],
+        "summary": "Create ticket category",
+        "description": "Creates a category with a tenant-unique name. Requires the Owner or Manager role in the tenant.",
+        "operationId": "CreateTicketCategory",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategoryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketCategoryDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid Bearer access token.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no active membership with a sufficient role in this tenant.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed; see `errors` for the offending fields.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/ticket-categories/{categoryId}": {
+      "put": {
+        "tags": [
+          "TicketCategories"
+        ],
+        "summary": "Rename ticket category",
+        "description": "Renames a category; names stay unique per tenant. Requires the Owner or Manager role in the tenant.",
+        "operationId": "RenameTicketCategory",
+        "parameters": [
+          {
+            "name": "categoryId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "path",
+            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategoryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketCategoryDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid Bearer access token.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no active membership with a sufficient role in this tenant.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed; see `errors` for the offending fields.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The resource does not exist or is not visible to the caller.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/ticket-categories/{categoryId}/status": {
+      "put": {
+        "tags": [
+          "TicketCategories"
+        ],
+        "summary": "Activate or deactivate category",
+        "description": "Deactivated categories cannot be used for new tickets; existing tickets keep them. Requires the Owner or Manager role in the tenant.",
+        "operationId": "SetTicketCategoryStatus",
+        "parameters": [
+          {
+            "name": "categoryId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "path",
+            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetStatusRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Missing, expired or invalid Bearer access token.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no active membership with a sufficient role in this tenant.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed; see `errors` for the offending fields.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The resource does not exist or is not visible to the caller.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/tickets": {
       "post": {
         "tags": [
@@ -2880,16 +3204,6 @@
         "operationId": "ListTickets",
         "parameters": [
           {
-            "name": "tenantId",
-            "in": "path",
-            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
             "name": "Status",
             "in": "query",
             "schema": {
@@ -2971,8 +3285,7 @@
             "name": "Descending",
             "in": "query",
             "schema": {
-              "type": "boolean",
-              "default": false
+              "type": "boolean"
             }
           },
           {
@@ -2984,8 +3297,7 @@
                 "integer",
                 "string"
               ],
-              "format": "int32",
-              "default": 1
+              "format": "int32"
             }
           },
           {
@@ -2997,8 +3309,17 @@
                 "integer",
                 "string"
               ],
-              "format": "int32",
-              "default": 25
+              "format": "int32"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "path",
+            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
             }
           }
         ],
@@ -3061,9 +3382,8 @@
         "operationId": "GetTicket",
         "parameters": [
           {
-            "name": "tenantId",
+            "name": "ticketId",
             "in": "path",
-            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
             "required": true,
             "schema": {
               "type": "string",
@@ -3071,8 +3391,9 @@
             }
           },
           {
-            "name": "ticketId",
+            "name": "tenantId",
             "in": "path",
+            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
             "required": true,
             "schema": {
               "type": "string",
@@ -3137,9 +3458,8 @@
         "operationId": "UpdateTicket",
         "parameters": [
           {
-            "name": "tenantId",
+            "name": "ticketId",
             "in": "path",
-            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
             "required": true,
             "schema": {
               "type": "string",
@@ -3147,8 +3467,9 @@
             }
           },
           {
-            "name": "ticketId",
+            "name": "tenantId",
             "in": "path",
+            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
             "required": true,
             "schema": {
               "type": "string",
@@ -3245,9 +3566,8 @@
         "operationId": "ChangeTicketStatus",
         "parameters": [
           {
-            "name": "tenantId",
+            "name": "ticketId",
             "in": "path",
-            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
             "required": true,
             "schema": {
               "type": "string",
@@ -3255,8 +3575,9 @@
             }
           },
           {
-            "name": "ticketId",
+            "name": "tenantId",
             "in": "path",
+            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
             "required": true,
             "schema": {
               "type": "string",
@@ -3353,9 +3674,8 @@
         "operationId": "ReopenTicket",
         "parameters": [
           {
-            "name": "tenantId",
+            "name": "ticketId",
             "in": "path",
-            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
             "required": true,
             "schema": {
               "type": "string",
@@ -3363,8 +3683,9 @@
             }
           },
           {
-            "name": "ticketId",
+            "name": "tenantId",
             "in": "path",
+            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
             "required": true,
             "schema": {
               "type": "string",
@@ -3461,16 +3782,6 @@
         "operationId": "ListTicketActivity",
         "parameters": [
           {
-            "name": "tenantId",
-            "in": "path",
-            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
             "name": "ticketId",
             "in": "path",
             "required": true,
@@ -3505,6 +3816,16 @@
               ],
               "format": "int32",
               "default": 50
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "path",
+            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
             }
           }
         ],
@@ -3577,9 +3898,8 @@
         "operationId": "GetTicketSla",
         "parameters": [
           {
-            "name": "tenantId",
+            "name": "ticketId",
             "in": "path",
-            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
             "required": true,
             "schema": {
               "type": "string",
@@ -3587,8 +3907,9 @@
             }
           },
           {
-            "name": "ticketId",
+            "name": "tenantId",
             "in": "path",
+            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
             "required": true,
             "schema": {
               "type": "string",
@@ -3644,330 +3965,6 @@
           }
         ]
       }
-    },
-    "/api/v1/tenants/{tenantId}/tickets/{ticketId}/assignments": {
-      "get": {
-        "tags": [
-          "Tickets"
-        ],
-        "summary": "List ticket assignments",
-        "description": "Returns current assignees, or the complete history when includeHistory=True. Requires an Owner, Manager or Agent role in the tenant.",
-        "operationId": "ListTicketAssignments",
-        "parameters": [
-          {
-            "name": "tenantId",
-            "in": "path",
-            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "ticketId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "includeHistory",
-            "in": "query",
-            "schema": {
-              "type": "boolean",
-              "default": false
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/AssignmentHistoryDto"
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing, expired or invalid Bearer access token.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "The caller has no active membership with a sufficient role in this tenant.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation failed; see `errors` for the offending fields.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "The resource does not exist or is not visible to the caller.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      },
-      "post": {
-        "tags": [
-          "Tickets"
-        ],
-        "summary": "Assign agents",
-        "description": "Assigns one or more eligible agents to the ticket. Requires the Owner or Manager role in the tenant.",
-        "operationId": "AssignTicketAgents",
-        "parameters": [
-          {
-            "name": "tenantId",
-            "in": "path",
-            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "ticketId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AssignAgentsRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TicketDetailDto"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing, expired or invalid Bearer access token.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "The caller has no active membership with a sufficient role in this tenant.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation failed; see `errors` for the offending fields.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "The resource does not exist or is not visible to the caller.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      }
-    },
-    "/api/v1/tenants/{tenantId}/tickets/{ticketId}/assignments/{membershipId}": {
-      "delete": {
-        "tags": [
-          "Tickets"
-        ],
-        "summary": "Unassign agent",
-        "description": "Closes an agent's assignment (history is kept). The last eligible assignee cannot be removed while the status needs one. Requires the Owner or Manager role in the tenant.",
-        "operationId": "UnassignTicketAgent",
-        "parameters": [
-          {
-            "name": "tenantId",
-            "in": "path",
-            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "ticketId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "membershipId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "version",
-            "in": "query",
-            "schema": {
-              "pattern": "^-?(?:0|[1-9]\\d*)$",
-              "type": [
-                "integer",
-                "string"
-              ],
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TicketDetailDto"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing, expired or invalid Bearer access token.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "The caller has no active membership with a sufficient role in this tenant.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation failed; see `errors` for the offending fields.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "The resource does not exist or is not visible to the caller.",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "Bearer": [ ]
-          }
-        ]
-      }
     }
   },
   "components": {
@@ -3979,8 +3976,6 @@
         "type": "object",
         "properties": {
           "token": {
-            "maxLength": 200,
-            "minLength": 0,
             "type": "string"
           }
         }
@@ -3993,8 +3988,6 @@
         "type": "object",
         "properties": {
           "membershipIds": {
-            "maxItems": 20,
-            "minItems": 1,
             "type": "array",
             "items": {
               "type": "string",
@@ -4138,8 +4131,6 @@
         "type": "object",
         "properties": {
           "name": {
-            "maxLength": 100,
-            "minLength": 2,
             "type": "string"
           }
         }
@@ -4152,13 +4143,9 @@
         "type": "object",
         "properties": {
           "currentPassword": {
-            "maxLength": 128,
-            "minLength": 0,
             "type": "string"
           },
           "newPassword": {
-            "maxLength": 128,
-            "minLength": 0,
             "type": "string"
           }
         }
@@ -4198,8 +4185,6 @@
         "type": "object",
         "properties": {
           "email": {
-            "maxLength": 256,
-            "minLength": 0,
             "type": "string"
           },
           "role": {
@@ -4214,8 +4199,6 @@
         "type": "object",
         "properties": {
           "name": {
-            "maxLength": 100,
-            "minLength": 2,
             "type": "string"
           }
         }
@@ -4232,8 +4215,6 @@
             "$ref": "#/components/schemas/TicketPriority"
           },
           "responseMinutes": {
-            "maximum": 525600,
-            "minimum": 1,
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "integer",
@@ -4242,8 +4223,6 @@
             "format": "int32"
           },
           "resolutionMinutes": {
-            "maximum": 525600,
-            "minimum": 1,
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "integer",
@@ -4265,13 +4244,9 @@
         "type": "object",
         "properties": {
           "title": {
-            "maxLength": 200,
-            "minLength": 3,
             "type": "string"
           },
           "description": {
-            "maxLength": 4000,
-            "minLength": 1,
             "type": "string"
           },
           "priority": {
@@ -4296,7 +4271,6 @@
             "format": "uuid"
           },
           "assigneeMembershipIds": {
-            "maxItems": 20,
             "type": [
               "null",
               "array"
@@ -4367,18 +4341,12 @@
         "type": "object",
         "properties": {
           "name": {
-            "maxLength": 150,
-            "minLength": 2,
             "type": "string"
           },
           "email": {
-            "maxLength": 256,
-            "minLength": 0,
             "type": "string"
           },
           "phone": {
-            "maxLength": 50,
-            "minLength": 0,
             "type": [
               "null",
               "string"
@@ -4400,8 +4368,6 @@
         "type": "object",
         "properties": {
           "password": {
-            "maxLength": 128,
-            "minLength": 0,
             "type": "string"
           }
         }
@@ -4429,8 +4395,6 @@
         "type": "object",
         "properties": {
           "email": {
-            "maxLength": 256,
-            "minLength": 0,
             "type": "string"
           }
         }
@@ -4492,8 +4456,6 @@
             "type": "string"
           },
           "password": {
-            "maxLength": 128,
-            "minLength": 0,
             "type": "string"
           }
         }
@@ -4505,8 +4467,6 @@
         "type": "object",
         "properties": {
           "refreshToken": {
-            "maxLength": 2048,
-            "minLength": 0,
             "type": "string"
           }
         }
@@ -4779,8 +4739,6 @@
         "type": "object",
         "properties": {
           "refreshToken": {
-            "maxLength": 2048,
-            "minLength": 0,
             "type": "string"
           }
         }
@@ -4794,18 +4752,12 @@
         "type": "object",
         "properties": {
           "email": {
-            "maxLength": 256,
-            "minLength": 0,
             "type": "string"
           },
           "password": {
-            "maxLength": 128,
-            "minLength": 0,
             "type": "string"
           },
           "displayName": {
-            "maxLength": 100,
-            "minLength": 2,
             "type": "string"
           }
         }
@@ -4842,8 +4794,6 @@
             "type": "string"
           },
           "newPassword": {
-            "maxLength": 128,
-            "minLength": 0,
             "type": "string"
           }
         }
@@ -5383,8 +5333,6 @@
         "type": "object",
         "properties": {
           "responseMinutes": {
-            "maximum": 525600,
-            "minimum": 1,
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "integer",
@@ -5393,8 +5341,6 @@
             "format": "int32"
           },
           "resolutionMinutes": {
-            "maximum": 525600,
-            "minimum": 1,
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "integer",
@@ -5415,16 +5361,12 @@
         "type": "object",
         "properties": {
           "title": {
-            "maxLength": 200,
-            "minLength": 3,
             "type": [
               "null",
               "string"
             ]
           },
           "description": {
-            "maxLength": 4000,
-            "minLength": 1,
             "type": [
               "null",
               "string"
@@ -5535,31 +5477,31 @@
   },
   "tags": [
     {
-      "name": "Health"
-    },
-    {
       "name": "Auth"
-    },
-    {
-      "name": "Organizations"
-    },
-    {
-      "name": "Invitations"
-    },
-    {
-      "name": "Tenants"
     },
     {
       "name": "Customers"
     },
     {
-      "name": "TicketCategories"
+      "name": "Health"
+    },
+    {
+      "name": "Invitations"
+    },
+    {
+      "name": "Organizations"
     },
     {
       "name": "SlaPolicies"
     },
     {
+      "name": "Tenants"
+    },
+    {
       "name": "Tickets"
+    },
+    {
+      "name": "TicketCategories"
     }
   ]
 }

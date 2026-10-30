@@ -11,20 +11,20 @@ import { CustomerDto } from '../../models/customer-dto';
 import { CustomerRequest } from '../../models/customer-request';
 
 export interface UpdateCustomer$Params {
+  customerId: string;
 
 /**
  * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
  */
   tenantId: string;
-  customerId: string;
       body: CustomerRequest
 }
 
 export function updateCustomer(http: HttpClient, rootUrl: string, params: UpdateCustomer$Params, context?: HttpContext): Observable<StrictHttpResponse<CustomerDto>> {
   const rb = new RequestBuilder(rootUrl, updateCustomer.PATH, 'put');
   if (params) {
-    rb.path('tenantId', params.tenantId, {});
     rb.path('customerId', params.customerId, {});
+    rb.path('tenantId', params.tenantId, {});
     rb.body(params.body, 'application/json');
   }
 

@@ -10,20 +10,20 @@ import { RequestBuilder } from '../../request-builder';
 import { SetStatusRequest } from '../../models/set-status-request';
 
 export interface SetTicketCategoryStatus$Params {
+  categoryId: string;
 
 /**
  * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
  */
   tenantId: string;
-  categoryId: string;
       body: SetStatusRequest
 }
 
 export function setTicketCategoryStatus(http: HttpClient, rootUrl: string, params: SetTicketCategoryStatus$Params, context?: HttpContext): Observable<StrictHttpResponse<void>> {
   const rb = new RequestBuilder(rootUrl, setTicketCategoryStatus.PATH, 'put');
   if (params) {
-    rb.path('tenantId', params.tenantId, {});
     rb.path('categoryId', params.categoryId, {});
+    rb.path('tenantId', params.tenantId, {});
     rb.body(params.body, 'application/json');
   }
 

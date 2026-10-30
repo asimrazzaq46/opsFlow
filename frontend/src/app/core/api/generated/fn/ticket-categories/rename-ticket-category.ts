@@ -11,20 +11,20 @@ import { CategoryRequest } from '../../models/category-request';
 import { TicketCategoryDto } from '../../models/ticket-category-dto';
 
 export interface RenameTicketCategory$Params {
+  categoryId: string;
 
 /**
  * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
  */
   tenantId: string;
-  categoryId: string;
       body: CategoryRequest
 }
 
 export function renameTicketCategory(http: HttpClient, rootUrl: string, params: RenameTicketCategory$Params, context?: HttpContext): Observable<StrictHttpResponse<TicketCategoryDto>> {
   const rb = new RequestBuilder(rootUrl, renameTicketCategory.PATH, 'put');
   if (params) {
-    rb.path('tenantId', params.tenantId, {});
     rb.path('categoryId', params.categoryId, {});
+    rb.path('tenantId', params.tenantId, {});
     rb.body(params.body, 'application/json');
   }
 

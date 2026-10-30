@@ -10,19 +10,19 @@ import { RequestBuilder } from '../../request-builder';
 import { TicketSlaDto } from '../../models/ticket-sla-dto';
 
 export interface GetTicketSla$Params {
+  ticketId: string;
 
 /**
  * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
  */
   tenantId: string;
-  ticketId: string;
 }
 
 export function getTicketSla(http: HttpClient, rootUrl: string, params: GetTicketSla$Params, context?: HttpContext): Observable<StrictHttpResponse<TicketSlaDto>> {
   const rb = new RequestBuilder(rootUrl, getTicketSla.PATH, 'get');
   if (params) {
-    rb.path('tenantId', params.tenantId, {});
     rb.path('ticketId', params.ticketId, {});
+    rb.path('tenantId', params.tenantId, {});
   }
 
   return http.request(

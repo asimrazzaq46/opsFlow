@@ -1,4 +1,10 @@
 using System.Net;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Npgsql;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -106,5 +112,155 @@ public class DevelopmentSeedingTests(ApiFactory factory) : IClassFixture<ApiFact
         await Assert.ThrowsAnyAsync<DbUpdateException>(() => RunAsync(options));
 
         Assert.Equal((0, 0, 0), await CountsAsync(options));
+    }
+}
+
+/// <summary>The manual-migration policy: Development startup only VERIFIES the schema and refuses to serve when it is not ready.</summary>
+public class DevelopmentStartupTests
+{
+    [Fact]
+    public void Model_changes_without_a_migration_block_startup_and_explain_how_to_generate_one()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => DevelopmentMigrationGuard.EnsureUpToDate(true, []));
+
+        Assert.Contains("no migration covers", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("dotnet ef migrations add", ex.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("not applied", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Unapplied_migrations_block_startup_and_are_named()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => DevelopmentMigrationGuard.EnsureUpToDate(false, ["20260101_A", "20260102_B"]));
+
+        Assert.Contains("2 migration(s) are not applied: 20260101_A, 20260102_B", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("dotnet ef database update", ex.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("no migration covers", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Both_problems_are_reported_together_and_an_up_to_date_database_passes()
+    {
+        var both = Assert.Throws<InvalidOperationException>(() => DevelopmentMigrationGuard.EnsureUpToDate(true, ["X"]));
+        Assert.Contains("no migration covers", both.Message, StringComparison.Ordinal);
+        Assert.Contains("not applied: X", both.Message, StringComparison.Ordinal);
+
+        DevelopmentMigrationGuard.EnsureUpToDate(false, []); // no exception: seeding may proceed
+    }
+
+    [Theory]
+    [InlineData("Development", true, true)]
+    [InlineData("Development", false, false)]
+    [InlineData("Production", true, false)] // production never runs the development hook (and nothing migrates anywhere)
+    [InlineData("Testing", true, false)]
+    public void The_startup_check_is_registered_only_in_enabled_development(string environment, bool enabled, bool expected)
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["DevelopmentInitialization:Enabled"] = enabled.ToString() }).Build();
+        var services = new ServiceCollection();
+
+        services.AddDevelopmentInitialization(configuration, new Microsoft.Extensions.Hosting.Internal.HostingEnvironment { EnvironmentName = environment });
+
+        Assert.Equal(expected, services.Any(s => s.ImplementationType == typeof(DevelopmentInitializer)));
+    }
+
+    [PostgresOnlyFact]
+    public async Task The_host_refuses_to_start_on_an_unmigrated_database_and_changes_nothing()
+    {
+        var name = $"opsflow_startup_{Guid.NewGuid():N}";
+        var connectionString = TestDatabase.CreatePostgresDatabase(name);
+        try
+        {
+            await using var blocked = new DevelopmentHostFactory(connectionString);
+
+            var failure = Assert.ThrowsAny<Exception>(() => blocked.CreateClient()); // starting the host runs the hook BEFORE the server listens
+
+            var message = Flatten(failure);
+            Assert.Contains("migration(s) are not applied", message, StringComparison.Ordinal);
+            Assert.Contains("InitialCreate", message, StringComparison.Ordinal);
+            Assert.DoesNotContain("Password=", message, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(0L, await ScalarAsync(connectionString, "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'")); // nothing migrated, created or seeded
+        }
+        finally
+        {
+            TestDatabase.DropPostgresDatabase(name);
+        }
+    }
+
+    [PostgresOnlyFact]
+    public async Task An_up_to_date_database_starts_seeds_once_and_is_never_migrated_by_the_host()
+    {
+        var name = $"opsflow_startup_{Guid.NewGuid():N}";
+        var connectionString = TestDatabase.CreatePostgresDatabase(name);
+        try
+        {
+            await using (var db = new OpsFlowDbContext(new DbContextOptionsBuilder<OpsFlowDbContext>().UseNpgsql(connectionString).Options, new OpsFlow.Application.Abstractions.TenantContext()))
+            {
+                await db.Database.MigrateAsync(); // the developer's manual 'dotnet ef database update', on an isolated test database
+            }
+
+            var applied = await ScalarAsync(connectionString, "SELECT count(*) FROM \"__EFMigrationsHistory\"");
+            await using (var first = new DevelopmentHostFactory(connectionString))
+            {
+                Assert.Equal(HttpStatusCode.OK, (await first.CreateClient().GetAsync("/api/v1/health")).StatusCode); // serves only after the hook succeeded
+            }
+
+            await using (var second = new DevelopmentHostFactory(connectionString))
+            {
+                second.CreateClient(); // restart: idempotent
+            }
+
+            Assert.Equal(1L, await ScalarAsync(connectionString, "SELECT count(*) FROM \"Users\" WHERE \"Email\" = 'startup-admin@example.com'"));
+            Assert.Equal(1L, await ScalarAsync(connectionString, "SELECT count(*) FROM \"Tenants\" WHERE \"Name\" = 'Startup Demo'"));
+            Assert.True(await ScalarAsync(connectionString, "SELECT count(*) FROM \"TicketCategories\"") > 0); // ticket defaults were ensured
+            Assert.Equal(applied, await ScalarAsync(connectionString, "SELECT count(*) FROM \"__EFMigrationsHistory\"")); // the host applied no migration
+        }
+        finally
+        {
+            TestDatabase.DropPostgresDatabase(name);
+        }
+    }
+
+    private static async Task<long> ScalarAsync(string connectionString, string sql)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand(sql, connection);
+        return (long)(await command.ExecuteScalarAsync())!;
+    }
+
+    private static string Flatten(Exception ex) => string.Join(" | ", Chain(ex).Select(e => e.Message));
+
+    private static IEnumerable<Exception> Chain(Exception? ex)
+    {
+        for (; ex is not null; ex = ex.InnerException)
+        {
+            yield return ex;
+        }
+    }
+
+    /// <summary>A Development-style host (verify-only hook + seeders registered) over an isolated database.</summary>
+    private sealed class DevelopmentHostFactory(string connectionString) : WebApplicationFactory<Program>
+    {
+        protected override void ConfigureWebHost(IWebHostBuilder builder)
+        {
+            builder.UseEnvironment("Testing");
+            builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Auth:Jwt:SigningKey"] = "integration-test-signing-key-0123456789-abcdefghij",
+                ["Auth:Password:Iterations"] = "1000",
+                ["DevelopmentSeed:AdminEmail"] = "startup-admin@example.com",
+                ["DevelopmentSeed:OrganizationName"] = "Startup Demo",
+                ["DevelopmentSeed:AdminPassword"] = "Seed!Str0ng#Pass1",
+            }));
+            builder.ConfigureServices(services =>
+            {
+                services.RemoveAll<DbContextOptions<OpsFlowDbContext>>();
+                services.RemoveAll<IDbContextOptionsConfiguration<OpsFlowDbContext>>();
+                services.AddDbContext<OpsFlowDbContext>(o => o.UseNpgsql(connectionString));
+                services.AddScoped<IDevelopmentSeeder, DevelopmentAdminSeeder>();
+                services.AddScoped<IDevelopmentSeeder, DevelopmentTenantDefaultsSeeder>();
+                services.AddHostedService<DevelopmentInitializer>();
+            });
+        }
     }
 }

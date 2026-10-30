@@ -10,19 +10,19 @@ import { RequestBuilder } from '../../request-builder';
 import { TicketCategoryDto } from '../../models/ticket-category-dto';
 
 export interface ListTicketCategories$Params {
+  includeInactive?: boolean;
 
 /**
  * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
  */
   tenantId: string;
-  includeInactive?: boolean;
 }
 
 export function listTicketCategories(http: HttpClient, rootUrl: string, params: ListTicketCategories$Params, context?: HttpContext): Observable<StrictHttpResponse<Array<TicketCategoryDto>>> {
   const rb = new RequestBuilder(rootUrl, listTicketCategories.PATH, 'get');
   if (params) {
-    rb.path('tenantId', params.tenantId, {});
     rb.query('includeInactive', params.includeInactive, {});
+    rb.path('tenantId', params.tenantId, {});
   }
 
   return http.request(

@@ -9,19 +9,19 @@ import { RequestBuilder } from '../../request-builder';
 
 
 export interface RevokeInvitation$Params {
+  invitationId: string;
 
 /**
  * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
  */
   tenantId: string;
-  invitationId: string;
 }
 
 export function revokeInvitation(http: HttpClient, rootUrl: string, params: RevokeInvitation$Params, context?: HttpContext): Observable<StrictHttpResponse<void>> {
   const rb = new RequestBuilder(rootUrl, revokeInvitation.PATH, 'delete');
   if (params) {
-    rb.path('tenantId', params.tenantId, {});
     rb.path('invitationId', params.invitationId, {});
+    rb.path('tenantId', params.tenantId, {});
   }
 
   return http.request(

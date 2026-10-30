@@ -11,20 +11,20 @@ import { ReopenRequest } from '../../models/reopen-request';
 import { TicketDetailDto } from '../../models/ticket-detail-dto';
 
 export interface ReopenTicket$Params {
+  ticketId: string;
 
 /**
  * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
  */
   tenantId: string;
-  ticketId: string;
       body: ReopenRequest
 }
 
 export function reopenTicket(http: HttpClient, rootUrl: string, params: ReopenTicket$Params, context?: HttpContext): Observable<StrictHttpResponse<TicketDetailDto>> {
   const rb = new RequestBuilder(rootUrl, reopenTicket.PATH, 'post');
   if (params) {
-    rb.path('tenantId', params.tenantId, {});
     rb.path('ticketId', params.ticketId, {});
+    rb.path('tenantId', params.tenantId, {});
     rb.body(params.body, 'application/json');
   }
 

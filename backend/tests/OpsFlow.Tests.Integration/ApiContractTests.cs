@@ -3,7 +3,10 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text.Json;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.OpenApi;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.JsonWebTokens;
@@ -89,7 +92,7 @@ public class ApiContractTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.True(json.GetProperty("errors").EnumerateObject().Any());
 
         using var malformed = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/login") { Content = new StringContent("{ not json", System.Text.Encoding.UTF8, "application/json") };
-        await AssertProblemAsync(await factory.CreateClient().SendAsync(malformed), HttpStatusCode.BadRequest, "BAD_REQUEST");
+        await AssertProblemAsync(await factory.CreateClient().SendAsync(malformed), HttpStatusCode.BadRequest, "VALIDATION_ERROR"); // MVC: JSON-parse errors are model-state errors
     }
 
     [Fact]
@@ -234,6 +237,50 @@ public class ApiContractTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var untyped = SignedToken([new("sub", user.UserId.ToString()), new("sid", sid), new("av", "1")]);
 
         await AssertProblemAsync(await factory.CreateClient().SendAsync(Get("/api/v1/auth/me", untyped)), HttpStatusCode.Unauthorized, "AUTH_TOKEN_INVALID");
+    }
+
+    // ---------------------------------------------------------------- MVC routing + explicit authorization
+
+    [Fact]
+    public void Every_api_endpoint_is_an_mvc_controller_action_with_explicit_authorization_and_a_unique_route()
+    {
+        var endpoints = factory.Services.GetRequiredService<EndpointDataSource>().Endpoints.OfType<RouteEndpoint>()
+            .Where(e => e.RoutePattern.RawText!.StartsWith("api/", StringComparison.Ordinal)).ToList();
+        string[] anonymous = ["GetHealth", "Register", "ConfirmEmail", "ResendConfirmation", "Login", "RefreshSession", "Logout", "ForgotPassword", "ResetPassword"];
+
+        Assert.Equal(50, endpoints.Count);
+        Assert.All(endpoints, e => Assert.NotNull(e.Metadata.GetMetadata<ControllerActionDescriptor>())); // no Minimal API mapping left
+        var routes = endpoints.Select(e => $"{e.Metadata.GetMetadata<HttpMethodMetadata>()!.HttpMethods.Single()} {e.RoutePattern.RawText!.TrimEnd('/')}").ToList();
+        Assert.Equal(routes.Count, routes.Distinct().Count()); // no ambiguous routes
+
+        foreach (var endpoint in endpoints)
+        {
+            var id = endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()!.EndpointName;
+            var isAnonymous = endpoint.Metadata.GetMetadata<IAllowAnonymous>() is not null;
+            Assert.Equal(anonymous.Contains(id), isAnonymous); // public stays public, protected never becomes anonymous
+            if (!isAnonymous)
+            {
+                Assert.NotEmpty(endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>()); // protected by an explicit [Authorize], not only the fallback policy
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Every_protected_action_rejects_anonymous_callers_and_public_ones_do_not()
+    {
+        var http = factory.CreateClient();
+        var id = Guid.NewGuid();
+        var tenant = $"/api/v1/tenants/{id}";
+        string[] protectedGets = ["/api/v1/auth/me", "/api/v1/auth/sessions", "/api/v1/organizations", tenant, tenant + "/members", tenant + "/customers", tenant + "/tickets", tenant + "/ticket-categories", tenant + "/sla-policies", tenant + "/invitations"];
+
+        foreach (var url in protectedGets)
+        {
+            await AssertProblemAsync(await http.GetAsync(url), HttpStatusCode.Unauthorized, "AUTH_TOKEN_MISSING");
+        }
+
+        await AssertProblemAsync(await http.PostAsJsonAsync("/api/v1/invitations/accept", new { token = "x" }), HttpStatusCode.Unauthorized, "AUTH_TOKEN_MISSING");
+        Assert.Equal(HttpStatusCode.OK, (await http.GetAsync("/api/v1/health")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await http.PostAsJsonAsync("/api/v1/auth/login", new { email = "a@example.com", password = "x" })).StatusCode); // reachable, answers on its own merits
     }
 
     // ---------------------------------------------------------------- OpenAPI / Bearer contract

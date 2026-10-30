@@ -10,11 +10,6 @@ import { RequestBuilder } from '../../request-builder';
 import { PagedResultOfTicketActivityDto } from '../../models/paged-result-of-ticket-activity-dto';
 
 export interface ListTicketActivity$Params {
-
-/**
- * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
- */
-  tenantId: string;
   ticketId: string;
 
 /**
@@ -26,15 +21,20 @@ export interface ListTicketActivity$Params {
  * Items per page (capped by the endpoint).
  */
   pageSize?: (number | string);
+
+/**
+ * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
+ */
+  tenantId: string;
 }
 
 export function listTicketActivity(http: HttpClient, rootUrl: string, params: ListTicketActivity$Params, context?: HttpContext): Observable<StrictHttpResponse<PagedResultOfTicketActivityDto>> {
   const rb = new RequestBuilder(rootUrl, listTicketActivity.PATH, 'get');
   if (params) {
-    rb.path('tenantId', params.tenantId, {});
     rb.path('ticketId', params.ticketId, {});
     rb.query('page', params.page, {});
     rb.query('pageSize', params.pageSize, {});
+    rb.path('tenantId', params.tenantId, {});
   }
 
   return http.request(

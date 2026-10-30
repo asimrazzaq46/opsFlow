@@ -10,23 +10,23 @@ import { RequestBuilder } from '../../request-builder';
 import { TicketDetailDto } from '../../models/ticket-detail-dto';
 
 export interface UnassignTicketAgent$Params {
+  ticketId: string;
+  membershipId: string;
+  version?: (number | string);
 
 /**
  * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
  */
   tenantId: string;
-  ticketId: string;
-  membershipId: string;
-  version?: (number | string);
 }
 
 export function unassignTicketAgent(http: HttpClient, rootUrl: string, params: UnassignTicketAgent$Params, context?: HttpContext): Observable<StrictHttpResponse<TicketDetailDto>> {
   const rb = new RequestBuilder(rootUrl, unassignTicketAgent.PATH, 'delete');
   if (params) {
-    rb.path('tenantId', params.tenantId, {});
     rb.path('ticketId', params.ticketId, {});
     rb.path('membershipId', params.membershipId, {});
     rb.query('version', params.version, {});
+    rb.path('tenantId', params.tenantId, {});
   }
 
   return http.request(

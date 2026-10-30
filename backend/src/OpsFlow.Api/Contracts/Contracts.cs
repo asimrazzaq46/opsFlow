@@ -1,37 +1,37 @@
 using System.ComponentModel.DataAnnotations;
 using OpsFlow.Domain.Tenants;
 
-namespace OpsFlow.Api.Endpoints;
+namespace OpsFlow.Api.Contracts;
 
-// Public, top-level request contracts: the minimal-API validation source generator only discovers accessible types.
+// Request contracts: validation attributes sit on the record parameters (MVC binds records through the constructor and rejects property-targeted attributes).
 public sealed record RegisterRequest(
-    [property: Required, EmailAddress, StringLength(256)] string Email,
-    [property: Required, StringLength(128)] string Password,
-    [property: Required, StringLength(100, MinimumLength = 2)] string DisplayName);
+    [Required, EmailAddress, StringLength(256)] string Email,
+    [Required, StringLength(128)] string Password,
+    [Required, StringLength(100, MinimumLength = 2)] string DisplayName);
 
-public sealed record EmailRequest([property: Required, EmailAddress, StringLength(256)] string Email);
+public sealed record EmailRequest([Required, EmailAddress, StringLength(256)] string Email);
 
-public sealed record ConfirmEmailRequest([property: Required] Guid UserId, [property: Required] string Token);
+public sealed record ConfirmEmailRequest([Required] Guid UserId, [Required] string Token);
 
 public sealed record LoginRequest(
-    [property: Required, EmailAddress] string Email,
-    [property: Required, StringLength(128)] string Password);
+    [Required, EmailAddress] string Email,
+    [Required, StringLength(128)] string Password);
 
 /// <summary>The refresh token travels in the HTTPS JSON body (no cookies are used anywhere).</summary>
-public sealed record RefreshRequest([property: Required, StringLength(2048)] string RefreshToken);
+public sealed record RefreshRequest([Required, StringLength(2048)] string RefreshToken);
 
-public sealed record LogoutRequest([property: Required, StringLength(2048)] string RefreshToken);
+public sealed record LogoutRequest([Required, StringLength(2048)] string RefreshToken);
 
 public sealed record ResetPasswordRequest(
-    [property: Required, EmailAddress] string Email,
-    [property: Required] string Token,
-    [property: Required, StringLength(128)] string NewPassword);
+    [Required, EmailAddress] string Email,
+    [Required] string Token,
+    [Required, StringLength(128)] string NewPassword);
 
 public sealed record ChangePasswordRequest(
-    [property: Required, StringLength(128)] string CurrentPassword,
-    [property: Required, StringLength(128)] string NewPassword);
+    [Required, StringLength(128)] string CurrentPassword,
+    [Required, StringLength(128)] string NewPassword);
 
-public sealed record DeactivateAccountRequest([property: Required, StringLength(128)] string Password);
+public sealed record DeactivateAccountRequest([Required, StringLength(128)] string Password);
 
 public sealed record UserInfo(Guid Id, string Email, string DisplayName);
 
@@ -40,14 +40,16 @@ public sealed record AuthResponse(string AccessToken, string TokenType, DateTime
 
 public sealed record SessionResponse(Guid Id, string? UserAgent, DateTime CreatedAtUtc, DateTime LastUsedAtUtc, bool IsCurrent);
 
-public sealed record CreateOrganizationRequest([property: Required, StringLength(100, MinimumLength = 2)] string Name);
+public sealed record CreateOrganizationRequest([Required, StringLength(100, MinimumLength = 2)] string Name);
 
-public sealed record AcceptInvitationRequest([property: Required, StringLength(200)] string Token);
+public sealed record AcceptInvitationRequest([Required, StringLength(200)] string Token);
 
 public sealed record CreateInvitationRequest(
-    [property: Required, EmailAddress, StringLength(256)] string Email,
-    [property: EnumDataType(typeof(TenantRole))] TenantRole Role);
+    [Required, EmailAddress, StringLength(256)] string Email,
+    [EnumDataType(typeof(TenantRole))] TenantRole Role);
 
-public sealed record ChangeRoleRequest([property: EnumDataType(typeof(TenantRole))] TenantRole Role);
+public sealed record ChangeRoleRequest([EnumDataType(typeof(TenantRole))] TenantRole Role);
 
 public sealed record SetStatusRequest(bool IsActive);
+
+public sealed record DefaultsResult(int RecordsAdded);

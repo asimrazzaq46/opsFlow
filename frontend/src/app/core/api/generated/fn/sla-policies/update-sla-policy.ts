@@ -11,20 +11,20 @@ import { SlaPolicyDto } from '../../models/sla-policy-dto';
 import { UpdateSlaPolicyRequest } from '../../models/update-sla-policy-request';
 
 export interface UpdateSlaPolicy$Params {
+  policyId: string;
 
 /**
  * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
  */
   tenantId: string;
-  policyId: string;
       body: UpdateSlaPolicyRequest
 }
 
 export function updateSlaPolicy(http: HttpClient, rootUrl: string, params: UpdateSlaPolicy$Params, context?: HttpContext): Observable<StrictHttpResponse<SlaPolicyDto>> {
   const rb = new RequestBuilder(rootUrl, updateSlaPolicy.PATH, 'put');
   if (params) {
-    rb.path('tenantId', params.tenantId, {});
     rb.path('policyId', params.policyId, {});
+    rb.path('tenantId', params.tenantId, {});
     rb.body(params.body, 'application/json');
   }
 

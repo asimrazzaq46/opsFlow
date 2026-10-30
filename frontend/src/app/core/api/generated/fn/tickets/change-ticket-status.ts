@@ -11,20 +11,20 @@ import { TicketDetailDto } from '../../models/ticket-detail-dto';
 import { TransitionRequest } from '../../models/transition-request';
 
 export interface ChangeTicketStatus$Params {
+  ticketId: string;
 
 /**
  * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
  */
   tenantId: string;
-  ticketId: string;
       body: TransitionRequest
 }
 
 export function changeTicketStatus(http: HttpClient, rootUrl: string, params: ChangeTicketStatus$Params, context?: HttpContext): Observable<StrictHttpResponse<TicketDetailDto>> {
   const rb = new RequestBuilder(rootUrl, changeTicketStatus.PATH, 'post');
   if (params) {
-    rb.path('tenantId', params.tenantId, {});
     rb.path('ticketId', params.ticketId, {});
+    rb.path('tenantId', params.tenantId, {});
     rb.body(params.body, 'application/json');
   }
 

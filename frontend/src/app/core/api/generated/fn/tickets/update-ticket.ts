@@ -11,20 +11,20 @@ import { TicketDetailDto } from '../../models/ticket-detail-dto';
 import { UpdateTicketRequest } from '../../models/update-ticket-request';
 
 export interface UpdateTicket$Params {
+  ticketId: string;
 
 /**
  * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
  */
   tenantId: string;
-  ticketId: string;
       body: UpdateTicketRequest
 }
 
 export function updateTicket(http: HttpClient, rootUrl: string, params: UpdateTicket$Params, context?: HttpContext): Observable<StrictHttpResponse<TicketDetailDto>> {
   const rb = new RequestBuilder(rootUrl, updateTicket.PATH, 'put');
   if (params) {
-    rb.path('tenantId', params.tenantId, {});
     rb.path('ticketId', params.ticketId, {});
+    rb.path('tenantId', params.tenantId, {});
     rb.body(params.body, 'application/json');
   }
 

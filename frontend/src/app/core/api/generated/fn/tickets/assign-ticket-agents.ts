@@ -11,20 +11,20 @@ import { AssignAgentsRequest } from '../../models/assign-agents-request';
 import { TicketDetailDto } from '../../models/ticket-detail-dto';
 
 export interface AssignTicketAgents$Params {
+  ticketId: string;
 
 /**
  * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
  */
   tenantId: string;
-  ticketId: string;
       body: AssignAgentsRequest
 }
 
 export function assignTicketAgents(http: HttpClient, rootUrl: string, params: AssignTicketAgents$Params, context?: HttpContext): Observable<StrictHttpResponse<TicketDetailDto>> {
   const rb = new RequestBuilder(rootUrl, assignTicketAgents.PATH, 'post');
   if (params) {
-    rb.path('tenantId', params.tenantId, {});
     rb.path('ticketId', params.ticketId, {});
+    rb.path('tenantId', params.tenantId, {});
     rb.body(params.body, 'application/json');
   }
 

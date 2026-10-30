@@ -10,11 +10,6 @@ import { RequestBuilder } from '../../request-builder';
 import { PagedResultOfCustomerDto } from '../../models/paged-result-of-customer-dto';
 
 export interface ListCustomers$Params {
-
-/**
- * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
- */
-  tenantId: string;
   search?: string;
   isActive?: boolean;
 
@@ -27,16 +22,21 @@ export interface ListCustomers$Params {
  * Items per page (capped by the endpoint).
  */
   pageSize?: (number | string);
+
+/**
+ * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
+ */
+  tenantId: string;
 }
 
 export function listCustomers(http: HttpClient, rootUrl: string, params: ListCustomers$Params, context?: HttpContext): Observable<StrictHttpResponse<PagedResultOfCustomerDto>> {
   const rb = new RequestBuilder(rootUrl, listCustomers.PATH, 'get');
   if (params) {
-    rb.path('tenantId', params.tenantId, {});
     rb.query('search', params.search, {});
     rb.query('isActive', params.isActive, {});
     rb.query('page', params.page, {});
     rb.query('pageSize', params.pageSize, {});
+    rb.path('tenantId', params.tenantId, {});
   }
 
   return http.request(

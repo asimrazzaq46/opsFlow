@@ -10,21 +10,21 @@ import { RequestBuilder } from '../../request-builder';
 import { AssignmentHistoryDto } from '../../models/assignment-history-dto';
 
 export interface ListTicketAssignments$Params {
+  ticketId: string;
+  includeHistory?: boolean;
 
 /**
  * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
  */
   tenantId: string;
-  ticketId: string;
-  includeHistory?: boolean;
 }
 
 export function listTicketAssignments(http: HttpClient, rootUrl: string, params: ListTicketAssignments$Params, context?: HttpContext): Observable<StrictHttpResponse<Array<AssignmentHistoryDto>>> {
   const rb = new RequestBuilder(rootUrl, listTicketAssignments.PATH, 'get');
   if (params) {
-    rb.path('tenantId', params.tenantId, {});
     rb.path('ticketId', params.ticketId, {});
     rb.query('includeHistory', params.includeHistory, {});
+    rb.path('tenantId', params.tenantId, {});
   }
 
   return http.request(

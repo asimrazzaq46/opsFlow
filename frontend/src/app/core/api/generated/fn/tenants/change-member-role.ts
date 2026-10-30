@@ -10,20 +10,20 @@ import { RequestBuilder } from '../../request-builder';
 import { ChangeRoleRequest } from '../../models/change-role-request';
 
 export interface ChangeMemberRole$Params {
+  membershipId: string;
 
 /**
  * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
  */
   tenantId: string;
-  membershipId: string;
       body: ChangeRoleRequest
 }
 
 export function changeMemberRole(http: HttpClient, rootUrl: string, params: ChangeMemberRole$Params, context?: HttpContext): Observable<StrictHttpResponse<void>> {
   const rb = new RequestBuilder(rootUrl, changeMemberRole.PATH, 'put');
   if (params) {
-    rb.path('tenantId', params.tenantId, {});
     rb.path('membershipId', params.membershipId, {});
+    rb.path('tenantId', params.tenantId, {});
     rb.body(params.body, 'application/json');
   }
 

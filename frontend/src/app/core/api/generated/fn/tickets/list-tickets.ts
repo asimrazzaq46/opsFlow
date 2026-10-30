@@ -13,11 +13,6 @@ import { TicketState } from '../../models/ticket-state';
 import { TicketStatus } from '../../models/ticket-status';
 
 export interface ListTickets$Params {
-
-/**
- * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
- */
-  tenantId: string;
   Status?: Array<TicketStatus>;
   Priority?: TicketPriority;
   CategoryId?: string;
@@ -31,12 +26,16 @@ export interface ListTickets$Params {
   Descending?: boolean;
   Page?: (number | string);
   PageSize?: (number | string);
+
+/**
+ * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
+ */
+  tenantId: string;
 }
 
 export function listTickets(http: HttpClient, rootUrl: string, params: ListTickets$Params, context?: HttpContext): Observable<StrictHttpResponse<PagedResultOfTicketSummaryDto>> {
   const rb = new RequestBuilder(rootUrl, listTickets.PATH, 'get');
   if (params) {
-    rb.path('tenantId', params.tenantId, {});
     rb.query('Status', params.Status, {});
     rb.query('Priority', params.Priority, {});
     rb.query('CategoryId', params.CategoryId, {});
@@ -50,6 +49,7 @@ export function listTickets(http: HttpClient, rootUrl: string, params: ListTicke
     rb.query('Descending', params.Descending, {});
     rb.query('Page', params.Page, {});
     rb.query('PageSize', params.PageSize, {});
+    rb.path('tenantId', params.tenantId, {});
   }
 
   return http.request(

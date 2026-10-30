@@ -12,11 +12,6 @@ import { PagedResultOfMemberDto } from '../../models/paged-result-of-member-dto'
 export interface ListMembers$Params {
 
 /**
- * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
- */
-  tenantId: string;
-
-/**
  * 1-based page number (clamped to a safe range).
  */
   page?: (number | string);
@@ -25,14 +20,19 @@ export interface ListMembers$Params {
  * Items per page (capped by the endpoint).
  */
   pageSize?: (number | string);
+
+/**
+ * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
+ */
+  tenantId: string;
 }
 
 export function listMembers(http: HttpClient, rootUrl: string, params: ListMembers$Params, context?: HttpContext): Observable<StrictHttpResponse<PagedResultOfMemberDto>> {
   const rb = new RequestBuilder(rootUrl, listMembers.PATH, 'get');
   if (params) {
-    rb.path('tenantId', params.tenantId, {});
     rb.query('page', params.page, {});
     rb.query('pageSize', params.pageSize, {});
+    rb.path('tenantId', params.tenantId, {});
   }
 
   return http.request(

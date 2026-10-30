@@ -10,20 +10,20 @@ import { RequestBuilder } from '../../request-builder';
 import { SetStatusRequest } from '../../models/set-status-request';
 
 export interface SetSlaPolicyStatus$Params {
+  policyId: string;
 
 /**
  * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
  */
   tenantId: string;
-  policyId: string;
       body: SetStatusRequest
 }
 
 export function setSlaPolicyStatus(http: HttpClient, rootUrl: string, params: SetSlaPolicyStatus$Params, context?: HttpContext): Observable<StrictHttpResponse<void>> {
   const rb = new RequestBuilder(rootUrl, setSlaPolicyStatus.PATH, 'put');
   if (params) {
-    rb.path('tenantId', params.tenantId, {});
     rb.path('policyId', params.policyId, {});
+    rb.path('tenantId', params.tenantId, {});
     rb.body(params.body, 'application/json');
   }
 

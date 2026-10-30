@@ -1,8 +1,8 @@
 namespace OpsFlow.Api.Infrastructure.Initialization;
 
-internal static class DevelopmentInitializationExtensions
+public static class DevelopmentInitializationExtensions
 {
-    /// <summary>Registers migrate + seed on startup ONLY in Development and only when explicitly enabled.</summary>
+    /// <summary>Registers the verify-only startup check + seeders ONLY in Development and only when explicitly enabled (no auto-migration anywhere).</summary>
     public static IServiceCollection AddDevelopmentInitialization(this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
     {
         services.Configure<DevelopmentSeedOptions>(configuration.GetSection(DevelopmentSeedOptions.SectionName));
