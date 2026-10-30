@@ -19,7 +19,8 @@ public sealed partial class TicketWorkflowService(IOpsFlowDbContext db, TicketAc
     /// <summary>Moves along InProgress / OnHold / Resolved / Closed. Owners and Managers can do every allowed transition; an Agent only on tickets they are assigned to (not Closed).</summary>
     public async Task<TicketDetailDto> TransitionAsync(Guid ticketId, TicketStatus target, int? expectedVersion, CancellationToken ct)
     {
-        var actor = await access.ResolveAsync(ct);
+        var (transaction, actor) = await access.BeginAuthorizedAsync(null, ct); // UPDATED: actor ki rows lock + current role, commit tak
+        await using var _ = transaction;
         var ticket = await LoadAsync(actor, ticketId, expectedVersion, ct);
         if (target is TicketStatus.Open or TicketStatus.Assigned)
         {
@@ -41,6 +42,12 @@ public sealed partial class TicketWorkflowService(IOpsFlowDbContext db, TicketAc
             throw AppException.Forbidden("Agents can only update tickets assigned to them, and cannot close them.");
         }
 
+        if (target is TicketStatus.InProgress or TicketStatus.OnHold or TicketStatus.Resolved
+            && !await access.EffectiveAssignments().AnyAsync(a => a.TicketId == ticketId, ct))
+        {
+            throw AppException.Conflict("The ticket has no eligible assignee.", "Assign an active agent first.");
+        }
+
         var now = Now;
         var old = ticket.Status;
         if (target == TicketStatus.Resolved)
@@ -59,6 +66,7 @@ public sealed partial class TicketWorkflowService(IOpsFlowDbContext db, TicketAc
         }
 
         await SaveAsync(ct);
+        await transaction.CommitAsync(ct);
         LogChanged(logger, ticketId, old, target);
         return await tickets.GetAsync(ticketId, ct);
     }
@@ -69,7 +77,8 @@ public sealed partial class TicketWorkflowService(IOpsFlowDbContext db, TicketAc
     /// </summary>
     public async Task<TicketDetailDto> ReopenAsync(Guid ticketId, int? expectedVersion, CancellationToken ct)
     {
-        var actor = await access.ResolveAsync(ct);
+        var (transaction, actor) = await access.BeginAuthorizedAsync(null, ct);
+        await using var _ = transaction;
         var ticket = await LoadAsync(actor, ticketId, expectedVersion, ct);
         if (!TicketWorkflow.IsFinished(ticket.Status))
         {
@@ -88,7 +97,7 @@ public sealed partial class TicketWorkflowService(IOpsFlowDbContext db, TicketAc
 
         var policy = await db.SlaPolicies.AsNoTracking().SingleOrDefaultAsync(p => p.Priority == ticket.Priority && p.IsActive, ct)
             ?? throw AppException.Conflict("No active SLA policy exists for this priority.");
-        var hasAssignees = await db.TicketAssignments.AnyAsync(a => a.TicketId == ticketId && a.UnassignedAtUtc == null, ct);
+        var hasAssignees = await access.EffectiveAssignments().AnyAsync(a => a.TicketId == ticketId, ct); // UPDATED: sirf ELIGIBLE agents ginay jate hain
 
         var now = Now;
         var old = ticket.Status;
@@ -100,6 +109,7 @@ public sealed partial class TicketWorkflowService(IOpsFlowDbContext db, TicketAc
         db.TicketActivities.Add(ticket.Record(TicketActivityType.SlaCycleStarted, null, now, newValue: cycle.CycleNumber.ToString(System.Globalization.CultureInfo.InvariantCulture), relatedId: cycle.Id));
 
         await SaveAsync(ct);
+        await transaction.CommitAsync(ct);
         LogChanged(logger, ticketId, old, next);
         return await tickets.GetAsync(ticketId, ct);
     }

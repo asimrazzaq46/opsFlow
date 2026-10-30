@@ -6,8 +6,9 @@ public sealed record TicketSummaryDto(
     Guid Id, long Number, string DisplayNumber, string Title, TicketPriority Priority, TicketStatus Status,
     Guid CategoryId, string CategoryName, Guid? CustomerId, string? CustomerName,
     DateTime CreatedAtUtc, DateTime UpdatedAtUtc, DateTime? ResolvedAtUtc, int Version,
-    int? AssigneeCount, DateTime? ResolutionDueAtUtc, bool? IsOverdue);
+    int? AssigneeCount, int? EligibleAssigneeCount, DateTime? ResolutionDueAtUtc, bool? IsOverdue);
 
+/// <summary><c>IsAgentActive</c> is true only while the assignee is still ELIGIBLE (Agent role, active membership, active user).</summary>
 public sealed record AssigneeDto(Guid MembershipId, Guid UserId, string DisplayName, DateTime AssignedAtUtc, bool IsAgentActive);
 
 public sealed record AssignmentHistoryDto(
@@ -22,8 +23,8 @@ public sealed record SlaCycleDto(
 /// <summary>Staff-only SLA view: the current (active, else latest) cycle plus the complete cycle history.</summary>
 public sealed record TicketSlaDto(SlaCycleDto? Current, IReadOnlyList<SlaCycleDto> Cycles);
 
-/// <summary>Assignees and SLA are staff-only: for Customers they are null.</summary>
-public sealed record TicketDetailDto(TicketSummaryDto Summary, string Description, Guid CreatedByUserId, IReadOnlyList<AssigneeDto>? Assignees, SlaCycleDto? CurrentSla);
+/// <summary>Assignees, SLA and the creating staff member are staff-only: for Customers they are null.</summary>
+public sealed record TicketDetailDto(TicketSummaryDto Summary, string Description, Guid? CreatedByUserId, IReadOnlyList<AssigneeDto>? Assignees, SlaCycleDto? CurrentSla);
 
 public sealed record TicketActivityDto(Guid Id, int Sequence, TicketActivityType Type, DateTime OccurredAtUtc, Guid? ActorUserId, string? OldValue, string? NewValue);
 
@@ -32,6 +33,9 @@ public enum TicketState
     Open,
     Finished,
     Overdue,
+
+    /// <summary>Not finished and without any ELIGIBLE assignee (none, or only suspended/deactivated/re-roled agents). Staff only.</summary>
+    Unstaffed,
 }
 
 public sealed record CreateTicketCommand(string Title, string Description, TicketPriority? Priority, Guid CategoryId, Guid? CustomerId, IReadOnlyList<Guid>? AssigneeMembershipIds);

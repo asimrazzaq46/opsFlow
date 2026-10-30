@@ -22,7 +22,7 @@ public sealed class TicketCategoryService(IOpsFlowDbContext db, ActorAccess acto
 
     public async Task<TicketCategoryDto> CreateAsync(string name, CancellationToken ct)
     {
-        await RequireManagerAsync(ct);
+        await using var transaction = await actor.BeginManagerAsync("Only Owners and Managers can manage categories.", ct); // UPDATED: authorization commit tak valid
         var normalized = TicketCategory.Normalize(name);
         if (await db.TicketCategories.AnyAsync(c => c.NormalizedName == normalized, ct))
         {
@@ -32,12 +32,13 @@ public sealed class TicketCategoryService(IOpsFlowDbContext db, ActorAccess acto
         var category = TicketCategory.Create(actor.TenantId, name, clock.GetUtcNow().UtcDateTime);
         db.TicketCategories.Add(category);
         await SaveAsync(ct);
+        await transaction.CommitAsync(ct);
         return new TicketCategoryDto(category.Id, category.Name, category.IsActive);
     }
 
     public async Task<TicketCategoryDto> RenameAsync(Guid id, string name, CancellationToken ct)
     {
-        await RequireManagerAsync(ct);
+        await using var transaction = await actor.BeginManagerAsync("Only Owners and Managers can manage categories.", ct);
         var normalized = TicketCategory.Normalize(name);
         if (await db.TicketCategories.AnyAsync(c => c.Id != id && c.NormalizedName == normalized, ct))
         {
@@ -47,15 +48,17 @@ public sealed class TicketCategoryService(IOpsFlowDbContext db, ActorAccess acto
         var category = await db.TicketCategories.SingleOrDefaultAsync(c => c.Id == id, ct) ?? throw NotFound();
         category.Rename(name, clock.GetUtcNow().UtcDateTime);
         await SaveAsync(ct);
+        await transaction.CommitAsync(ct);
         return new TicketCategoryDto(category.Id, category.Name, category.IsActive);
     }
 
     public async Task SetActiveAsync(Guid id, bool isActive, CancellationToken ct)
     {
-        await RequireManagerAsync(ct);
+        await using var transaction = await actor.BeginManagerAsync("Only Owners and Managers can manage categories.", ct);
         var category = await db.TicketCategories.SingleOrDefaultAsync(c => c.Id == id, ct) ?? throw NotFound();
         category.SetActive(isActive, clock.GetUtcNow().UtcDateTime);
         await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
     }
 
     private async Task SaveAsync(CancellationToken ct)
@@ -67,14 +70,6 @@ public sealed class TicketCategoryService(IOpsFlowDbContext db, ActorAccess acto
         catch (DbUpdateException ex) when (db.IsUniqueViolation(ex, UniqueConstraintKind.CategoryName))
         {
             throw AppException.Conflict("A category with this name already exists.");
-        }
-    }
-
-    private async Task RequireManagerAsync(CancellationToken ct)
-    {
-        if (await actor.RequireActiveRoleAsync(ct) is not (TenantRole.TenantOwner or TenantRole.Manager))
-        {
-            throw AppException.Forbidden("Only Owners and Managers can manage categories.");
         }
     }
 

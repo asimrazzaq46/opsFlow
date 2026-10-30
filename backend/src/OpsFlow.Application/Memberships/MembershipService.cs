@@ -16,13 +16,12 @@ public sealed partial class MembershipService(IOpsFlowDbContext db, ActorAccess 
 
     public async Task<PagedResult<MemberDto>> ListAsync(int page, int pageSize, CancellationToken ct)
     {
-        page = Math.Max(page, 1);
-        pageSize = Math.Clamp(pageSize, 1, MaxPageSize);
+        (page, pageSize, var skip) = Paging.Normalize(page, pageSize, MaxPageSize); // UPDATED: overflow-safe paging
 
         var query = db.Memberships.Where(m => m.Role != TenantRole.Customer);
         var total = await query.CountAsync(ct);
         var rows = await query.OrderBy(m => m.CreatedAtUtc).ThenBy(m => m.Id)
-            .Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
+            .Skip(skip).Take(pageSize).ToListAsync(ct);
 
         var directory = await users.GetAsync(rows.ConvertAll(m => m.UserId), ct);
         var items = rows.ConvertAll(m =>

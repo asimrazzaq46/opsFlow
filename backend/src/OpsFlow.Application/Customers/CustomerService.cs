@@ -20,8 +20,7 @@ public sealed partial class CustomerService(IOpsFlowDbContext db, ActorAccess ac
     public async Task<PagedResult<CustomerDto>> ListAsync(string? search, bool? isActive, int page, int pageSize, CancellationToken ct)
     {
         await RequireManagerAsync(ct);
-        page = Math.Max(page, 1);
-        pageSize = Math.Clamp(pageSize, 1, MaxPageSize);
+        (page, pageSize, var skip) = Paging.Normalize(page, pageSize, MaxPageSize); // UPDATED: overflow-safe paging
 
         var query = db.Customers.AsNoTracking();
         if (isActive is { } active)
@@ -38,7 +37,7 @@ public sealed partial class CustomerService(IOpsFlowDbContext db, ActorAccess ac
         }
 
         var total = await query.CountAsync(ct);
-        var items = await query.OrderBy(c => c.Name).ThenBy(c => c.Id).Skip((page - 1) * pageSize).Take(pageSize)
+        var items = await query.OrderBy(c => c.Name).ThenBy(c => c.Id).Skip(skip).Take(pageSize)
             .Select(c => new CustomerDto(c.Id, c.Name, c.Email, c.Phone, c.UserId, c.IsActive, c.CreatedAtUtc, c.UpdatedAtUtc)).ToListAsync(ct);
         return new PagedResult<CustomerDto>(items, page, pageSize, total);
     }
@@ -51,7 +50,7 @@ public sealed partial class CustomerService(IOpsFlowDbContext db, ActorAccess ac
 
     public async Task<CustomerDto> CreateAsync(string name, string email, string? phone, Guid? linkedUserId, CancellationToken ct)
     {
-        await RequireManagerAsync(ct);
+        await using var transaction = await actor.BeginManagerAsync("Only Owners and Managers can manage customers.", ct); // UPDATED: authorization commit tak valid
         var normalized = EmailAddress.Normalize(email);
         if (await db.Customers.AnyAsync(c => c.NormalizedEmail == normalized, ct))
         {
@@ -67,13 +66,14 @@ public sealed partial class CustomerService(IOpsFlowDbContext db, ActorAccess ac
 
         db.Customers.Add(customer);
         await SaveAsync(ct);
+        await transaction.CommitAsync(ct);
         LogCreated(logger, customer.Id, TenantId);
         return ToDto(customer);
     }
 
     public async Task<CustomerDto> UpdateAsync(Guid id, string name, string email, string? phone, Guid? linkedUserId, CancellationToken ct)
     {
-        await RequireManagerAsync(ct);
+        await using var transaction = await actor.BeginManagerAsync("Only Owners and Managers can manage customers.", ct);
         var customer = await db.Customers.SingleOrDefaultAsync(c => c.Id == id, ct) ?? throw NotFound();
         var normalized = EmailAddress.Normalize(email);
         if (await db.Customers.AnyAsync(c => c.Id != id && c.NormalizedEmail == normalized, ct))
@@ -90,15 +90,17 @@ public sealed partial class CustomerService(IOpsFlowDbContext db, ActorAccess ac
         customer.Update(name, email, phone, now);
         customer.LinkUser(linkedUserId, now);
         await SaveAsync(ct);
+        await transaction.CommitAsync(ct);
         return ToDto(customer);
     }
 
     public async Task SetActiveAsync(Guid id, bool isActive, CancellationToken ct)
     {
-        await RequireManagerAsync(ct);
+        await using var transaction = await actor.BeginManagerAsync("Only Owners and Managers can manage customers.", ct);
         var customer = await db.Customers.SingleOrDefaultAsync(c => c.Id == id, ct) ?? throw NotFound();
         customer.SetActive(isActive, Now);
         await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
     }
 
     // The linked user must hold an ACTIVE Customer membership in THIS tenant: an email match alone never grants ticket access.
@@ -129,13 +131,7 @@ public sealed partial class CustomerService(IOpsFlowDbContext db, ActorAccess ac
         }
     }
 
-    private async Task RequireManagerAsync(CancellationToken ct)
-    {
-        if (await actor.RequireActiveRoleAsync(ct) is not (TenantRole.TenantOwner or TenantRole.Manager))
-        {
-            throw AppException.Forbidden("Only Owners and Managers can manage customers.");
-        }
-    }
+    private Task RequireManagerAsync(CancellationToken ct) => actor.RequireManagerAsync("Only Owners and Managers can manage customers.", ct);
 
     private Guid TenantId => actor.TenantId;
 

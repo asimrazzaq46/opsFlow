@@ -25,16 +25,17 @@ public sealed class SlaPolicyService(IOpsFlowDbContext db, ActorAccess actor, Ti
 
     public async Task<SlaPolicyDto> CreateAsync(TicketPriority priority, int responseMinutes, int resolutionMinutes, CancellationToken ct)
     {
-        await RequireManagerAsync(ct);
+        await using var transaction = await actor.BeginManagerAsync("Only Owners and Managers can manage SLA policies.", ct); // UPDATED: authorization commit tak valid
         var policy = Build(() => SlaPolicy.Create(actor.TenantId, priority, responseMinutes, resolutionMinutes, clock.GetUtcNow().UtcDateTime));
         db.SlaPolicies.Add(policy);
         await SaveAsync(ct);
+        await transaction.CommitAsync(ct);
         return ToDto(policy);
     }
 
     public async Task<SlaPolicyDto> UpdateAsync(Guid id, int responseMinutes, int resolutionMinutes, CancellationToken ct)
     {
-        await RequireManagerAsync(ct);
+        await using var transaction = await actor.BeginManagerAsync("Only Owners and Managers can manage SLA policies.", ct);
         var policy = await db.SlaPolicies.SingleOrDefaultAsync(p => p.Id == id, ct) ?? throw NotFound();
         Build(() =>
         {
@@ -42,15 +43,23 @@ public sealed class SlaPolicyService(IOpsFlowDbContext db, ActorAccess actor, Ti
             return policy;
         });
         await SaveAsync(ct);
+        await transaction.CommitAsync(ct);
         return ToDto(policy);
     }
 
     public async Task SetActiveAsync(Guid id, bool isActive, CancellationToken ct)
     {
-        await RequireManagerAsync(ct);
+        await using var transaction = await actor.BeginManagerAsync("Only Owners and Managers can manage SLA policies.", ct);
         var policy = await db.SlaPolicies.SingleOrDefaultAsync(p => p.Id == id, ct) ?? throw NotFound();
+        if (!isActive && policy.IsActive)
+        {
+            // UPDATED: har priority ke liye ek active policy zaroori hai (ek hi active ho sakti hai): deactivate karne ke bajaye targets edit karein
+            throw AppException.Conflict("A priority must keep an active SLA policy.", "Edit the policy targets instead of deactivating it.");
+        }
+
         policy.SetActive(isActive, clock.GetUtcNow().UtcDateTime);
         await SaveAsync(ct);
+        await transaction.CommitAsync(ct);
     }
 
     private static T Build<T>(Func<T> factory)
@@ -74,14 +83,6 @@ public sealed class SlaPolicyService(IOpsFlowDbContext db, ActorAccess actor, Ti
         catch (DbUpdateException ex) when (db.IsUniqueViolation(ex, UniqueConstraintKind.SlaPolicyPriority))
         {
             throw AppException.Conflict("An active SLA policy already exists for this priority.");
-        }
-    }
-
-    private async Task RequireManagerAsync(CancellationToken ct)
-    {
-        if (await actor.RequireActiveRoleAsync(ct) is not (TenantRole.TenantOwner or TenantRole.Manager))
-        {
-            throw AppException.Forbidden("Only Owners and Managers can manage SLA policies.");
         }
     }
 

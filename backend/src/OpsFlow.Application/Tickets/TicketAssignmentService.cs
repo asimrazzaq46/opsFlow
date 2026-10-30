@@ -92,10 +92,12 @@ public sealed partial class TicketAssignmentService(IOpsFlowDbContext db, Ticket
 
             var assignment = await db.TicketAssignments.SingleOrDefaultAsync(a => a.TicketId == ticketId && a.MembershipId == membershipId && a.UnassignedAtUtc == null, ct)
                 ?? throw AppException.NotFound("The agent is not assigned to this ticket.");
-            var active = await db.TicketAssignments.CountAsync(a => a.TicketId == ticketId && a.UnassignedAtUtc == null, ct);
-            if (active == 1 && TicketWorkflow.RequiresAssignee(ticket.Status))
+            // UPDATED: sirf ELIGIBLE agents ginay jate hain: aakhri eligible assignee hat nahi sakta, lekin ineligible (suspended/deactivated) agent
+            // ko hamesha hata sakte hain jab doosra eligible agent maujood ho (pehle naya agent assign karein)
+            var remainingEligible = await access.EffectiveAssignments().CountAsync(a => a.TicketId == ticketId && a.Id != assignment.Id, ct);
+            if (remainingEligible == 0 && TicketWorkflow.RequiresAssignee(ticket.Status))
             {
-                throw AppException.Conflict("The last assignee cannot be removed while the ticket is " + ticket.Status + ".");
+                throw AppException.Conflict("The last eligible assignee cannot be removed while the ticket is " + ticket.Status + ".", "Assign another active agent first.");
             }
 
             var now = Now;

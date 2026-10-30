@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using OpsFlow.Application.Abstractions;
 using OpsFlow.Application.Common;
 using OpsFlow.Application.Memberships;
@@ -28,6 +29,30 @@ public sealed class TicketAccess(ActorAccess actorAccess, ICurrentUser currentUs
         var role = await actorAccess.RequireActiveRoleAsync(ct);
         return new TicketActor(currentUser.UserId, tenantContext.MembershipId!.Value, role);
     }
+
+    /// <summary>Authorized mutation transaction (see <see cref="ActorAccess.BeginAuthorizedAsync"/>); extra memberships (e.g. assignees) are locked and re-validated too.</summary>
+    public async Task<(IDbContextTransaction Transaction, TicketActor Actor)> BeginAuthorizedAsync(IReadOnlyCollection<Guid>? alsoLock, CancellationToken ct)
+    {
+        var (transaction, role) = await actorAccess.BeginAuthorizedAsync(alsoLock, ct);
+        try
+        {
+            return (transaction, new TicketActor(currentUser.UserId, tenantContext.MembershipId!.Value, role));
+        }
+        catch
+        {
+            await transaction.DisposeAsync();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// EFFECTIVE assignments: the row is open AND the agent is still eligible (Agent role, active membership, active user). Suspended,
+    /// deactivated or re-roled agents keep their history row but no longer count as ticket owners.
+    /// </summary>
+    public IQueryable<TicketAssignment> EffectiveAssignments() =>
+        db.TicketAssignments.Where(a => a.UnassignedAtUtc == null
+            && db.Memberships.Any(m => m.Id == a.MembershipId && m.Role == TenantRole.Agent && m.Status == MembershipStatus.Active
+                && db.Users.Any(u => u.Id == m.UserId && u.Status == UserStatus.Active)));
 
     public IQueryable<Ticket> Visible(TicketActor actor) => actor.Role switch
     {

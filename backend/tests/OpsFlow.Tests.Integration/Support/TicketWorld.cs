@@ -2,9 +2,12 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using OpsFlow.Application.Abstractions;
 using OpsFlow.Domain.Tenants;
+using OpsFlow.Infrastructure.Persistence;
 
 namespace OpsFlow.Tests.Integration.Support;
 
@@ -15,7 +18,7 @@ public sealed record SlaPolicyJson(Guid Id, string Priority, int ResponseMinutes
 public sealed record TicketSummaryJson(
     Guid Id, long Number, string DisplayNumber, string Title, string Priority, string Status, Guid CategoryId, string CategoryName,
     Guid? CustomerId, string? CustomerName, DateTime CreatedAtUtc, DateTime UpdatedAtUtc, DateTime? ResolvedAtUtc, int Version,
-    int? AssigneeCount, DateTime? ResolutionDueAtUtc, bool? IsOverdue);
+    int? AssigneeCount, int? EligibleAssigneeCount, DateTime? ResolutionDueAtUtc, bool? IsOverdue);
 
 public sealed record AssigneeJson(Guid MembershipId, Guid UserId, string DisplayName, DateTime AssignedAtUtc, bool IsAgentActive);
 
@@ -23,7 +26,7 @@ public sealed record SlaCycleJson(
     Guid Id, int CycleNumber, string Reason, DateTime StartedAtUtc, int ResponseMinutes, int ResolutionMinutes, DateTime? ResponseDueAtUtc,
     DateTime ResolutionDueAtUtc, DateTime? FirstResponseAtUtc, DateTime? ResolvedAtUtc, string ResponseState, string ResolutionState, double? RemainingResolutionMinutes);
 
-public sealed record TicketJson(TicketSummaryJson Summary, string Description, Guid CreatedByUserId, List<AssigneeJson>? Assignees, SlaCycleJson? CurrentSla)
+public sealed record TicketJson(TicketSummaryJson Summary, string Description, Guid? CreatedByUserId, List<AssigneeJson>? Assignees, SlaCycleJson? CurrentSla)
 {
     public Guid Id => Summary.Id;
     public string Status => Summary.Status;
@@ -114,6 +117,44 @@ public sealed class TicketWorld
         {
             (await client.RefreshAsync()).EnsureSuccessStatusCode();
         }
+    }
+
+    // ---- PostgreSQL lock choreography (deterministic: hold an UNCOMMITTED change, observe the request blocking on it, then commit) ----
+
+    /// <summary>Starts a transaction on its own connection and applies the update WITHOUT committing; the caller commits or disposes it.</summary>
+    public async Task<(IServiceScope Scope, IDbContextTransaction Transaction)> HoldUncommittedAsync(string updateSql)
+    {
+        var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpsFlowDbContext>();
+        var transaction = await db.Database.BeginTransactionAsync();
+        await db.Database.ExecuteSqlRawAsync(updateSql);
+        return (scope, transaction);
+    }
+
+    public string SuspendMembershipSql(Guid membershipId) => $"UPDATE \"Memberships\" SET \"Status\" = 'Inactive' WHERE \"Id\" = '{membershipId}'";
+
+    public string DemoteMembershipSql(Guid membershipId) => $"UPDATE \"Memberships\" SET \"Role\" = 'Agent' WHERE \"Id\" = '{membershipId}'";
+
+    public string DeactivateUserSql(Guid userId) => $"UPDATE \"Users\" SET \"Status\" = 'Deactivated' WHERE \"Id\" = '{userId}'";
+
+    /// <summary>Bounded wait until some backend is blocked on a row lock (replaces sleeping and hoping).</summary>
+    public async Task WaitForLockWaiterAsync()
+    {
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpsFlowDbContext>();
+        var deadline = DateTime.UtcNow.AddSeconds(15);
+        while (DateTime.UtcNow < deadline)
+        {
+            var waiting = await db.Database.SqlQueryRaw<int>("SELECT count(*)::int AS \"Value\" FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND datname = current_database()").SingleAsync();
+            if (waiting > 0)
+            {
+                return;
+            }
+
+            await Task.Delay(20);
+        }
+
+        throw new TimeoutException("No request ever blocked on the row lock.");
     }
 
     // ---- service-level access for deterministic interleaving tests (same DI scope a request would get) ----

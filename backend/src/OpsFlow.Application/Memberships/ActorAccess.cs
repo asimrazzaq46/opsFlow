@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using OpsFlow.Application.Abstractions;
 using OpsFlow.Application.Common;
 using OpsFlow.Domain.Tenants;
@@ -25,6 +26,48 @@ public sealed class ActorAccess(IOpsFlowDbContext db, ITenantContext tenantConte
                 .Select(m => (TenantRole?)m.Role)
                 .SingleOrDefaultAsync(ct);
         return role ?? throw AppException.Forbidden("Your access to this organization is no longer valid.");
+    }
+
+    /// <summary>
+    /// Starts the transaction of a MUTATION: locks the actor's (and the given extra) membership/user rows first, THEN re-reads the actor's
+    /// current role. Until the caller commits or disposes, no demotion/suspension/deactivation of those rows can commit, so authorization
+    /// is valid at the commit boundary. The caller commits.
+    /// </summary>
+    public async Task<(IDbContextTransaction Transaction, TenantRole Role)> BeginAuthorizedAsync(IReadOnlyCollection<Guid>? alsoLock, CancellationToken ct)
+    {
+        var actorId = tenantContext.MembershipId ?? throw AppException.Forbidden("Your access to this organization is no longer valid.");
+        var transaction = await db.BeginTransactionAsync(ct);
+        try
+        {
+            await db.LockMembershipsAsync([actorId, .. alsoLock ?? []], ct);
+            return (transaction, await RequireActiveRoleAsync(ct));
+        }
+        catch
+        {
+            await transaction.DisposeAsync();
+            throw;
+        }
+    }
+
+    public async Task RequireManagerAsync(string forbiddenMessage, CancellationToken ct)
+    {
+        if (await RequireActiveRoleAsync(ct) is not (TenantRole.TenantOwner or TenantRole.Manager))
+        {
+            throw AppException.Forbidden(forbiddenMessage);
+        }
+    }
+
+    /// <summary>Owner/Manager-only mutation: an authorized transaction that is rejected (and rolled back) for everybody else.</summary>
+    public async Task<IDbContextTransaction> BeginManagerAsync(string forbiddenMessage, CancellationToken ct)
+    {
+        var (transaction, role) = await BeginAuthorizedAsync(null, ct);
+        if (role is not (TenantRole.TenantOwner or TenantRole.Manager))
+        {
+            await transaction.DisposeAsync();
+            throw AppException.Forbidden(forbiddenMessage);
+        }
+
+        return transaction;
     }
 
     public async Task RequireOwnerAsync(CancellationToken ct)

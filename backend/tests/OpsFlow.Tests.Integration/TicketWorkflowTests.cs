@@ -372,7 +372,7 @@ public class TicketWorkflowTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Empty((await w.GetTicketAsync(w.Owner, ticket.Id)).Assignees!);
     }
 
-    [Fact]
+    [PostgresOnlyFact] // UPDATED: SQLite mein loser ki explicit transaction writer ko block karti hai; PostgreSQL row-level conflict hi asal scenario hai
     public async Task Two_simultaneous_reopens_create_exactly_one_new_cycle()
     {
         var w = await TicketWorld.CreateAsync(factory);
@@ -414,7 +414,7 @@ public class TicketWorkflowTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(2, (await w.SlaAsync(ticket.Id)).Cycles.Count);
     }
 
-    [Fact]
+    [PostgresOnlyFact] // UPDATED: SQLite mein loser ki explicit transaction writer ko block karti hai; PostgreSQL row-level conflict hi asal scenario hai
     public async Task Conflicting_simultaneous_transitions_never_overwrite_each_other()
     {
         var w = await TicketWorld.CreateAsync(factory);
@@ -453,5 +453,228 @@ public class TicketWorkflowTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(HttpStatusCode.Conflict, (await w.Manager.PostAsync(w.Url($"tickets/{ticket.Id}/status"), new { status = "InProgress", version = stale })).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await w.Manager.PostAsync(w.Url($"tickets/{ticket.Id}/assignments"), new { membershipIds = new[] { w.Agent2Membership }, version = stale })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await w.Manager.PostAsync(w.Url($"tickets/{ticket.Id}/status"), new { status = "InProgress", version = (await w.GetTicketAsync(w.Manager, ticket.Id)).Version })).StatusCode);
+    }
+
+    // ---------------------------------------------------------------- audit fix: a priority always keeps its active SLA policy
+
+    [Fact]
+    public async Task The_only_active_sla_policy_of_a_priority_cannot_be_deactivated()
+    {
+        var w = await TicketWorld.CreateAsync(factory);
+        var policies = await w.Owner.ReadAsync<List<SlaPolicyJson>>(await w.Owner.GetAsync(w.Url("sla-policies")));
+        var medium = policies.Single(p => p.Priority == "Medium");
+
+        foreach (var policy in policies)
+        {
+            Assert.Equal(HttpStatusCode.Conflict, (await w.Manager.PutAsync(w.Url($"sla-policies/{policy.Id}/status"), new { isActive = false })).StatusCode);
+        }
+
+        Assert.All(await w.Owner.ReadAsync<List<SlaPolicyJson>>(await w.Owner.GetAsync(w.Url("sla-policies"))), p => Assert.True(p.IsActive));
+        Assert.Equal(HttpStatusCode.NoContent, (await w.Manager.PutAsync(w.Url($"sla-policies/{medium.Id}/status"), new { isActive = true })).StatusCode); // re-activating an active policy is a no-op
+        Assert.Equal(HttpStatusCode.OK, (await w.Manager.PutAsync(w.Url($"sla-policies/{medium.Id}"), new { responseMinutes = 30, resolutionMinutes = 90 })).StatusCode); // edit instead
+        Assert.Equal("Medium", (await w.CreateTicketAsync(w.Manager)).Summary.Priority); // ticket creation for that priority still works
+    }
+
+    // ---------------------------------------------------------------- audit fix: ineligible (suspended / deactivated / re-roled) assigned agents
+
+    [Fact]
+    public async Task Ineligible_assignees_keep_their_history_but_no_longer_count_as_owners()
+    {
+        var w = await TicketWorld.CreateAsync(factory);
+        var ticket = await w.CreateTicketAsync(w.Customer);
+        await w.AssignAsync(ticket.Id, w.Agent1Membership, w.Agent2Membership);
+        (await w.Owner.PutAsync(w.Url($"members/{w.Agent1Membership}/status"), new { isActive = false })).EnsureSuccessStatusCode();
+
+        var detail = await w.GetTicketAsync(w.Manager, ticket.Id);
+
+        Assert.Equal(2, detail.Summary.AssigneeCount); // history/rows untouched
+        Assert.Equal(1, detail.Summary.EligibleAssigneeCount);
+        Assert.False(detail.Assignees!.Single(a => a.MembershipId == w.Agent1Membership).IsAgentActive);
+        Assert.True(detail.Assignees!.Single(a => a.MembershipId == w.Agent2Membership).IsAgentActive);
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Agent1.PostAsync(w.Url($"tickets/{ticket.Id}/status"), new { status = "InProgress" })).StatusCode); // their mutations are blocked
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Agent1.GetAsync(w.Url("tickets"))).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await w.Manager.DeleteAsync(w.Url($"tickets/{ticket.Id}/assignments/{w.Agent2Membership}"))).StatusCode); // last ELIGIBLE assignee stays
+        (await w.Manager.DeleteAsync(w.Url($"tickets/{ticket.Id}/assignments/{w.Agent1Membership}"))).EnsureSuccessStatusCode(); // the ineligible one can always be removed
+        var history = await w.Manager.ReadAsync<List<AssignmentJson>>(await w.Manager.GetAsync(w.Url($"tickets/{ticket.Id}/assignments?includeHistory=true")));
+        Assert.Equal(2, history.Count);
+        Assert.False(history.Single(h => h.MembershipId == w.Agent1Membership).IsActive);
+    }
+
+    [Fact]
+    public async Task A_ticket_whose_assignees_are_all_ineligible_is_flagged_and_must_be_reassigned()
+    {
+        var w = await TicketWorld.CreateAsync(factory);
+        var ticket = await w.CreateTicketAsync(w.Manager, new { title = "Orphan soon", description = "d", categoryId = w.CategoryId, assigneeMembershipIds = new[] { w.Agent1Membership } });
+        await w.MoveAsync(w.Agent1, ticket.Id, "InProgress");
+        var healthy = await w.CreateTicketAsync(w.Manager, new { title = "Healthy", description = "d", categoryId = w.CategoryId, assigneeMembershipIds = new[] { w.Agent2Membership } });
+        (await w.Owner.PutAsync(w.Url($"members/{w.Agent1Membership}/status"), new { isActive = false })).EnsureSuccessStatusCode();
+
+        async Task<Guid[]> UnstaffedAsync() =>
+            (await w.Manager.ReadAsync<PagedDto<TicketSummaryJson>>(await w.Manager.GetAsync(w.Url("tickets?state=Unstaffed")))).Items.Select(t => t.Id).ToArray();
+
+        Assert.Equal([ticket.Id], await UnstaffedAsync());
+        Assert.Equal(HttpStatusCode.Conflict, (await w.Manager.PostAsync(w.Url($"tickets/{ticket.Id}/status"), new { status = "OnHold" })).StatusCode); // no work without an eligible owner
+        Assert.Equal(HttpStatusCode.Conflict, (await w.Manager.PostAsync(w.Url($"tickets/{ticket.Id}/status"), new { status = "Resolved" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await w.Manager.DeleteAsync(w.Url($"tickets/{ticket.Id}/assignments/{w.Agent1Membership}"))).StatusCode); // assign someone first
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Customer.GetAsync(w.Url("tickets?state=Unstaffed"))).StatusCode);
+
+        await w.AssignAsync(ticket.Id, w.Agent2Membership); // Manager/Owner reassignment
+        (await w.Manager.DeleteAsync(w.Url($"tickets/{ticket.Id}/assignments/{w.Agent1Membership}"))).EnsureSuccessStatusCode();
+
+        Assert.DoesNotContain(ticket.Id, await UnstaffedAsync());
+        Assert.DoesNotContain(healthy.Id, await UnstaffedAsync());
+        Assert.Equal("OnHold", (await w.MoveAsync(w.Agent2, ticket.Id, "OnHold")).Status);
+    }
+
+    [Fact]
+    public async Task Deactivated_and_re_roled_agents_are_ineligible_and_reopen_falls_back_to_open()
+    {
+        var w = await TicketWorld.CreateAsync(factory);
+        var ticket = await w.CreateTicketAsync(w.Manager, new { title = "Reopen me", description = "d", categoryId = w.CategoryId, assigneeMembershipIds = new[] { w.Agent1Membership, w.Agent2Membership } });
+        await w.MoveAsync(w.Agent1, ticket.Id, "Resolved");
+        (await w.Agent2.PostAsync("/api/v1/auth/deactivate", new { password = ApiClient.Password })).EnsureSuccessStatusCode(); // account deactivated
+        (await w.Owner.PutAsync(w.Url($"members/{w.Agent1Membership}/role"), new { role = "Manager" })).EnsureSuccessStatusCode(); // no longer an Agent
+
+        var before = await w.GetTicketAsync(w.Manager, ticket.Id);
+        var reopened = await w.Manager.ReadAsync<TicketJson>(await w.Manager.PostAsync(w.Url($"tickets/{ticket.Id}/reopen"), new { }));
+
+        Assert.Equal(0, before.Summary.EligibleAssigneeCount);
+        Assert.Equal("Open", reopened.Status); // nobody eligible to own it
+        Assert.Equal(2, reopened.Summary.AssigneeCount);
+        Assert.Contains(ticket.Id, (await w.Manager.ReadAsync<PagedDto<TicketSummaryJson>>(await w.Manager.GetAsync(w.Url("tickets?state=Unstaffed")))).Items.Select(t => t.Id));
+        Assert.Equal("Assigned", (await w.AssignAsync(ticket.Id, await EligibleAgentAsync(w))).Status); // a fresh eligible agent makes it Assigned again
+    }
+
+    private static async Task<Guid> EligibleAgentAsync(TicketWorld w)
+    {
+        var extra = await ApiClient.AddMemberAsync(w.Factory, w.Owner, w.Org.Id, "Agent");
+        return (await w.Owner.MembersAsync(w.Org.Id)).Single(m => m.UserId == extra.UserId).Id;
+    }
+
+    // ---------------------------------------------------------------- audit fix: authorization must hold at the COMMIT boundary (PostgreSQL row-lock choreography)
+
+    [PostgresOnlyFact]
+    public async Task A_status_change_cannot_commit_after_its_actor_was_suspended_meanwhile()
+    {
+        var w = await TicketWorld.CreateAsync(factory);
+        var ticket = await w.CreateTicketAsync(w.Manager, new { title = "Race", description = "d", categoryId = w.CategoryId, assigneeMembershipIds = new[] { w.Agent1Membership } });
+        var activityBefore = (await w.ActivityAsync(w.Manager, ticket.Id)).Count;
+        var (scope, suspension) = await w.HoldUncommittedAsync(w.SuspendMembershipSql(w.Agent1Membership)); // the suspension is in flight, not yet committed
+        using (scope)
+        await using (suspension)
+        {
+            var inFlight = w.Agent1.PostAsync(w.Url($"tickets/{ticket.Id}/status"), new { status = "InProgress" }); // passed authentication/authorization already
+            await w.WaitForLockWaiterAsync(); // it is now blocked waiting for the actor's row
+            await suspension.CommitAsync(); // the suspension wins
+
+            Assert.Equal(HttpStatusCode.Forbidden, (await inFlight.WaitAsync(QueryGate.Timeout)).StatusCode);
+        }
+
+        Assert.Equal("Assigned", (await w.GetTicketAsync(w.Owner, ticket.Id)).Status);
+        Assert.Equal(activityBefore, (await w.ActivityAsync(w.Owner, ticket.Id)).Count);
+    }
+
+    [PostgresOnlyFact]
+    public async Task A_status_change_cannot_commit_after_its_actors_account_was_deactivated_meanwhile()
+    {
+        var w = await TicketWorld.CreateAsync(factory);
+        var ticket = await w.CreateTicketAsync(w.Manager, new { title = "Race", description = "d", categoryId = w.CategoryId, assigneeMembershipIds = new[] { w.Agent1Membership } });
+        var (scope, deactivation) = await w.HoldUncommittedAsync(w.DeactivateUserSql(w.Agent1.UserId));
+        using (scope)
+        await using (deactivation)
+        {
+            var inFlight = w.Agent1.PostAsync(w.Url($"tickets/{ticket.Id}/status"), new { status = "InProgress" });
+            await w.WaitForLockWaiterAsync();
+            await deactivation.CommitAsync();
+
+            Assert.Equal(HttpStatusCode.Forbidden, (await inFlight.WaitAsync(QueryGate.Timeout)).StatusCode);
+        }
+
+        Assert.Equal("Assigned", (await w.GetTicketAsync(w.Owner, ticket.Id)).Status);
+    }
+
+    [PostgresOnlyFact]
+    public async Task A_ticket_creation_by_a_manager_demoted_meanwhile_is_rejected_and_consumes_no_number()
+    {
+        var w = await TicketWorld.CreateAsync(factory);
+        var (scope, demotion) = await w.HoldUncommittedAsync(w.DemoteMembershipSql(w.ManagerMembership));
+        using (scope)
+        await using (demotion)
+        {
+            var inFlight = w.TryCreateTicketAsync(w.Manager, new { title = "Too late", description = "d", categoryId = w.CategoryId, customerId = w.CustomerContactId });
+            await w.WaitForLockWaiterAsync();
+            await demotion.CommitAsync();
+
+            Assert.Equal(HttpStatusCode.Forbidden, (await inFlight.WaitAsync(QueryGate.Timeout)).StatusCode); // an Agent may not create for a customer
+        }
+
+        using var check = factory.Services.CreateScope();
+        var db = check.ServiceProvider.GetRequiredService<OpsFlowDbContext>();
+        Assert.Equal(0, await db.TicketCounters.IgnoreQueryFilters().Where(c => c.TenantId == w.Org.Id).Select(c => c.LastNumber).SingleAsync()); // counter rolled back
+        Assert.Equal(0, await db.Tickets.IgnoreQueryFilters().CountAsync(t => t.TenantId == w.Org.Id));
+    }
+
+    [PostgresOnlyFact]
+    public async Task A_ticket_cannot_be_created_for_an_agent_suspended_meanwhile()
+    {
+        var w = await TicketWorld.CreateAsync(factory);
+        var (scope, suspension) = await w.HoldUncommittedAsync(w.SuspendMembershipSql(w.Agent1Membership));
+        using (scope)
+        await using (suspension)
+        {
+            var inFlight = w.TryCreateTicketAsync(w.Manager, new { title = "Assign on create", description = "d", categoryId = w.CategoryId, assigneeMembershipIds = new[] { w.Agent1Membership } });
+            await w.WaitForLockWaiterAsync();
+            await suspension.CommitAsync();
+
+            Assert.Equal(HttpStatusCode.BadRequest, (await inFlight.WaitAsync(QueryGate.Timeout)).StatusCode); // eligibility re-checked after the lock
+        }
+
+        using var check = factory.Services.CreateScope();
+        Assert.Equal(0, await check.ServiceProvider.GetRequiredService<OpsFlowDbContext>().Tickets.IgnoreQueryFilters().CountAsync(t => t.TenantId == w.Org.Id));
+    }
+
+    [PostgresOnlyFact]
+    public async Task Customer_and_category_management_by_a_manager_demoted_meanwhile_is_rejected()
+    {
+        var w = await TicketWorld.CreateAsync(factory);
+        var (scope, demotion) = await w.HoldUncommittedAsync(w.DemoteMembershipSql(w.ManagerMembership));
+        using (scope)
+        await using (demotion)
+        {
+            var customer = w.Manager.PostAsync(w.Url("customers"), new { name = "Late", email = $"late-{Guid.NewGuid():N}@example.com" });
+            var category = w.Manager.PostAsync(w.Url("ticket-categories"), new { name = "Late category" });
+            await w.WaitForLockWaiterAsync();
+            await demotion.CommitAsync();
+
+            Assert.Equal(HttpStatusCode.Forbidden, (await customer.WaitAsync(QueryGate.Timeout)).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await category.WaitAsync(QueryGate.Timeout)).StatusCode);
+        }
+
+        Assert.DoesNotContain(await w.Owner.ReadAsync<List<CategoryJson>>(await w.Owner.GetAsync(w.Url("ticket-categories"))), c => c.Name == "Late category");
+        Assert.DoesNotContain((await w.Owner.ReadAsync<PagedDto<CustomerJson>>(await w.Owner.GetAsync(w.Url("customers?search=late")))).Items, c => c.Name == "Late");
+    }
+
+    [PostgresOnlyFact]
+    public async Task A_suspension_waits_for_an_in_flight_mutation_and_both_commit_consistently()
+    {
+        var w = await TicketWorld.CreateAsync(factory);
+        var ticket = await w.CreateTicketAsync(w.Manager, new { title = "Order", description = "d", categoryId = w.CategoryId, assigneeMembershipIds = new[] { w.Agent1Membership } });
+        var (service, serviceDb, serviceScope) = await ServiceAsync<TicketWorkflowService>(w, w.Agent1, w.Agent1Membership, TenantRole.Agent);
+        using (serviceScope)
+        {
+            factory.SaveGate.PauseNextSave(serviceDb); // the agent's transition holds its authorization locks and stops right before committing
+            var transition = Task.Run(() => { TicketWorld.SignInAs(serviceScope.ServiceProvider, w.Agent1); return service.TransitionAsync(ticket.Id, TicketStatus.InProgress, null, CancellationToken.None); });
+            Assert.True(await factory.SaveGate.WaitUntilPausedAsync());
+
+            var suspension = w.Owner.PutAsync(w.Url($"members/{w.Agent1Membership}/status"), new { isActive = false });
+            await w.WaitForLockWaiterAsync(); // the suspension must wait for the commit boundary
+            factory.SaveGate.Resume();
+
+            Assert.Equal("InProgress", (await transition.WaitAsync(QueryGate.Timeout)).Summary.Status.ToString());
+            Assert.Equal(HttpStatusCode.NoContent, (await suspension.WaitAsync(QueryGate.Timeout)).StatusCode);
+        }
+
+        Assert.Equal("InProgress", (await w.GetTicketAsync(w.Owner, ticket.Id)).Status); // the legitimately authorized change landed...
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Agent1.GetAsync(w.Url("tickets"))).StatusCode); // ...and the suspension took effect right after
     }
 }

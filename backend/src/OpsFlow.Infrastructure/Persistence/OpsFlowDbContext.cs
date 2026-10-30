@@ -87,6 +87,19 @@ public sealed class OpsFlowDbContext(DbContextOptions<OpsFlowDbContext> options,
 
     public Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default) => Database.BeginTransactionAsync(cancellationToken);
 
+    // UPDATED: actor/assignee rows par FOR SHARE lock (transaction ke end tak) - authorization commit boundary tak valid rahe
+    public async Task LockMembershipsAsync(IReadOnlyCollection<Guid> membershipIds, CancellationToken cancellationToken = default)
+    {
+        if (!Database.IsNpgsql() || membershipIds.Count == 0 || tenantContext.TenantId is not { } tenantId)
+        {
+            return;
+        }
+
+        var ids = membershipIds.Distinct().Order().ToArray(); // fixed order: two lockers can never deadlock on each other
+        await Database.ExecuteSqlInterpolatedAsync($"SELECT 1 FROM \"Memberships\" WHERE \"TenantId\" = {tenantId} AND \"Id\" = ANY({ids}) ORDER BY \"Id\" FOR SHARE", cancellationToken);
+        await Database.ExecuteSqlInterpolatedAsync($"SELECT 1 FROM \"Users\" WHERE \"Id\" IN (SELECT \"UserId\" FROM \"Memberships\" WHERE \"TenantId\" = {tenantId} AND \"Id\" = ANY({ids})) ORDER BY \"Id\" FOR SHARE", cancellationToken);
+    }
+
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         EnforceTenantBoundaries();

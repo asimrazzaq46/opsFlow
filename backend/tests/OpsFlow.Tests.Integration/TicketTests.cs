@@ -83,7 +83,8 @@ public class TicketTests(ApiFactory factory) : IClassFixture<ApiFactory>
 
         Assert.Equal("Open", ticket.Status);
         Assert.Equal(w.CustomerContactId, ticket.Summary.CustomerId);
-        Assert.Equal(w.Customer.UserId, ticket.CreatedByUserId); // requester derived from the authenticated identity
+        Assert.Null(ticket.CreatedByUserId); // customers never see staff/user ids
+        Assert.Equal(w.Customer.UserId, (await w.GetTicketAsync(w.Manager, ticket.Id)).CreatedByUserId); // requester derived from the authenticated identity
         Assert.Equal("Medium", ticket.Summary.Priority);
         Assert.Null(ticket.Assignees); // staffing and SLA are staff-only
         Assert.Null(ticket.CurrentSla);
@@ -280,7 +281,7 @@ public class TicketTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal("Renamed", after.Summary.Title);
         Assert.Equal("Open", after.Status);
         Assert.Equal(ticket.Summary.Number, after.Summary.Number);
-        Assert.Equal(ticket.CreatedByUserId, after.CreatedByUserId);
+        Assert.Equal(w.Customer.UserId, after.CreatedByUserId);
         Assert.Equal(ticket.Summary.CustomerId, after.Summary.CustomerId);
     }
 
@@ -409,5 +410,50 @@ public class TicketTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var after = await w.GetTicketAsync(w.Manager, ticket.Id);
         Assert.Equal("Assigned", after.Status); // the status change and its activity rolled back together
         Assert.Equal(before, (await w.ActivityAsync(w.Manager, ticket.Id)).Count);
+    }
+
+    // ---------------------------------------------------------------- audit fixes: staff ids, paging
+
+    [Fact]
+    public async Task The_staff_creator_is_visible_to_staff_but_never_to_the_customer()
+    {
+        var w = await TicketWorld.CreateAsync(factory);
+        var ticket = await w.CreateTicketAsync(w.Manager, new { title = "Phone order", description = "d", categoryId = w.CategoryId, customerId = w.CustomerContactId });
+
+        var asCustomer = await w.GetTicketAsync(w.Customer, ticket.Id);
+        var asStaff = await w.GetTicketAsync(w.Owner, ticket.Id);
+
+        Assert.Null(asCustomer.CreatedByUserId);
+        Assert.Null(asCustomer.Assignees);
+        Assert.Null(asCustomer.Summary.EligibleAssigneeCount);
+        Assert.Equal(w.Manager.UserId, asStaff.CreatedByUserId);
+        Assert.NotNull(asStaff.Summary.EligibleAssigneeCount);
+    }
+
+    [Fact]
+    public async Task Extreme_page_and_page_size_values_are_clamped_instead_of_overflowing()
+    {
+        var w = await TicketWorld.CreateAsync(factory);
+        var ticket = await w.CreateTicketAsync(w.Manager);
+        string[] extremes = ["page=2147483647&pageSize=2147483647", "page=-5&pageSize=-1", "page=0&pageSize=0", "page=1000001&pageSize=100"];
+
+        foreach (var query in extremes)
+        {
+            foreach (var path in new[] { "tickets", "customers", "members", $"tickets/{ticket.Id}/activity" })
+            {
+                var response = await w.Manager.GetAsync(w.Url($"{path}?{query}"));
+                Assert.Equal(HttpStatusCode.OK, response.StatusCode); // never a 500 from a negative/overflowing Skip
+            }
+        }
+
+        var huge = await w.Manager.ReadAsync<PagedDto<TicketSummaryJson>>(await w.Manager.GetAsync(w.Url("tickets?page=2147483647&pageSize=2147483647")));
+        var tiny = await w.Manager.ReadAsync<PagedDto<TicketSummaryJson>>(await w.Manager.GetAsync(w.Url("tickets?page=-5&pageSize=0")));
+        Assert.Equal(1_000_000, huge.Page);
+        Assert.Equal(100, huge.PageSize);
+        Assert.Empty(huge.Items);
+        Assert.Equal(1, huge.TotalCount);
+        Assert.Equal(1, tiny.Page);
+        Assert.Equal(1, tiny.PageSize);
+        Assert.Single(tiny.Items);
     }
 }

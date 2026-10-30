@@ -24,7 +24,9 @@ public sealed partial class TicketService(IOpsFlowDbContext db, TicketAccess acc
     /// </summary>
     public async Task<TicketDetailDto> CreateAsync(CreateTicketCommand cmd, CancellationToken ct)
     {
-        var actor = await access.ResolveAsync(ct);
+        // UPDATED: actor aur (agar hon to) assignees ki rows lock ho kar transaction shuru; commit tak authorization/eligibility nahi badal sakti
+        var (transaction, actor) = await access.BeginAuthorizedAsync(cmd.AssigneeMembershipIds, ct);
+        await using var _ = transaction;
         var category = await db.TicketCategories.AsNoTracking().SingleOrDefaultAsync(c => c.Id == cmd.CategoryId && c.IsActive, ct)
             ?? throw AppException.BadRequest("The category is not available.");
 
@@ -65,7 +67,6 @@ public sealed partial class TicketService(IOpsFlowDbContext db, TicketAccess acc
             ?? throw AppException.Conflict("No active SLA policy exists for this priority.", "An Owner must initialize the tenant defaults.");
 
         var now = Now;
-        await using var transaction = await db.BeginTransactionAsync(ct);
         var number = await NextNumberAsync(ct);
         var ticket = Ticket.Create(tenantContext.TenantId!.Value, number, cmd.Title, cmd.Description, priority, category.Id, customerId, actor.UserId, now);
         db.Tickets.Add(ticket);
@@ -125,26 +126,26 @@ public sealed partial class TicketService(IOpsFlowDbContext db, TicketAccess acc
                                join u in db.Users on m.UserId equals u.Id
                                where a.TicketId == id && a.UnassignedAtUtc == null
                                orderby a.AssignedAtUtc, a.Id
-                               select new AssigneeDto(m.Id, u.Id, u.DisplayName, a.AssignedAtUtc, m.Status == MembershipStatus.Active && u.Status == Domain.Users.UserStatus.Active))
+                               select new AssigneeDto(m.Id, u.Id, u.DisplayName, a.AssignedAtUtc, m.Role == TenantRole.Agent && m.Status == MembershipStatus.Active && u.Status == Domain.Users.UserStatus.Active))
                 .ToListAsync(ct);
             var current = await db.TicketSlaCycles.AsNoTracking().Where(c => c.TicketId == id).OrderByDescending(c => c.CycleNumber).FirstOrDefaultAsync(ct);
             sla = current is null ? null : ToDto(current, now);
         }
 
-        return new TicketDetailDto(ToSummary(row, prefix, now, !actor.IsCustomer), meta.Description, meta.CreatedByUserId, assignees, sla);
+        return new TicketDetailDto(ToSummary(row, prefix, now, !actor.IsCustomer), meta.Description, actor.IsCustomer ? null : meta.CreatedByUserId, assignees, sla); // UPDATED: staff user id customer ko nahi jata
     }
 
     public async Task<PagedResult<TicketSummaryDto>> ListAsync(TicketListFilter filter, CancellationToken ct)
     {
         var actor = await access.ResolveAsync(ct);
-        if (actor.IsCustomer && (filter.AssignedMembershipId is not null || filter.CustomerId is not null || filter.State == TicketState.Overdue))
+        if (actor.IsCustomer && (filter.AssignedMembershipId is not null || filter.CustomerId is not null || filter.State is TicketState.Overdue or TicketState.Unstaffed))
         {
             throw AppException.Forbidden("Customers cannot filter by assignee, customer or SLA state.");
         }
 
         var now = Now;
-        var page = Math.Max(filter.Page, 1);
-        var pageSize = Math.Clamp(filter.PageSize, 1, MaxPageSize);
+        var (page, pageSize, skip) = Paging.Normalize(filter.Page, filter.PageSize, MaxPageSize); // UPDATED: overflow-safe paging
+        var effective = access.EffectiveAssignments();
 
         // Authorization is applied FIRST, inside the query; every other filter only narrows what the caller may already see.
         var query = access.Visible(actor);
@@ -190,6 +191,8 @@ public sealed partial class TicketService(IOpsFlowDbContext db, TicketAccess acc
             TicketState.Finished => query.Where(t => t.Status == TicketStatus.Resolved || t.Status == TicketStatus.Closed),
             TicketState.Overdue => query.Where(t => t.Status != TicketStatus.Resolved && t.Status != TicketStatus.Closed
                 && db.TicketSlaCycles.Any(c => c.TicketId == t.Id && c.ResolvedAtUtc == null && c.ResolutionDueAtUtc < now)),
+            TicketState.Unstaffed => query.Where(t => t.Status != TicketStatus.Resolved && t.Status != TicketStatus.Closed
+                && !effective.Any(a => a.TicketId == t.Id)),
             _ => query,
         };
 
@@ -205,7 +208,7 @@ public sealed partial class TicketService(IOpsFlowDbContext db, TicketAccess acc
         }
 
         var total = await query.CountAsync(ct);
-        var rows = await Project(Order(query, filter.SortBy, filter.Descending).Skip((page - 1) * pageSize).Take(pageSize)).ToListAsync(ct);
+        var rows = await Project(Order(query, filter.SortBy, filter.Descending).Skip(skip).Take(pageSize)).ToListAsync(ct);
         var prefix = await PrefixAsync(ct);
         return new PagedResult<TicketSummaryDto>(rows.ConvertAll(r => ToSummary(r, prefix, now, !actor.IsCustomer)), page, pageSize, total);
     }
@@ -218,12 +221,11 @@ public sealed partial class TicketService(IOpsFlowDbContext db, TicketAccess acc
             throw NotFound();
         }
 
-        page = Math.Max(page, 1);
-        pageSize = Math.Clamp(pageSize, 1, MaxPageSize);
+        (page, pageSize, var skip) = Paging.Normalize(page, pageSize, MaxPageSize);
         var customer = actor.IsCustomer;
         var query = db.TicketActivities.AsNoTracking().Where(a => a.TicketId == ticketId && (!customer || a.CustomerVisible));
         var total = await query.CountAsync(ct);
-        var items = await query.OrderBy(a => a.Sequence).Skip((page - 1) * pageSize).Take(pageSize)
+        var items = await query.OrderBy(a => a.Sequence).Skip(skip).Take(pageSize)
             .Select(a => new TicketActivityDto(a.Id, a.Sequence, a.Type, a.OccurredAtUtc, customer ? null : a.ActorUserId, a.OldValue, a.NewValue)).ToListAsync(ct);
         return new PagedResult<TicketActivityDto>(items, page, pageSize, total);
     }
@@ -255,7 +257,8 @@ public sealed partial class TicketService(IOpsFlowDbContext db, TicketAccess acc
     /// </summary>
     public async Task<TicketDetailDto> UpdateAsync(Guid id, UpdateTicketCommand cmd, CancellationToken ct)
     {
-        var actor = await access.ResolveAsync(ct);
+        var (transaction, actor) = await access.BeginAuthorizedAsync(null, ct); // UPDATED: edit bhi authorized transaction mein
+        await using var _ = transaction;
         var ticket = await access.Visible(actor).Where(t => t.Id == id).SingleOrDefaultAsync(ct) ?? throw NotFound();
         if (cmd.Version is { } expected && expected != ticket.Version)
         {
@@ -311,6 +314,7 @@ public sealed partial class TicketService(IOpsFlowDbContext db, TicketAccess acc
             try
             {
                 await db.SaveChangesAsync(ct);
+                await transaction.CommitAsync(ct);
             }
             catch (DbUpdateConcurrencyException)
             {
@@ -343,16 +347,21 @@ public sealed partial class TicketService(IOpsFlowDbContext db, TicketAccess acc
     internal sealed record TicketRow(
         Guid Id, long Number, string Title, TicketPriority Priority, TicketStatus Status, Guid CategoryId, string? CategoryName,
         Guid? CustomerId, string? CustomerName, DateTime CreatedAtUtc, DateTime UpdatedAtUtc, DateTime? ResolvedAtUtc, int Version,
-        int AssigneeCount, DateTime? ResolutionDueAtUtc);
+        int AssigneeCount, DateTime? ResolutionDueAtUtc, int EligibleAssigneeCount);
 
     // One query per page: correlated sub-selects instead of Include chains or per-row follow-up queries.
-    private IQueryable<TicketRow> Project(IQueryable<Ticket> query) => query.Select(t => new TicketRow(
-        t.Id, t.Number, t.Title, t.Priority, t.Status, t.CategoryId,
-        db.TicketCategories.Where(c => c.Id == t.CategoryId).Select(c => c.Name).FirstOrDefault(),
-        t.CustomerId, db.Customers.Where(c => c.Id == t.CustomerId).Select(c => c.Name).FirstOrDefault(),
-        t.CreatedAtUtc, t.UpdatedAtUtc, t.ResolvedAtUtc, t.Version,
-        db.TicketAssignments.Count(a => a.TicketId == t.Id && a.UnassignedAtUtc == null),
-        db.TicketSlaCycles.Where(c => c.TicketId == t.Id && c.ResolvedAtUtc == null).Select(c => (DateTime?)c.ResolutionDueAtUtc).FirstOrDefault()));
+    private IQueryable<TicketRow> Project(IQueryable<Ticket> query)
+    {
+        var effective = access.EffectiveAssignments();
+        return query.Select(t => new TicketRow(
+            t.Id, t.Number, t.Title, t.Priority, t.Status, t.CategoryId,
+            db.TicketCategories.Where(c => c.Id == t.CategoryId).Select(c => c.Name).FirstOrDefault(),
+            t.CustomerId, db.Customers.Where(c => c.Id == t.CustomerId).Select(c => c.Name).FirstOrDefault(),
+            t.CreatedAtUtc, t.UpdatedAtUtc, t.ResolvedAtUtc, t.Version,
+            db.TicketAssignments.Count(a => a.TicketId == t.Id && a.UnassignedAtUtc == null),
+            db.TicketSlaCycles.Where(c => c.TicketId == t.Id && c.ResolvedAtUtc == null).Select(c => (DateTime?)c.ResolutionDueAtUtc).FirstOrDefault(),
+            effective.Count(a => a.TicketId == t.Id)));
+    }
 
     private async Task<string> PrefixAsync(CancellationToken ct) =>
         await db.Settings.AsNoTracking().Select(s => s.TicketNumberPrefix).SingleOrDefaultAsync(ct) ?? TenantSettings.DefaultTicketPrefix;
@@ -360,7 +369,7 @@ public sealed partial class TicketService(IOpsFlowDbContext db, TicketAccess acc
     private static TicketSummaryDto ToSummary(TicketRow r, string prefix, DateTime now, bool staff) => new(
         r.Id, r.Number, TenantSettings.FormatNumber(prefix, r.Number), r.Title, r.Priority, r.Status, r.CategoryId, r.CategoryName ?? string.Empty,
         r.CustomerId, r.CustomerName, r.CreatedAtUtc, r.UpdatedAtUtc, r.ResolvedAtUtc, r.Version,
-        staff ? r.AssigneeCount : null, staff ? r.ResolutionDueAtUtc : null,
+        staff ? r.AssigneeCount : null, staff ? r.EligibleAssigneeCount : null, staff ? r.ResolutionDueAtUtc : null,
         staff ? r.ResolutionDueAtUtc is { } due && !TicketWorkflow.IsFinished(r.Status) && now > due : null);
 
     internal static SlaCycleDto ToDto(TicketSlaCycle c, DateTime now) => new(
