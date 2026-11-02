@@ -228,7 +228,7 @@ public class ApiFactory : WebApplicationFactory<Program>
     public TestClock Clock { get; } = new();
     public SaveGate SaveGate { get; } = new();
     public SaveFaultInjector Faults { get; } = new();
-    public QueryCounter Queries { get; } = new(); // UPDATED: Milestone 5 hardening - query-count / EXPLAIN measurements
+    public QueryCounter Queries { get; } = new(); // query-count / EXPLAIN measurements
 
     protected virtual int SensitivePermitLimit => 100_000;
 
@@ -241,7 +241,7 @@ public class ApiFactory : WebApplicationFactory<Program>
             ["RateLimiting:SensitivePermitLimit"] = SensitivePermitLimit.ToString(System.Globalization.CultureInfo.InvariantCulture),
             ["Auth:Jwt:SigningKey"] = "integration-test-signing-key-0123456789-abcdefghij",
             ["Auth:Password:Iterations"] = "1000", // fast hashing for tests only; production enforces >= 210000
-            ["Database:AutoApplyMigrationsOnStartup"] = "false", // UPDATED: test hosts schema/DB ka control khud rakhte hain
+            ["Database:AutoApplyMigrationsOnStartup"] = "false", // test hosts create and own the schema themselves
         }));
         builder.ConfigureServices(services =>
         {

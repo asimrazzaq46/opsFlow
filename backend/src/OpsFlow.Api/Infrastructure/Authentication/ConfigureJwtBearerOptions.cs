@@ -34,7 +34,7 @@ internal sealed class ConfigureJwtBearerOptions(
         options.RequireHttpsMetadata = false; // no metadata endpoint is used; the key is local
         options.SaveToken = false;
         options.TokenValidationParameters = JwtTokenValidation.Parameters(auth.Value.Jwt, clock);
-        // UPDATED: SignalR WebSocket header nahi bhej sakta - sirf hub path par query access_token qubool; baqi validation bilkul wahi (access type + DB session)
+        // SignalR WebSockets cannot send headers, so access_token is read from the query string on the hub path only; validation is otherwise identical (access type + DB session).
         var hubPath = realtime.Value.HubPath;
         options.Events = new JwtBearerEvents
         {
@@ -55,7 +55,7 @@ internal sealed class ConfigureJwtBearerOptions(
         };
     }
 
-    // UPDATED: 401 body (StatusCodePages) mein stable code: token missing / expired / invalid. Default challenge (WWW-Authenticate) barqarar.
+    // Stable code in the 401 body (StatusCodePages): token missing / expired / invalid. The default challenge (WWW-Authenticate) is kept.
     private static Task RecordChallengeCode(JwtBearerChallengeContext context)
     {
         context.HttpContext.Items[ProblemDetailsSetup.CodeItem] = context.AuthenticateFailure switch
@@ -71,7 +71,7 @@ internal sealed class ConfigureJwtBearerOptions(
     private static async Task ValidateSessionAsync(TokenValidatedContext context)
     {
         var principal = context.Principal;
-        // UPDATED: refresh JWT (ya token_type ke baghair token) Bearer access token ke taur par reject
+        // A refresh JWT (or a token without token_type) is never accepted as a Bearer access token.
         if (principal?.FindFirstValue(AuthClaims.TokenType) != AuthClaims.AccessTokenType)
         {
             context.Fail("Only access tokens can authenticate API requests.");

@@ -103,8 +103,8 @@ public sealed class TicketAccess(
         );
 
     /// <summary>
-    /// UPDATED: messages/notes ka agla per-ticket sequence. ExecuteUpdate ticket row par lock leta hai (commit tak), is liye concurrent writers
-    /// serialize hote hain aur koi sequence do baar nahi milti; ticket Version/ActivitySequence ko nahi chhoota.
+    /// Next per-ticket sequence shared by messages and notes. The ExecuteUpdate holds the ticket row lock until commit, so concurrent
+    /// writers serialize and no sequence is handed out twice; the ticket's Version/ActivitySequence are not touched.
     /// </summary>
     public async Task<int> NextMessageSequenceAsync(Guid ticketId, CancellationToken ct)
     {
@@ -121,6 +121,24 @@ public sealed class TicketAccess(
                 .Select(t => t.MessageSequence)
                 .SingleAsync(ct)
             : throw AppException.NotFound("Ticket not found.");
+    }
+
+    /// <summary>
+    /// Takes the ticket row lock until commit without changing any value. Child-task writes and agent unassignment serialize on it,
+    /// so "agent removed from the ticket" and "task given to that agent" can never both commit.
+    /// </summary>
+    public async Task LockTicketAsync(Guid ticketId, CancellationToken ct)
+    {
+        var rows = await db
+            .Tickets.Where(t => t.Id == ticketId)
+            .ExecuteUpdateAsync(
+                s => s.SetProperty(t => t.ActivitySequence, t => t.ActivitySequence),
+                ct
+            );
+        if (rows != 1)
+        {
+            throw AppException.NotFound("Ticket not found.");
+        }
     }
 
     /// <summary>Every agent must be an ACTIVE Agent membership of THIS tenant whose user account is active.</summary>

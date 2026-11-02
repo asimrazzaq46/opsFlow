@@ -11,6 +11,7 @@ public static class OutboxEvents
     public const string TicketMessageCreated = "ticket.message.created";
     public const string TicketNoteCreated = "ticket.note.created";
     public const string CacheInvalidated = "cache.invalidated";
+    public const string TicketTaskChanged = "ticket.task.changed";
 }
 
 public sealed record NotificationEvent(Guid NotificationId);
@@ -20,6 +21,9 @@ public sealed record TicketMessageEvent(Guid TicketId, Guid MessageId);
 public sealed record TicketNoteEvent(Guid TicketId, Guid NoteId);
 
 public sealed record CacheInvalidatedEvent(string Resource);
+
+/// <summary>Minimal internal change signal; clients reload the authoritative task list. <c>Change</c> is a <see cref="TicketTaskChanges"/> value.</summary>
+public sealed record TicketTaskEvent(Guid TicketId, Guid? TaskId, string Change, int? Version);
 
 /// <summary>
 /// Stages events in the caller's DbContext. They are committed by the SAME SaveChanges as the business change, so a rollback removes them

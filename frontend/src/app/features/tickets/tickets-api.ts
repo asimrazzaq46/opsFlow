@@ -2,12 +2,13 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { Api } from '../../core/api/generated/api';
 import {
-  assignTicketAgents, changeTicketStatus, createTicket, createTicketNote, downloadTicketAttachment, getTicket, listMembers, listTicketAttachments,
-  listTicketCategories, listTicketMessages, listTicketNotes, listTickets, reopenTicket, sendTicketMessage, unassignTicketAgent, uploadTicketAttachment,
+  assignTicketAgents, changeTicketStatus, changeTicketTaskStatus, createTicket, createTicketNote, createTicketTask, downloadTicketAttachment, getTicket,
+  listMembers, listTicketAttachments, listTicketCategories, listTicketMessages, listTicketNotes, listTickets, listTicketTasks, reassignTicketTask, reopenTicket,
+  reorderTicketTasks, sendTicketMessage, unassignTicketAgent, updateTicketTask, uploadTicketAttachment,
 } from '../../core/api/generated/functions';
 import {
   AttachmentDto, CreateTicketRequest, MemberDto, PagedResultOfTicketMessageDto, PagedResultOfTicketNoteDto, PagedResultOfTicketSummaryDto, TicketCategoryDto,
-  TicketDetailDto, TicketMessageDto, TicketNoteDto, TicketStatus,
+  TicketDetailDto, TicketMessageDto, TicketNoteDto, TicketStatus, TicketTaskDto, TicketTaskListDto, TicketTaskStatus,
 } from '../../core/api/generated/models';
 import { TenantService } from '../../core/auth/tenant.service';
 
@@ -62,7 +63,7 @@ export class TicketsApi {
       .pipe(map((r) => r.body as unknown as Blob));
   }
 
-  // UPDATED: Milestone 5 - REST commands (server stays authoritative; version = optimistic concurrency token)
+  // REST commands (server stays authoritative; version = optimistic concurrency token)
   create(body: CreateTicketRequest): Observable<TicketDetailDto> {
     return this.api.invoke(createTicket, { tenantId: this.tenantId, body });
   }
@@ -90,5 +91,30 @@ export class TicketsApi {
   /** Tenant members (Agents are the assignable ones). */
   members(): Observable<MemberDto[]> {
     return this.api.invoke(listMembers, { tenantId: this.tenantId, pageSize: 100 }).pipe(map((p) => p.items));
+  }
+
+  // Internal child tasks (staff only; server enforces ownership/manager rules and versions)
+  tasks(ticketId: string): Observable<TicketTaskListDto> {
+    return this.api.invoke(listTicketTasks, { tenantId: this.tenantId, ticketId });
+  }
+
+  createTask(ticketId: string, title: string, description: string | null, assigneeMembershipId: string | null): Observable<TicketTaskDto> {
+    return this.api.invoke(createTicketTask, { tenantId: this.tenantId, ticketId, body: { title, description, assigneeMembershipId } });
+  }
+
+  updateTask(ticketId: string, taskId: string, title: string, description: string | null, version: number): Observable<TicketTaskDto> {
+    return this.api.invoke(updateTicketTask, { tenantId: this.tenantId, ticketId, taskId, body: { title, description, version } });
+  }
+
+  changeTaskStatus(ticketId: string, taskId: string, status: TicketTaskStatus, version: number): Observable<TicketTaskDto> {
+    return this.api.invoke(changeTicketTaskStatus, { tenantId: this.tenantId, ticketId, taskId, body: { status, version } });
+  }
+
+  reassignTask(ticketId: string, taskId: string, assigneeMembershipId: string, version: number): Observable<TicketTaskDto> {
+    return this.api.invoke(reassignTicketTask, { tenantId: this.tenantId, ticketId, taskId, body: { assigneeMembershipId, version } });
+  }
+
+  reorderTasks(ticketId: string, tasks: { taskId: string; version: number }[]): Observable<TicketTaskListDto> {
+    return this.api.invoke(reorderTicketTasks, { tenantId: this.tenantId, ticketId, body: { tasks } });
   }
 }

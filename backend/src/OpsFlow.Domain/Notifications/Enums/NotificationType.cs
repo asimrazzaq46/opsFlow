@@ -12,6 +12,6 @@ public enum NotificationType
     TicketReopened,
     MessageReceived,
     NoteAdded,
-    SlaWarning, // UPDATED: Milestone 4 - automated SLA monitoring
+    SlaWarning, // raised by automated SLA monitoring
     SlaBreached,
 }

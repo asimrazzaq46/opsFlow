@@ -127,6 +127,49 @@
     "you": "You",
     "supportTeam": "Support team"
   },
+  "tasks": {
+    "title": "Child tasks",
+    "hint": "Internal work items. Customers never see them.",
+    "add": "Add task",
+    "create": "Create task",
+    "edit": "Edit",
+    "save": "Save",
+    "details": "Details",
+    "reassign": "Reassign",
+    "changeStatus": "Change status",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "progress": "{{done}} / {{total}} completed",
+    "empty": "No child tasks yet.",
+    "emptyHint": "Split the ticket work into tasks for the assigned agents.",
+    "loadError": "Could not load the tasks.",
+    "readOnly": "The ticket is resolved or closed: tasks are read-only until it is reopened.",
+    "assignedToYou": "The task will be assigned to you.",
+    "noEligibleAgents": "Assign an active agent to the ticket first.",
+    "needsReassignment": "Needs reassignment",
+    "fields": {
+      "title": "Title",
+      "description": "Description (optional)",
+      "assignee": "Responsible agent"
+    },
+    "validation": {
+      "title": "Enter a title (max. 200 characters).",
+      "assignee": "Choose a responsible agent."
+    },
+    "status": {
+      "Todo": "To do",
+      "InProgress": "In progress",
+      "Done": "Done"
+    },
+    "errors": {
+      "conflict": "Someone else changed the tasks. The latest version has been loaded.",
+      "forbidden": "You are not allowed to change this task.",
+      "notFound": "The task or ticket is no longer available to you.",
+      "invalid": "The task could not be saved: check the input.",
+      "generic": "The action failed. Please try again.",
+      "agentHasOpenTasks": "This agent still owns unfinished child tasks. Reassign them first."
+    }
+  },
   "notes": {
     "title": "Internal notes",
     "hint": "Visible to staff only. Customers never see these notes.",

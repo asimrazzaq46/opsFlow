@@ -82,6 +82,9 @@ public sealed class RealtimeOutboxHandler(
                 case OutboxEvents.TicketNoteCreated:
                     await PublishNoteAsync(Read<TicketNoteEvent>(message), ct);
                     break;
+                case OutboxEvents.TicketTaskChanged:
+                    await PublishTaskAsync(Read<TicketTaskEvent>(message), ct);
+                    break;
                 default:
                     throw new OutboxPermanentException(
                         $"Unsupported realtime event type '{message.EventType}'."
@@ -169,6 +172,28 @@ public sealed class RealtimeOutboxHandler(
                 tenantContext.TenantId!.Value,
                 ticket.Id,
                 (await notes.MapAsync([note], ct))[0]
+            ),
+            ct
+        );
+    }
+
+    // Recipients are computed at delivery time from the internal task audience (no customer path); the payload carries no task content.
+    private async Task PublishTaskAsync(TicketTaskEvent ev, CancellationToken ct)
+    {
+        if (!await db.Tickets.AsNoTracking().AnyAsync(t => t.Id == ev.TicketId, ct))
+        {
+            return;
+        }
+
+        var recipients = await audience.TaskStaffAsync(ev.TicketId, ct);
+        await publisher.NotifyUsersAsync(
+            recipients.ConvertAll(u => u.ToString()),
+            new TicketTaskChanged(
+                tenantContext.TenantId!.Value,
+                ev.TicketId,
+                ev.TaskId,
+                ev.Change,
+                ev.Version
             ),
             ct
         );

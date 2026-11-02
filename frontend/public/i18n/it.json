@@ -127,6 +127,49 @@
     "you": "Tu",
     "supportTeam": "Team di supporto"
   },
+  "tasks": {
+    "title": "Attività figlie",
+    "hint": "Attività interne. I clienti non le vedono mai.",
+    "add": "Aggiungi attività",
+    "create": "Crea attività",
+    "edit": "Modifica",
+    "save": "Salva",
+    "details": "Dettagli",
+    "reassign": "Riassegna",
+    "changeStatus": "Cambia stato",
+    "moveUp": "Sposta su",
+    "moveDown": "Sposta giù",
+    "progress": "{{done}} / {{total}} completate",
+    "empty": "Ancora nessuna attività figlia.",
+    "emptyHint": "Suddividi il lavoro del ticket in attività per gli agenti assegnati.",
+    "loadError": "Impossibile caricare le attività.",
+    "readOnly": "Il ticket è risolto o chiuso: le attività sono di sola lettura finché non viene riaperto.",
+    "assignedToYou": "L'attività sarà assegnata a te.",
+    "noEligibleAgents": "Assegna prima un agente attivo al ticket.",
+    "needsReassignment": "Da riassegnare",
+    "fields": {
+      "title": "Titolo",
+      "description": "Descrizione (facoltativa)",
+      "assignee": "Agente responsabile"
+    },
+    "validation": {
+      "title": "Inserisci un titolo (max. 200 caratteri).",
+      "assignee": "Scegli un agente responsabile."
+    },
+    "status": {
+      "Todo": "Da fare",
+      "InProgress": "In corso",
+      "Done": "Completata"
+    },
+    "errors": {
+      "conflict": "Qualcuno ha modificato le attività. È stata caricata la versione più recente.",
+      "forbidden": "Non sei autorizzato a modificare questa attività.",
+      "notFound": "L'attività o il ticket non è più disponibile.",
+      "invalid": "Impossibile salvare l'attività: controlla i dati.",
+      "generic": "Operazione non riuscita. Riprova.",
+      "agentHasOpenTasks": "Questo agente ha ancora attività figlie non completate. Riassegnale prima."
+    }
+  },
   "notes": {
     "title": "Note interne",
     "hint": "Visibili solo allo staff. I clienti non vedono mai queste note.",

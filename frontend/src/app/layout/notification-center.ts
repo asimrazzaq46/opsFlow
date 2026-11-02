@@ -5,7 +5,7 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { NotificationDto } from '../core/api/generated/models';
 import { NotificationService } from '../core/notifications/notification.service';
 
-/** UPDATED: SLA notifications carry an SLA kind (FirstResponse/Resolution) as detail, every other type a ticket status. */
+/** SLA notifications carry an SLA kind (FirstResponse/Resolution) as detail, every other type a ticket status. */
 export const notificationDetailKey = (n: Pick<NotificationDto, 'type' | 'detail'>): string =>
   (n.type === 'SlaWarning' || n.type === 'SlaBreached' ? 'notifications.slaKinds.' : 'tickets.status.') + (n.detail ?? '');
 

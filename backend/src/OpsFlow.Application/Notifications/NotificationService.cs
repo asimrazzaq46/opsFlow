@@ -54,7 +54,7 @@ public sealed class NotificationService(
         recipients.Remove(actorUserId);
         if (recipients.Count == 0)
         {
-            return 0; // UPDATED: caller ko 0 milta hai (SLA monitor diagnostic log karta hai); khali notification kabhi nahi banti
+            return 0; // no empty notification is created; the caller gets 0 (the SLA monitor logs a diagnostic)
         }
 
         var prefix =
@@ -77,7 +77,7 @@ public sealed class NotificationService(
                 now
             );
             db.Notifications.Add(notification);
-            // UPDATED: live push/e-mail ab outbox ke zariye (isi commit mein), direct publish nahi
+            // Live push/e-mail go through the outbox in this same commit, never a direct publish.
             var channels =
                 OutboxChannels.Realtime
                 | (

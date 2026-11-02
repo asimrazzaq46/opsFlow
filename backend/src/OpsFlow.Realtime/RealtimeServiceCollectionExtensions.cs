@@ -40,8 +40,8 @@ public static class RealtimeServiceCollectionExtensions
             )
             .ValidateOnStart();
 
-        // UPDATED: AddSignalR ka default IUserIdProvider pehle register hota tha aur hamara provider kabhi nahi chalta tha; ab hamara pehle (TryAdd),
-        // is liye jo provider host ne AddRealtime se pehle register kiya ho wo kabhi override nahi hota
+        // Registered before AddSignalR, whose default IUserIdProvider would otherwise win; TryAdd keeps any
+        // provider the host registered before AddRealtime.
         services.TryAddSingleton<IUserIdProvider, ClaimUserIdProvider>();
         var signalR = services
             .AddSignalR()

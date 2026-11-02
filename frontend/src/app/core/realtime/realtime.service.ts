@@ -10,7 +10,7 @@ export type HubConnectionFactory = (url: string, accessTokenFactory: AccessToken
 export const REALTIME_HUB_FACTORY = new InjectionToken<HubConnectionFactory>('REALTIME_HUB_FACTORY', {
   providedIn: 'root',
   factory: () => (url, accessTokenFactory) =>
-    // UPDATED: Bearer-only API hai (cookies/credentials nahi); default withCredentials=true cross-origin CORS (no credentials) mein negotiate tor deta
+    // Bearer-only API (no cookies); the default withCredentials=true would break the cross-origin negotiate request because CORS allows no credentials
     new HubConnectionBuilder().withUrl(url, { accessTokenFactory, withCredentials: false }).withAutomaticReconnect().configureLogging(LogLevel.Warning).build(),
 });
 
@@ -35,7 +35,7 @@ export class RealtimeService {
   private connection: HubConnection | null = null;
   private args: { url: string; accessTokenFactory: AccessTokenFactory } | null = null;
   private retryTimer: ReturnType<typeof setTimeout> | undefined;
-  // UPDATED: wanted groups; the server forgets them on every new connection, so they are re-joined (and re-authorized) after start/reconnect
+  // Wanted groups; the server forgets them on every new connection, so they are re-joined (and re-authorized) after start/reconnect
   private readonly groups = new Set<string>();
 
   constructor() {

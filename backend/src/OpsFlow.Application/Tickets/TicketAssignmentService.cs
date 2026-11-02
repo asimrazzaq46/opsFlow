@@ -98,7 +98,7 @@ public sealed partial class TicketAssignmentService(
                 ticket.Touch(now);
             }
 
-            // UPDATED: naye assignees ko TicketAssigned; Open->Assigned par customer ko status notification (staffing details nahi)
+            // New assignees are told directly; the customer only learns about Open -> Assigned, never who is staffing the ticket.
             var agentUsers = await db
                 .Memberships.AsNoTracking()
                 .Where(m => agents.Contains(m.Id))
@@ -143,7 +143,7 @@ public sealed partial class TicketAssignmentService(
                 when (db.IsUniqueViolation(ex, UniqueConstraintKind.ActivitySequence)
                     || db.IsUniqueViolation(ex, UniqueConstraintKind.NotificationDedup)
                     || db.IsUniqueViolation(ex, UniqueConstraintKind.OutboxDedup)
-                ) // UPDATED: same-version race notification dedup par bhi takrata hai
+                ) // a same-version race can also surface as a notification/outbox dedup violation
             {
                 db.ChangeTracker.Clear(); // same race, reported by the timeline's unique sequence first
             }
@@ -167,8 +167,16 @@ public sealed partial class TicketAssignmentService(
     {
         for (var attempt = 0; attempt < MaxAttempts; attempt++)
         {
+            // One transaction per attempt: the ticket row lock serializes this with child-task creation and reassignment.
+            await using var transaction = await db.BeginTransactionAsync(ct);
             var tenant = await db.Tenants.SingleAsync(ct);
             var actor = await access.ResolveAsync(ct);
+            if (!actor.IsManager)
+            {
+                throw AppException.Forbidden("Only Owners and Managers can change assignments.");
+            }
+
+            await access.LockTicketAsync(ticketId, ct);
             var ticket = await LoadAsync(actor, ticketId, expectedVersion, ct);
             if (ticket.Status == TicketStatus.Closed)
             {
@@ -183,8 +191,8 @@ public sealed partial class TicketAssignmentService(
                         && a.UnassignedAtUtc == null,
                     ct
                 ) ?? throw AppException.NotFound("The agent is not assigned to this ticket.");
-            // UPDATED: sirf ELIGIBLE agents ginay jate hain: aakhri eligible assignee hat nahi sakta, lekin ineligible (suspended/deactivated) agent
-            // ko hamesha hata sakte hain jab doosra eligible agent maujood ho (pehle naya agent assign karein)
+            // Only ELIGIBLE agents count: the last eligible assignee cannot be removed, but an ineligible (suspended/deactivated)
+            // agent can always be removed once another eligible agent is assigned.
             var remainingEligible = await access
                 .EffectiveAssignments()
                 .CountAsync(a => a.TicketId == ticketId && a.Id != assignment.Id, ct);
@@ -196,6 +204,26 @@ public sealed partial class TicketAssignmentService(
                         + ".",
                     "Assign another active agent first."
                 );
+            }
+
+            // An agent who still owns unfinished child tasks cannot be unassigned (also not while Resolved, which would leave
+            // orphaned tasks after a reopen); a manager reassigns the tasks first. Membership revocation is never blocked by this.
+            if (
+                await db.TicketTasks.AnyAsync(
+                    t =>
+                        t.TicketId == ticketId
+                        && t.AssigneeMembershipId == membershipId
+                        && t.Status != TicketTaskStatus.Done,
+                    ct
+                )
+            )
+            {
+                throw AppException
+                    .Conflict(
+                        "The agent still owns unfinished child tasks on this ticket.",
+                        "Reassign those tasks to another assigned agent first."
+                    )
+                    .WithCode("TICKET_AGENT_HAS_OPEN_TASKS");
             }
 
             var now = Now;
@@ -228,6 +256,7 @@ public sealed partial class TicketAssignmentService(
             try
             {
                 await db.SaveChangesAsync(ct);
+                await transaction.CommitAsync(ct);
                 return await tickets.GetAsync(ticketId, ct);
             }
             catch (DbUpdateConcurrencyException)
@@ -238,13 +267,13 @@ public sealed partial class TicketAssignmentService(
                 when (db.IsUniqueViolation(ex, UniqueConstraintKind.ActivitySequence)
                     || db.IsUniqueViolation(ex, UniqueConstraintKind.NotificationDedup)
                     || db.IsUniqueViolation(ex, UniqueConstraintKind.OutboxDedup)
-                ) // UPDATED: same-version race notification dedup par bhi takrata hai
+                ) // a same-version race can also surface as a notification/outbox dedup violation
             {
                 db.ChangeTracker.Clear();
             }
             catch (Exception ex) when (db.IsDeadlock(ex))
             {
-                db.ChangeTracker.Clear(); // UPDATED: deadlock victim retry karta hai
+                db.ChangeTracker.Clear(); // the deadlock victim retries
             }
         }
 

@@ -44,7 +44,7 @@ public static class BackgroundSetup
             ?? new BackgroundOptions();
         if (!background.ServerEnabled)
         {
-            services.AddHostedService<BackgroundDisabledNotice>(); // UPDATED: disabled worker ab startup par saaf dikhta hai (chup nahi)
+            services.AddHostedService<BackgroundDisabledNotice>(); // a disabled worker is reported at startup instead of failing silently
             return services;
         }
 

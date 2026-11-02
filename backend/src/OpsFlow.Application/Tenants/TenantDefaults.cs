@@ -133,7 +133,7 @@ public sealed partial class TenantDefaultsService(
             return 0;
         }
 
-        // UPDATED: cache sirf tab invalidate hota hai jab categories/SLA policies sach mein add hui (settings/counter cached nahi)
+        // Invalidate the cache only when categories/SLA policies were actually added (settings/counter are not cached).
         var categoriesChanged = CategoryNamesMissing(categories);
         var policiesChanged = TenantDefaults.SlaTargets.Keys.Any(p => !priorities.Contains(p));
         if (categoriesChanged)
@@ -154,7 +154,7 @@ public sealed partial class TenantDefaultsService(
                 tenantId,
                 CacheResources.Categories,
                 CancellationToken.None
-            ); // commit ke baad; outbox event backstop hai
+            ); // after commit; the outbox event is the backstop
         }
 
         if (policiesChanged)

@@ -13,5 +13,12 @@ public enum TicketActivityType
     Reopened,
     SlaCycleStarted,
     SlaCycleCompleted,
-    AttachmentAdded, // UPDATED: staff-only timeline entry (file name kabhi copy nahi hota)
+    AttachmentAdded, // staff-only timeline entry (the file name is never copied)
+
+    // Child task audit; not in the IsCustomerVisible whitelist, so always internal.
+    TaskCreated,
+    TaskDetailsUpdated,
+    TaskStatusChanged,
+    TaskAssigned,
+    TasksReordered,
 }

@@ -12,7 +12,7 @@ export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
     provideRouter(routes, withComponentInputBinding()),
-    provideHttpClient(withFetch(), withInterceptors([authInterceptor])), // UPDATED: Bearer + 401 refresh
+    provideHttpClient(withFetch(), withInterceptors([authInterceptor])), // Bearer + 401 refresh
     provideTranslateService({ fallbackLang: DEFAULT_LANGUAGE }),
     provideTranslateHttpLoader({ prefix: '/i18n/', suffix: '.json' }),
   ],

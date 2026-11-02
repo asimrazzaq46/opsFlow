@@ -146,7 +146,9 @@ export class TicketActions {
       },
       error: (e: unknown) => {
         const status = e instanceof HttpErrorResponse ? e.status : 0;
-        this.message.set(status === 409 ? 'tickets.errors.conflict' : status === 403 ? 'common.forbidden' : status === 400 ? 'tickets.errors.invalid' : 'tickets.errors.generic');
+        // Unassign is rejected while the agent still owns unfinished child tasks; show a specific message
+        const code = e instanceof HttpErrorResponse ? (e.error as { code?: string } | null)?.code : undefined;
+        this.message.set(code === 'TICKET_AGENT_HAS_OPEN_TASKS' ? 'tasks.errors.agentHasOpenTasks' : status === 409 ? 'tickets.errors.conflict' : status === 403 ? 'common.forbidden' : status === 400 ? 'tickets.errors.invalid' : 'tickets.errors.generic');
         this.busy.set(false);
         this.changed.emit(); // reload the authoritative state (never retry automatically)
       },

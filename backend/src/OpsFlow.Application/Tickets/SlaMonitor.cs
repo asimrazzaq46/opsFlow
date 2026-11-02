@@ -192,7 +192,7 @@ public sealed partial class SlaMonitor(
             );
             if (recipients == 0)
             {
-                // UPDATED: marker/breach record sahi rehta hai, lekin kisi ko notify nahi hua - ye chup nahi rehna chahiye
+                // The marker/breach record stays correct, but nobody was notified; this must not go unnoticed.
                 LogNoRecipients(
                     logger,
                     cycle.TenantId,

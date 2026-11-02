@@ -28,7 +28,7 @@ public sealed record SessionInfo(
 public sealed partial class SessionService(
     IOpsFlowDbContext db,
     IPasswordHasher hasher,
-    ITokenService tokenService, // UPDATED: access + refresh JWT ek hi service se
+    ITokenService tokenService,
     IOptions<AuthOptions> options,
     TimeProvider clock,
     ILogger<SessionService> logger
@@ -99,7 +99,7 @@ public sealed partial class SessionService(
             throw InvalidRefresh();
         }
 
-        // UPDATED: pehle JWT (signature/issuer/audience/expiry/algorithm/type), phir DB se hash + ownership
+        // Validate the JWT first (signature/issuer/audience/expiry/algorithm/type), then the stored hash + ownership.
         var claims =
             await tokenService.ValidateRefreshTokenAsync(rawToken) ?? throw InvalidRefresh();
         var now = Now;
@@ -147,9 +147,9 @@ public sealed partial class SessionService(
                 .Where(t => t.TokenHash == hash)
                 .Select(t => t.UsedAtUtc)
                 .SingleAsync(ct);
-            // UPDATED: Clear() ke baad session detached thi - revoke persist hone ke liye dobara tracked load zaroori hai
+            // Clear() detached the session; reload it tracked so the revoke is persisted.
             session = await db.UserSessions.SingleAsync(s => s.Id == session.Id, ct);
-            throw await ReuseAsync(session, winnerUsedAt ?? now, Now, ct); // UPDATED: fresh Now - request stall hui ho to purana timestamp galat grace deta
+            throw await ReuseAsync(session, winnerUsedAt ?? now, Now, ct); // fresh Now: a stale timestamp from a stalled request would grant the wrong grace
         }
 
         var access = tokenService.CreateAccessToken(user.Id, session.Id, user.AuthVersion, now);

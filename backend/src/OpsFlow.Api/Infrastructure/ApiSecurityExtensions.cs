@@ -51,7 +51,7 @@ internal static class ApiSecurityExtensions
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUser, CurrentUser>();
 
-        // UPDATED: Identity cookies ki jagah JWT bearer + validated Auth options (fail-fast at host start, not at design time)
+        // JWT bearer + validated Auth options (fail-fast at host start, not at design time)
         var authOptions = services
             .AddOptions<AuthOptions>()
             .Bind(configuration.GetSection(AuthOptions.SectionName));
@@ -86,7 +86,7 @@ internal static class ApiSecurityExtensions
                         return;
                     }
 
-                    // UPDATED: Bearer-only API hai - credentials/cookies allow nahi kiye jate
+                    // Bearer-only API: credentials/cookies are not allowed.
                     p.WithOrigins(origins)
                         .WithMethods("GET", "POST", "PUT", "DELETE")
                         .WithHeaders(
@@ -94,7 +94,7 @@ internal static class ApiSecurityExtensions
                             "Content-Type",
                             "X-Requested-With",
                             "X-SignalR-User-Agent"
-                        ); // UPDATED: SignalR negotiate headers
+                        ); // includes SignalR negotiate headers
                 }
             )
         );

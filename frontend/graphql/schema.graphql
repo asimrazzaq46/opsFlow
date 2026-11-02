@@ -20,6 +20,8 @@ type Query {
     @cost(weight: "10")
   dashboard(filter: AnalyticsFilterInput): DashboardDto! @cost(weight: "30")
   report(filter: AnalyticsFilterInput): ReportDto! @cost(weight: "60")
+  ticketTaskProgress(ticketIds: [UUID!]!): [TicketTaskProgressDto!]!
+    @cost(weight: "10")
   kanbanBoard(filter: KanbanFilterInput, perColumn: Int! = 20): [KanbanColumn!]!
     @cost(weight: "40")
 }
@@ -239,6 +241,12 @@ type TicketSummaryDto {
   isOverdue: Boolean
 }
 
+type TicketTaskProgressDto {
+  ticketId: UUID!
+  totalTasks: Int!
+  completedTasks: Int!
+}
+
 type TrendPointDto {
   periodStartUtc: DateTime!
   created: Int!
@@ -321,6 +329,11 @@ enum TicketActivityType {
   SLA_CYCLE_STARTED
   SLA_CYCLE_COMPLETED
   ATTACHMENT_ADDED
+  TASK_CREATED
+  TASK_DETAILS_UPDATED
+  TASK_STATUS_CHANGED
+  TASK_ASSIGNED
+  TASKS_REORDERED
 }
 
 enum TicketPriority {

@@ -909,6 +909,76 @@ namespace OpsFlow.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OpsFlow.Domain.Tickets.TicketTask", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AssigneeMembershipId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedByMembershipId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TicketId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedByMembershipId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "CreatedByMembershipId");
+
+                    b.HasIndex("TenantId", "UpdatedByMembershipId");
+
+                    b.HasIndex("TenantId", "AssigneeMembershipId", "Status");
+
+                    b.HasIndex("TenantId", "TicketId", "SortOrder");
+
+                    b.ToTable("TicketTasks", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_TicketTasks_SortOrder", "\"SortOrder\" > 0");
+
+                            t.HasCheckConstraint("CK_TicketTasks_Status", "\"Status\" IN ('Todo','InProgress','Done')");
+
+                            t.HasCheckConstraint("CK_TicketTasks_Title", "length(trim(\"Title\")) > 0");
+                        });
+                });
+
             modelBuilder.Entity("OpsFlow.Domain.Users.RefreshToken", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1374,6 +1444,42 @@ namespace OpsFlow.Infrastructure.Persistence.Migrations
                         .HasPrincipalKey("TenantId", "Id")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("OpsFlow.Domain.Tickets.TicketTask", b =>
+                {
+                    b.HasOne("OpsFlow.Domain.Tenants.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpsFlow.Domain.Tenants.Membership", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "AssigneeMembershipId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpsFlow.Domain.Tenants.Membership", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "CreatedByMembershipId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpsFlow.Domain.Tickets.Ticket", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "TicketId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpsFlow.Domain.Tenants.Membership", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "UpdatedByMembershipId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("OpsFlow.Domain.Users.RefreshToken", b =>

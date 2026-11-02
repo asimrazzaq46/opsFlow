@@ -18,7 +18,7 @@ public sealed class TenantSettings : ITenantOwned
     public Guid TenantId { get; private set; }
     public string TicketNumberPrefix { get; private set; }
 
-    // UPDATED: Milestone 5 - tenant ka authoritative reporting timezone (IANA id); validation Application layer mein, yahan sirf store
+    // Authoritative tenant reporting timezone (IANA id); validated in the Application layer, only stored here.
     public string ReportingTimeZone { get; private set; }
     public DateTime CreatedAtUtc { get; private set; }
     public DateTime UpdatedAtUtc { get; private set; }

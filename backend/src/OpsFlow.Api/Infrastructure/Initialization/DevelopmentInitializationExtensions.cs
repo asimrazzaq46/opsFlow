@@ -24,7 +24,7 @@ public static class DevelopmentInitializationExtensions
         )
         {
             services.AddScoped<IDevelopmentSeeder, DevelopmentAdminSeeder>();
-            services.AddScoped<IDevelopmentSeeder, DevelopmentTenantDefaultsSeeder>(); // UPDATED: demo tenant ke ticket defaults
+            services.AddScoped<IDevelopmentSeeder, DevelopmentTenantDefaultsSeeder>(); // ticket defaults for the demo tenant
             services.AddHostedService<DevelopmentInitializer>();
         }
 

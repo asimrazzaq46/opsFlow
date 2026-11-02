@@ -8,7 +8,7 @@ public sealed class DevelopmentInitializationOptions
     public bool Enabled { get; set; }
 }
 
-// UPDATED: Development startup par maujooda (already generated) migrations khud apply karne ka explicit switch
+// Explicit switch to apply existing (already generated) migrations on Development startup.
 public sealed class DatabaseStartupOptions
 {
     public const string SectionName = "Database";

@@ -29,12 +29,12 @@ public static class DependencyInjection
         services.AddDbContext<OpsFlowDbContext>(o => o.UseNpgsql(connectionString));
         services.AddScoped<IOpsFlowDbContext>(sp => sp.GetRequiredService<OpsFlowDbContext>());
         services.AddScoped<IUserDirectory, UserDirectory>();
-        // UPDATED: custom auth primitives (hasher, JWT, per-request session check)
+        // Custom auth primitives: password hasher, JWT, per-request session check
         services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
-        services.AddSingleton<ITokenService, TokenService>(); // UPDATED: access + refresh JWT ki ek service
+        services.AddSingleton<ITokenService, TokenService>(); // issues and validates both access and refresh JWTs
         services.AddScoped<ISessionValidator, SessionValidator>();
 
-        // UPDATED: attachments - private local storage (provider abstraction: IAttachmentStorage)
+        // Attachments: private local storage behind the IAttachmentStorage abstraction
         services.Configure<AttachmentOptions>(
             configuration.GetSection(AttachmentOptions.SectionName)
         );
@@ -43,7 +43,7 @@ public static class DependencyInjection
         services.Configure<SmtpOptions>(configuration.GetSection(SmtpOptions.SectionName));
         services.AddSingleton<IEmailService, SmtpEmailService>();
 
-        // UPDATED: Milestone 4 - outbox/SLA/background options, jobs and the optional Redis application cache
+        // Outbox/SLA/background options, jobs and the optional Redis application cache
         services.Configure<OutboxOptions>(configuration.GetSection(OutboxOptions.SectionName));
         services.Configure<SlaOptions>(configuration.GetSection(SlaOptions.SectionName));
         services.Configure<BackgroundOptions>(
@@ -61,7 +61,7 @@ public static class DependencyInjection
             && !string.IsNullOrWhiteSpace(redis)
         )
         {
-            // UPDATED: galat Cache:RedisConnectionString startup par saaf error deta hai (production config chhupti nahi); runtime outages phir bhi DB par fallback karte hain
+            // An invalid Cache:RedisConnectionString fails clearly at startup so a broken production config is not hidden; runtime outages still fall back to the database.
             try
             {
                 _ = RedisTenantCache.BuildConfiguration(redis);

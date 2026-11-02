@@ -32,7 +32,7 @@ public sealed partial class RedisTenantCache(
     private const string Prefix = "opsflow:cache:v1";
     private static readonly TimeSpan LogInterval = TimeSpan.FromSeconds(30);
 
-    // UPDATED: PublicationOnly: fail hua Connect cache nahi hota, agla access dobara try karta hai
+    // PublicationOnly: a failed Connect is not cached, so the next access retries.
     private readonly Lazy<ConnectionMultiplexer> _connection = new(
         () =>
             ConnectionMultiplexer.Connect(BuildConfiguration(options.Value.RedisConnectionString!)),

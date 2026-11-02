@@ -21,13 +21,11 @@ public static class DependencyInjection
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<TenantContext>();
         services.AddScoped<ITenantContext>(sp => sp.GetRequiredService<TenantContext>());
-        // UPDATED: custom authentication services (Identity hata diya gaya)
         services.AddScoped<UserTokenService>();
         services.AddScoped<SessionService>();
         services.AddScoped<AccountService>();
         services.AddScoped<OrganizationService>();
         services.AddScoped<ActorAccess>();
-        // UPDATED: Milestone 2 services
         services.AddScoped<TenantDefaultsService>();
         services.AddScoped<CustomerService>();
         services.AddScoped<TicketAccess>();
@@ -35,11 +33,10 @@ public static class DependencyInjection
         services.AddScoped<SlaPolicyService>();
         services.AddScoped<TicketService>();
         services.AddScoped<TicketWorkflowService>();
-        services.TryAddScoped<Analytics.IReportingTimeZoneProvider, Analytics.TenantReportingTimeZoneProvider>(); // UPDATED: tenant settings se timezone (UTC fallback)
+        services.TryAddScoped<Analytics.IReportingTimeZoneProvider, Analytics.TenantReportingTimeZoneProvider>(); // timezone from tenant settings (UTC fallback)
         services.AddScoped<Tenants.TenantSettingsService>();
-        services.AddScoped<Analytics.AnalyticsService>(); // UPDATED: Milestone 5 - dashboard/report aggregates
+        services.AddScoped<Analytics.AnalyticsService>();
         services.AddScoped<TicketAssignmentService>();
-        // UPDATED: Milestone 3 services
         services.AddScoped<TicketAudience>();
         services.AddScoped<NotificationService>();
         services.AddScoped<TicketMessageMapper>();
@@ -47,11 +44,12 @@ public static class DependencyInjection
         services.AddScoped<IChatConversationAuthorizer>(sp => sp.GetRequiredService<TicketChatStore>());
         services.AddScoped<IChatMessageStore<TicketMessageDto>>(sp => sp.GetRequiredService<TicketChatStore>());
         services.AddSingleton<IChatMessageValidator>(new DefaultChatMessageValidator(4000));
-        services.AddScoped<ChatService<TicketMessageDto>>(); // UPDATED: ticket chat generic OpsFlow.Realtime pipeline se
+        services.AddScoped<ChatService<TicketMessageDto>>(); // ticket chat runs through the generic OpsFlow.Realtime pipeline
         services.AddScoped<TicketMessageService>();
         services.AddScoped<TicketNoteMapper>();
         services.AddScoped<TicketNoteService>();
-        // UPDATED: Milestone 4 - transactional outbox (writer + dispatcher + per-channel handlers)
+        services.AddScoped<TicketTaskService>();
+        // Transactional outbox: writer + dispatcher + per-channel handlers
         services.AddScoped<OutboxWriter>();
         services.AddScoped<NotificationEligibility>();
         services.AddScoped<IOutboxChannelHandler, RealtimeOutboxHandler>();

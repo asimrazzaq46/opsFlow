@@ -18,7 +18,7 @@ public sealed class SmtpOptions
     public string FromAddress { get; set; } = "noreply@opsflow.local";
     public string FromName { get; set; } = "OpsFlow";
 
-    /// <summary>UPDATED: upper bound of ONE send (connect + transfer). Keep it well below Outbox:LeaseSeconds.</summary>
+    /// <summary>Upper bound of ONE send (connect + transfer). Keep it well below Outbox:LeaseSeconds.</summary>
     public int TimeoutSeconds { get; set; } = 30;
 }
 
@@ -51,7 +51,7 @@ internal sealed class SmtpEmailService(IOptions<SmtpOptions> options) : IEmailSe
             Subject = subject,
             Body = body,
         };
-        // UPDATED: SmtpClient.Timeout async sends par bharosemand nahi: apna deadline token (host shutdown phir bhi OperationCanceled)
+        // SmtpClient.Timeout is unreliable for async sends, so use our own deadline token (host shutdown still surfaces as OperationCanceled).
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(timeout);
         try

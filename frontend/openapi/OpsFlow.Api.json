@@ -2782,7 +2782,7 @@
           "Tenants"
         ],
         "summary": "Initialize tenant defaults",
-        "description": "Idempotently adds the missing default ticket settings, counter, categories and SLA policies (for tenants created before Milestone 2). Requires the Owner role in the tenant.",
+        "description": "Idempotently adds the missing default ticket settings, counter, categories and SLA policies (for tenants created before these defaults were provisioned at onboarding). Requires the Owner role in the tenant.",
         "operationId": "InitializeTenantDefaults",
         "parameters": [
           {
@@ -5287,6 +5287,649 @@
           }
         ]
       }
+    },
+    "/api/v1/tenants/{tenantId}/tickets/{ticketId}/tasks": {
+      "get": {
+        "tags": [
+          "Ticket tasks"
+        ],
+        "summary": "List child tasks",
+        "description": "Returns all internal child tasks of a ticket in their defined order, with a status summary and the caller's permissions. Owners and Managers see the tasks of every ticket; an Agent only while assigned to the parent ticket (otherwise 404). Customers are always rejected (403). Tasks are read-only while the ticket is Resolved or Closed.",
+        "operationId": "ListTicketTasks",
+        "parameters": [
+          {
+            "name": "ticketId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "path",
+            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketTaskListDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid Bearer access token.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no active membership with a sufficient role in this tenant.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The resource does not exist or is not visible to the caller.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Ticket tasks"
+        ],
+        "summary": "Create child task",
+        "description": "Creates an internal task in status Todo at the end of the list. Owners and Managers must choose assigneeMembershipId: an active Agent currently assigned to the ticket. An Agent assigned to the ticket creates tasks only for themselves (assigneeMembershipId may be omitted; another id is 403). Returns 409 when the ticket is Resolved/Closed or the agent is not assigned to the ticket, 400 for invalid input or an ineligible member. The parent ticket's status, SLA and assignments are never changed.",
+        "operationId": "CreateTicketTask",
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "path",
+            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "ticketId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTicketTaskRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketTaskDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid Bearer access token.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no active membership with a sufficient role in this tenant.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed; see `errors` for the offending fields.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The resource does not exist or is not visible to the caller.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/tickets/{ticketId}/tasks/{taskId}": {
+      "patch": {
+        "tags": [
+          "Ticket tasks"
+        ],
+        "summary": "Update child task details",
+        "description": "Replaces the title and description of a task (a null or empty description clears it). Owners and Managers may edit any task; an Agent only their own task (403 otherwise). The version must match the current task version, otherwise 409; 409 also when the ticket is Resolved/Closed.",
+        "operationId": "UpdateTicketTask",
+        "parameters": [
+          {
+            "name": "ticketId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "path",
+            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTicketTaskRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketTaskDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid Bearer access token.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no active membership with a sufficient role in this tenant.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed; see `errors` for the offending fields.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The resource does not exist or is not visible to the caller.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/tickets/{ticketId}/tasks/{taskId}/status": {
+      "patch": {
+        "tags": [
+          "Ticket tasks"
+        ],
+        "summary": "Change child task status",
+        "description": "Moves a task between Todo, InProgress and Done. Done records the completion time; leaving Done clears it. Owners and Managers may change any task; an Agent only their own task (403 otherwise). A stale version or a Resolved/Closed ticket is 409. Completing every task never resolves the parent ticket.",
+        "operationId": "ChangeTicketTaskStatus",
+        "parameters": [
+          {
+            "name": "ticketId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "path",
+            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeTicketTaskStatusRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketTaskDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid Bearer access token.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no active membership with a sufficient role in this tenant.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed; see `errors` for the offending fields.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The resource does not exist or is not visible to the caller.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/tickets/{ticketId}/tasks/{taskId}/assignee": {
+      "patch": {
+        "tags": [
+          "Ticket tasks"
+        ],
+        "summary": "Reassign child task",
+        "description": "Changes the responsible agent of a task. Requires the Owner or Manager role (403 otherwise). The new assignee must be an active Agent of the tenant (400) who is currently assigned to the ticket (409). A stale version or a Resolved/Closed ticket is 409. The previous and new assignee are recorded in the internal audit history.",
+        "operationId": "ReassignTicketTask",
+        "parameters": [
+          {
+            "name": "ticketId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "taskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "path",
+            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReassignTicketTaskRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketTaskDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid Bearer access token.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no active membership with a sufficient role in this tenant.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed; see `errors` for the offending fields.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The resource does not exist or is not visible to the caller.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/tickets/{ticketId}/tasks/order": {
+      "put": {
+        "tags": [
+          "Ticket tasks"
+        ],
+        "summary": "Reorder child tasks",
+        "description": "Atomically sets the order of ALL tasks of the ticket. Requires the Owner or Manager role (403 otherwise). Every task must appear exactly once with the version the client last saw: duplicates or ids of another ticket are 400; a missing task (created concurrently), a stale version or a Resolved/Closed ticket is 409. Returns the reordered list.",
+        "operationId": "ReorderTicketTasks",
+        "parameters": [
+          {
+            "name": "ticketId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "path",
+            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReorderTicketTasksRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketTaskListDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid Bearer access token.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no active membership with a sufficient role in this tenant.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed; see `errors` for the offending fields.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The resource does not exist or is not visible to the caller.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -5534,6 +6177,34 @@
           }
         }
       },
+      "ChangeTicketTaskStatusRequest": {
+        "required": [
+          "status",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TicketTaskStatus"
+              }
+            ]
+          },
+          "version": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "ConfirmEmailRequest": {
         "required": [
           "userId",
@@ -5671,6 +6342,32 @@
               "type": "string",
               "format": "uuid"
             }
+          }
+        }
+      },
+      "CreateTicketTaskRequest": {
+        "required": [
+          "title",
+          "description",
+          "assigneeMembershipId"
+        ],
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "assigneeMembershipId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
           }
         }
       },
@@ -6359,6 +7056,31 @@
           }
         }
       },
+      "ReassignTicketTaskRequest": {
+        "required": [
+          "assigneeMembershipId",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "assigneeMembershipId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "version": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "RefreshRequest": {
         "required": [
           "refreshToken"
@@ -6403,6 +7125,20 @@
               "string"
             ],
             "format": "int32"
+          }
+        }
+      },
+      "ReorderTicketTasksRequest": {
+        "required": [
+          "tasks"
+        ],
+        "type": "object",
+        "properties": {
+          "tasks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TicketTaskOrderItem"
+            }
           }
         }
       },
@@ -6764,7 +7500,12 @@
           "Reopened",
           "SlaCycleStarted",
           "SlaCycleCompleted",
-          "AttachmentAdded"
+          "AttachmentAdded",
+          "TaskCreated",
+          "TaskDetailsUpdated",
+          "TaskStatusChanged",
+          "TaskAssigned",
+          "TasksReordered"
         ]
       },
       "TicketCategoryDto": {
@@ -7104,6 +7845,200 @@
           }
         }
       },
+      "TicketTaskDto": {
+        "required": [
+          "id",
+          "ticketId",
+          "title",
+          "description",
+          "status",
+          "sortOrder",
+          "assigneeMembershipId",
+          "assigneeDisplayName",
+          "isAssigneeEligible",
+          "createdAtUtc",
+          "updatedAtUtc",
+          "completedAtUtc",
+          "version",
+          "canEdit",
+          "canChangeStatus"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "ticketId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/TicketTaskStatus"
+          },
+          "sortOrder": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "assigneeMembershipId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "assigneeDisplayName": {
+            "type": "string"
+          },
+          "isAssigneeEligible": {
+            "type": "boolean"
+          },
+          "createdAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completedAtUtc": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "version": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "canEdit": {
+            "type": "boolean"
+          },
+          "canChangeStatus": {
+            "type": "boolean"
+          }
+        }
+      },
+      "TicketTaskListDto": {
+        "required": [
+          "tasks",
+          "summary",
+          "isReadOnly",
+          "canCreate",
+          "canManage"
+        ],
+        "type": "object",
+        "properties": {
+          "tasks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TicketTaskDto"
+            }
+          },
+          "summary": {
+            "$ref": "#/components/schemas/TicketTaskSummaryDto"
+          },
+          "isReadOnly": {
+            "type": "boolean"
+          },
+          "canCreate": {
+            "type": "boolean"
+          },
+          "canManage": {
+            "type": "boolean"
+          }
+        }
+      },
+      "TicketTaskOrderItem": {
+        "required": [
+          "taskId",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "taskId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "version": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "TicketTaskStatus": {
+        "enum": [
+          "Todo",
+          "InProgress",
+          "Done"
+        ]
+      },
+      "TicketTaskSummaryDto": {
+        "required": [
+          "totalTasks",
+          "todoTasks",
+          "inProgressTasks",
+          "completedTasks"
+        ],
+        "type": "object",
+        "properties": {
+          "totalTasks": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "todoTasks": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "inProgressTasks": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "completedTasks": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "TransitionRequest": {
         "required": [
           "status",
@@ -7215,6 +8150,34 @@
               "string"
             ],
             "format": "uuid"
+          },
+          "version": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "UpdateTicketTaskRequest": {
+        "required": [
+          "title",
+          "description",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "version": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
@@ -7344,6 +8307,9 @@
     },
     {
       "name": "Ticket notes"
+    },
+    {
+      "name": "Ticket tasks"
     }
   ]
 }

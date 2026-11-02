@@ -43,6 +43,33 @@ public sealed class TicketAudience(IOpsFlowDbContext db)
         return await managers.Union(agents).ToListAsync(ct);
     }
 
+    /// <summary>
+    /// Audience of internal child-task data: active Owners/Managers and only the Agents that are CURRENTLY eligible assignees
+    /// (never the creating agent by itself, never the customer).
+    /// </summary>
+    public async Task<List<Guid>> TaskStaffAsync(Guid ticketId, CancellationToken ct) =>
+        await db
+            .Memberships.AsNoTracking()
+            .Where(m =>
+                m.Status == MembershipStatus.Active
+                && db.Users.Any(u => u.Id == m.UserId && u.Status == UserStatus.Active)
+                && (
+                    m.Role == TenantRole.TenantOwner
+                    || m.Role == TenantRole.Manager
+                    || (
+                        m.Role == TenantRole.Agent
+                        && db.TicketAssignments.Any(a =>
+                            a.TicketId == ticketId
+                            && a.MembershipId == m.Id
+                            && a.UnassignedAtUtc == null
+                        )
+                    )
+                )
+            )
+            .Select(m => m.UserId)
+            .Distinct()
+            .ToListAsync(ct);
+
     public async Task<Guid?> CustomerAsync(Guid? customerId, CancellationToken ct)
     {
         if (customerId is null)

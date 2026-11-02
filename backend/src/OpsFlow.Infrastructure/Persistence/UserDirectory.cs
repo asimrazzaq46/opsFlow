@@ -5,7 +5,6 @@ namespace OpsFlow.Infrastructure.Persistence;
 
 internal sealed class UserDirectory(OpsFlowDbContext db) : IUserDirectory
 {
-    // UPDATED: ab domain User table se (Identity users hata diye)
     public async Task<IReadOnlyDictionary<Guid, UserSummary>> GetAsync(
         IReadOnlyCollection<Guid> userIds,
         CancellationToken cancellationToken

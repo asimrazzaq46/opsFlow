@@ -158,7 +158,7 @@ public sealed class TicketChatStore(
             new TicketMessageEvent(ticketId, message.Id),
             $"chat:{message.Id}",
             OutboxChannels.Realtime
-        ); // UPDATED: live push outbox se
+        ); // live push goes through the outbox
         await notifications.StageAsync(
             ticket,
             NotificationType.MessageReceived,
@@ -185,7 +185,7 @@ public sealed class TicketChatStore(
             throw AppException.Conflict("The ticket was changed by someone else.", "Please retry.");
         }
 
-        // UPDATED: deliveries khali: realtime push outbox dispatcher karta hai (duplicate direct publish nahi)
+        // No deliveries: the outbox dispatcher does the realtime push, so a direct publish would duplicate it.
         return new ChatAppendResult<TicketMessageDto>(
             (await mapper.MapAsync([message], actor.IsCustomer, CancellationToken.None))[0],
             false,

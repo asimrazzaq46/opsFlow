@@ -63,7 +63,7 @@ internal sealed class TicketConfiguration : IEntityTypeConfiguration<Ticket>
             t.Id,
         });
         b.HasIndex(t => new { t.TenantId, t.CreatedByUserId });
-        // UPDATED: default list / Kanban order = UpdatedAtUtc DESC, Number ASC (TicketService.Order "updatedAt"); isi order ka index
+        // Index matching the default list / Kanban order: UpdatedAtUtc DESC, Number ASC (TicketService.Order "updatedAt").
         b.HasIndex(t => new { t.TenantId, t.UpdatedAtUtc, t.Number }).IsDescending(false, true, false);
     }
 }

@@ -94,7 +94,7 @@ public sealed class TicketNoteService(
             new TicketNoteEvent(ticketId, note.Id),
             $"note:{note.Id}",
             OutboxChannels.Realtime
-        ); // UPDATED: staff push outbox se
+        ); // staff push goes through the outbox
         await notifications.StageAsync(
             ticket,
             NotificationType.NoteAdded,
@@ -121,7 +121,7 @@ public sealed class TicketNoteService(
             throw AppException.Conflict("The ticket was changed by someone else.", "Please retry.");
         }
 
-        // UPDATED: commit ho chuka; staff push outbox dispatcher karta hai
+        // Committed; the outbox dispatcher does the staff push.
         return new WriteResult<TicketNoteDto>(
             (await MapAsync([note], CancellationToken.None))[0],
             true

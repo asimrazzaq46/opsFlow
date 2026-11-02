@@ -35,7 +35,7 @@ public sealed class Ticket : ITenantOwned
     public int ActivitySequence { get; private set; }
     public int CycleCount { get; private set; }
 
-    // UPDATED: messages/notes ka per-ticket sequence counter (row-lock wala ExecuteUpdate allocate karta hai, EF isay kabhi nahi likhta)
+    // Per-ticket sequence counter shared by messages and notes; allocated by a row-locking ExecuteUpdate, never written by EF.
     public int MessageSequence { get; private set; }
 
     public static Ticket Create(

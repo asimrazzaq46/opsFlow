@@ -29,7 +29,7 @@ public sealed partial class CustomerService(
     )
     {
         await RequireManagerAsync(ct);
-        (page, pageSize, var skip) = Paging.Normalize(page, pageSize, MaxPageSize); // UPDATED: overflow-safe paging
+        (page, pageSize, var skip) = Paging.Normalize(page, pageSize, MaxPageSize); // overflow-safe paging
 
         var query = db.Customers.AsNoTracking();
         if (isActive is { } active)
@@ -87,7 +87,7 @@ public sealed partial class CustomerService(
         await using var transaction = await actor.BeginManagerAsync(
             "Only Owners and Managers can manage customers.",
             ct
-        ); // UPDATED: authorization commit tak valid
+        ); // authorization stays valid until commit
         var normalized = EmailAddress.Normalize(email);
         if (await db.Customers.AnyAsync(c => c.NormalizedEmail == normalized, ct))
         {

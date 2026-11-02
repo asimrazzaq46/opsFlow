@@ -216,7 +216,7 @@ public sealed partial class AccountService(
                 .Select(t => new { t.Id, t.OwnerChangeStamp })
                 .ToListAsync(ct);
 
-            // UPDATED: sirf USABLE Owners gine jate hain (active membership + active user)
+            // Only USABLE Owners count (active membership + active user).
             var soleOwner = await db.UsableOwners(allTenants: true)
                 .Where(m => m.UserId == userId)
                 .AnyAsync(

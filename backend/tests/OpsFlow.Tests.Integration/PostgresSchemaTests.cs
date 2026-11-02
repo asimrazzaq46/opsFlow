@@ -123,10 +123,10 @@ public class PostgresSchemaTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal("timestamp with time zone", Assert.Single(types));
     }
 
-    // ---- Milestone 2 tables: tenant-consistent composite FKs, uniqueness and check constraints as PostgreSQL enforces them ----
+    // ---- Ticket tables: tenant-consistent composite FKs, uniqueness and check constraints as PostgreSQL enforces them ----
 
     private static string InsertTicket(Guid tenantId, long number, Guid categoryId, Guid createdBy, string status = "Open") =>
-        $"INSERT INTO \"Tickets\" (\"Id\",\"TenantId\",\"Number\",\"Title\",\"Description\",\"Priority\",\"CategoryId\",\"CreatedByUserId\",\"Status\",\"CreatedAtUtc\",\"UpdatedAtUtc\",\"Version\",\"ActivitySequence\",\"CycleCount\",\"MessageSequence\") VALUES ('{Guid.NewGuid()}','{tenantId}',{number},'t','d','Low','{categoryId}','{createdBy}','{status}',NOW(),NOW(),1,0,0,0)"; // UPDATED: naya MessageSequence column NOT NULL hai
+        $"INSERT INTO \"Tickets\" (\"Id\",\"TenantId\",\"Number\",\"Title\",\"Description\",\"Priority\",\"CategoryId\",\"CreatedByUserId\",\"Status\",\"CreatedAtUtc\",\"UpdatedAtUtc\",\"Version\",\"ActivitySequence\",\"CycleCount\",\"MessageSequence\") VALUES ('{Guid.NewGuid()}','{tenantId}',{number},'t','d','Low','{categoryId}','{createdBy}','{status}',NOW(),NOW(),1,0,0,0)"; // MessageSequence is NOT NULL
 
     private static string InsertAssignment(Guid tenantId, Guid ticketId, Guid membershipId, Guid byMembershipId) =>
         $"INSERT INTO \"TicketAssignments\" (\"Id\",\"TenantId\",\"TicketId\",\"MembershipId\",\"AssignedByMembershipId\",\"AssignedAtUtc\") VALUES ('{Guid.NewGuid()}','{tenantId}','{ticketId}','{membershipId}','{byMembershipId}',NOW())";
@@ -193,7 +193,7 @@ public class PostgresSchemaTests(ApiFactory factory) : IClassFixture<ApiFactory>
             $"INSERT INTO \"TicketCategories\" (\"Id\",\"TenantId\",\"Name\",\"NormalizedName\",\"IsActive\",\"CreatedAtUtc\",\"UpdatedAtUtc\") VALUES ('{Guid.NewGuid()}','{a.Org.Id}','general','general',TRUE,NOW(),NOW())"));
     }
 
-    // ---- Milestone 3 tables ----
+    // ---- Chat, notes, attachments and notification tables ----
 
     [PostgresOnlyFact]
     public async Task Chat_notes_attachments_and_notifications_are_tenant_consistent_unique_and_checked()

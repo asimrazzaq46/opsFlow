@@ -20,7 +20,7 @@ public sealed class TicketMessageService(
 {
     private const int MaxPageSize = 100;
 
-    // UPDATED: pehle ye service seedha store+publish karti thi; ab generic ChatService pipeline use hoti hai (sender sirf authenticated user)
+    // Runs through the generic ChatService pipeline; the sender is always the authenticated user.
     public async Task<WriteResult<TicketMessageDto>> SendAsync(
         Guid ticketId,
         SendMessageCommand cmd,

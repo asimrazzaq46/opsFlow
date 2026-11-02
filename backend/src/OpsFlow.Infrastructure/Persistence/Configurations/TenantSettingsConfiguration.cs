@@ -20,7 +20,7 @@ internal sealed class TenantSettingsConfiguration : IEntityTypeConfiguration<Ten
         b.HasKey(s => s.TenantId);
         b.Property(s => s.TenantId).ValueGeneratedNever();
         b.Property(s => s.TicketNumberPrefix).HasMaxLength(10).IsRequired();
-        // UPDATED: varchar(64) NOT NULL DEFAULT 'UTC' - purane tenants migration se UTC par rehte hain
+        // varchar(64) NOT NULL DEFAULT 'UTC': existing tenants stay on UTC through the migration.
         b.Property(s => s.ReportingTimeZone)
             .HasMaxLength(TenantSettings.MaxReportingTimeZoneLength)
             .IsRequired()

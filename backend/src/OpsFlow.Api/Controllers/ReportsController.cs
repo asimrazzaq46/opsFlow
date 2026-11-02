@@ -45,7 +45,7 @@ public sealed class ReportsController(AnalyticsService analytics) : ControllerBa
         );
         Response.Headers["X-Export-Truncated"] = csv.Truncated ? "true" : "false";
         Response.Headers.CacheControl = "no-store";
-        // UPDATED: rows database reader se seedha response mein stream hoti hain (poora CSV memory mein nahi banta)
+        // Rows stream from the database reader straight into the response; the full CSV is never buffered in memory.
         Response.ContentType = "text/csv; charset=utf-8";
         Response.Headers.ContentDisposition = new System.Net.Mime.ContentDisposition { FileName = csv.FileName }.ToString();
         await csv.WriteAsync(Response.Body, ct);

@@ -16,19 +16,19 @@ if (!builder.Environment.IsDevelopment())
     builder.Logging.AddJsonConsole();
 }
 
-builder.Services.AddApiControllers(); // UPDATED: Minimal APIs ki jagah MVC Controllers
-builder.Services.AddProblemDetails(ProblemDetailsSetup.Configure); // UPDATED: every error body have code + traceId
+builder.Services.AddApiControllers();
+builder.Services.AddProblemDetails(ProblemDetailsSetup.Configure); // every error body carries code + traceId
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddOpsFlowOpenApi(); // Bearer security scheme + endpoint documentation
 
 builder.Services.Configure<AppOptions>(builder.Configuration.GetSection(AppOptions.SectionName));
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
-// UPDATED: Milestone 3 - reusable realtime library (Redis backplane sirf config se, warna in-process)
+// Redis backplane only when configured; otherwise in-process.
 builder.Services.AddRealtime(o => builder.Configuration.GetSection(RealtimeOptions.SectionName).Bind(o));
 builder.Services.AddApiSecurity(builder.Configuration, builder.Environment);
-builder.Services.AddOpsFlowGraphQl(builder.Environment); // UPDATED: Milestone 5 - GraphQL read layer
-builder.Services.AddOpsFlowBackground(builder.Configuration); // UPDATED: Milestone 4 - Hangfire worker sirf Background:ServerEnabled par
+builder.Services.AddOpsFlowGraphQl(builder.Environment); // GraphQL read layer
+builder.Services.AddOpsFlowBackground(builder.Configuration); // Hangfire worker runs only when Background:ServerEnabled is set
 builder.Services.AddDevelopmentInitialization(builder.Configuration, builder.Environment);
 
 var app = builder.Build();
@@ -51,10 +51,10 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi().AllowAnonymous();
 }
 
-app.UseOpsFlowHangfireDashboard(); // UPDATED: default off; loopback-only, production mein explicit opt-in
-app.MapControllers(); // UPDATED: saare endpoints Controllers/ se
-app.MapOpsFlowGraphQl(app.Environment); // UPDATED: /api/v1/tenants/{tenantId}/graphql (read-only, same membership policy as REST)
-app.MapRealtimeHub(); // UPDATED: authenticated SignalR hub (/hubs/realtime)
+app.UseOpsFlowHangfireDashboard(); // off by default; loopback-only, explicit opt-in in production
+app.MapControllers();
+app.MapOpsFlowGraphQl(app.Environment); // /api/v1/tenants/{tenantId}/graphql (read-only, same membership policy as REST)
+app.MapRealtimeHub(); // authenticated SignalR hub (/hubs/realtime)
 
 app.Run();
 

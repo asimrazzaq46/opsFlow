@@ -160,7 +160,7 @@ public class RealtimeTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(HttpStatusCode.Forbidden, (await b.Owner.GetAsync(a.Url($"tickets/{ticket.Id}/messages"))).StatusCode);
     }
 
-    // UPDATED: Milestone 5 hardening - lifecycle notifications (outbox -> realtime) are tenant scoped too
+    // Lifecycle notifications (outbox -> realtime) are tenant scoped too
     [Fact]
     public async Task Ticket_lifecycle_notifications_never_reach_another_tenants_staff()
     {

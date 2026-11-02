@@ -57,7 +57,7 @@ public sealed partial class OutboxDispatcher(
         {
             ct.ThrowIfCancellationRequested();
             var token = Guid.NewGuid();
-            // UPDATED: lease/claim ka waqt har claim par taaza (batch-start ka purana `now` nahi): pehle ke slow events ke baad bhi lease poori milti hai
+            // Fresh claim time per claim (not the batch-start `now`), so slow earlier events never shorten this lease.
             var claimTime = Now;
             var lease = claimTime.AddSeconds(o.LeaseSeconds);
             var claimed = await db
@@ -115,7 +115,7 @@ public sealed partial class OutboxDispatcher(
                                 $"No handler for channel {channel}."
                             )
                     ).HandleAsync(message, ct);
-                    // UPDATED: channel complete hone par lease bhi renew hoti hai (sirf claim-token ke owner ke liye): ek event ke kai channels ho to lease beech mein expire nahi hoti
+                    // Renew the lease after each completed channel (claim-token owner only) so it cannot expire mid-event when there are several channels.
                     var renewed = Now.AddSeconds(options.Value.LeaseSeconds);
                     await db
                         .OutboxMessages.Where(m => m.Id == id && m.ClaimToken == token)

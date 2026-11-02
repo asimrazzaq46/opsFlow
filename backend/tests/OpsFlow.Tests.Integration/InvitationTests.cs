@@ -200,7 +200,7 @@ public class InvitationTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var manager = await ApiClient.AddMemberAsync(factory, owner, org.Id, "Manager");
         var agent = await ApiClient.AddMemberAsync(factory, owner, org.Id, "Agent");
 
-        // UPDATED: Customer role ab invite ho sakta hai: Owner/Manager ke liye, Agent ke liye nahi
+        // Owners and Managers may invite Customers; Agents may not
         var byOwner = await owner.PostAsync($"/api/v1/tenants/{org.Id}/invitations", new { email = $"c1-{Guid.NewGuid():N}@example.com", role = "Customer" });
         var byManager = await manager.PostAsync($"/api/v1/tenants/{org.Id}/invitations", new { email = $"c2-{Guid.NewGuid():N}@example.com", role = "Customer" });
         var byAgent = await agent.PostAsync($"/api/v1/tenants/{org.Id}/invitations", new { email = $"c3-{Guid.NewGuid():N}@example.com", role = "Customer" });

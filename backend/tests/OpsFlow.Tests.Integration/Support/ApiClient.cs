@@ -29,6 +29,8 @@ public sealed class ApiClient(HttpClient http)
 
     public Task<HttpResponseMessage> PutAsync(string url, object body) => http.PutAsJsonAsync(url, body);
 
+    public Task<HttpResponseMessage> PatchAsync(string url, object body) => http.PatchAsJsonAsync(url, body);
+
     public Task<HttpResponseMessage> DeleteAsync(string url) => http.DeleteAsync(url);
 
     public async Task<T> ReadAsync<T>(HttpResponseMessage response)

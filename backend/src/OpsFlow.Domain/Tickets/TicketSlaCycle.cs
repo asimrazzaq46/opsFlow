@@ -24,13 +24,13 @@ public sealed class TicketSlaCycle : ITenantOwned
     public DateTime? ResponseDueAtUtc { get; private set; }
     public DateTime ResolutionDueAtUtc { get; private set; }
 
-    /// <summary>Set by the future customer-visible reply (Milestone 3); never fabricated here.</summary>
+    /// <summary>Set by the first customer-visible staff reply; never fabricated here.</summary>
     public DateTime? FirstResponseAtUtc { get; private set; }
 
     /// <summary>Completion instant of the resolution target; null while the cycle is active.</summary>
     public DateTime? ResolvedAtUtc { get; private set; }
 
-    // UPDATED: Milestone 4 - idempotency markers of the SLA monitor (set once, atomically; never cleared). A breach marker is a persisted record, the state itself stays derived from the instants above.
+    // Idempotency markers of the SLA monitor (set once, atomically; never cleared). A breach marker is a persisted record, the state itself stays derived from the instants above.
     public DateTime? ResponseWarnedAtUtc { get; private set; }
     public DateTime? ResponseBreachedAtUtc { get; private set; }
     public DateTime? ResolutionWarnedAtUtc { get; private set; }

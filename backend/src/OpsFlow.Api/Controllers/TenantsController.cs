@@ -92,14 +92,14 @@ public sealed class TenantsController(
     [Authorize(Policy = AuthPolicies.TenantOwner)]
     [EndpointSummary("Initialize tenant defaults")]
     [EndpointDescription(
-        "Idempotently adds the missing default ticket settings, counter, categories and SLA policies (for tenants created before Milestone 2). Requires the Owner role in the tenant."
+        "Idempotently adds the missing default ticket settings, counter, categories and SLA policies (for tenants created before these defaults were provisioned at onboarding). Requires the Owner role in the tenant."
     )]
     public async Task<ActionResult<DefaultsResult>> InitializeTenantDefaults(CancellationToken ct)
     {
         return Ok(new DefaultsResult(await defaults.EnsureAsync(ct)));
     }
 
-    // UPDATED: Milestone 5 - tenant reporting timezone (authoritative; browser timezone sirf UI suggestion hai)
+    // The tenant reporting timezone is authoritative; the browser timezone is only a UI suggestion.
     [HttpGet("settings", Name = "GetTenantSettings")]
     [Authorize(Policy = AuthPolicies.TenantStaff)]
     [EndpointSummary("Get organization settings")]

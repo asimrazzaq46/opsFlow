@@ -43,7 +43,7 @@ const targetOut = check ? join(work, 'generated') : outDir;
 try {
   run('dotnet', [
     'build', apiProject, '--no-incremental', '-nologo', '-v', 'q',
-    // UPDATED: optional alag build configuration (jab IDE ne default bin folders lock kiye hon): APIGEN_CONFIGURATION=Verify
+    // Optional separate build configuration for when the IDE locks the default bin folders: APIGEN_CONFIGURATION=Verify
     ...(process.env.APIGEN_CONFIGURATION ? ['-c', process.env.APIGEN_CONFIGURATION] : []),
     '-p:OpenApiGenerateDocuments=true', `-p:OpenApiSpecOutputDir=${targetSpecDir}`,
   ]);

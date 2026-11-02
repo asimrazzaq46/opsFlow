@@ -11,7 +11,7 @@ namespace OpsFlow.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/tenants/{tenantId:guid}/tickets")]
-[Authorize(Policy = AuthPolicies.TenantMember)] // UPDATED: kaun kya dekh/badal sakta hai, wo services DB state se role-wise tay karti hain
+[Authorize(Policy = AuthPolicies.TenantMember)] // services decide per role, from DB state, who may see or change what
 public sealed class TicketsController(TicketService tickets, TicketWorkflowService workflow)
     : ControllerBase
 {

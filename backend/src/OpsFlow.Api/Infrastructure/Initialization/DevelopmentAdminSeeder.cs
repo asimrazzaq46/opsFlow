@@ -34,7 +34,6 @@ public sealed partial class DevelopmentAdminSeeder(
             return;
         }
 
-        // UPDATED: Identity UserManager ki jagah domain User table
         var normalized = EmailAddress.Normalize(seed.AdminEmail);
         var existing = await db
             .Users.AsNoTracking()

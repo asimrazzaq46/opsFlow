@@ -25,7 +25,7 @@ public sealed partial class InvitationService(
 {
     private const int MaxAttempts = 3;
 
-    // UPDATED: invitation ki expiry approved requirement ke mutabiq 72 ghante
+    // 72-hour expiry per the approved requirement.
     private static readonly TimeSpan Lifetime = TimeSpan.FromHours(72);
 
     /// <summary>Permission matrix: Owners manage invitations of any staff role; Managers only Agent invitations.</summary>
@@ -50,7 +50,7 @@ public sealed partial class InvitationService(
         var normalized = Invitation.Normalize(address);
         for (var attempt = 0; attempt < MaxAttempts; attempt++)
         {
-            // UPDATED: role snapshot ki jagah current DB authorization; stamp pehle read, commit par rotate
+            // Current DB authorization, not a role snapshot; the stamp is read first and rotated on commit.
             var tenant = await db.Tenants.SingleAsync(ct);
             var actorRole = await actor.RequireActiveRoleAsync(ct);
             if (!CanManage(actorRole, role))
@@ -128,7 +128,7 @@ public sealed partial class InvitationService(
     {
         for (var attempt = 0; attempt < MaxAttempts; attempt++)
         {
-            // UPDATED: revoke bhi current authorization + stamp protocol par (Manager sirf Agent invitations)
+            // Revoke follows the same current-authorization + stamp protocol (Managers only Agent invitations).
             var tenant = await db.Tenants.SingleAsync(ct);
             var actorRole = await actor.RequireActiveRoleAsync(ct);
             var invitation =
@@ -166,7 +166,6 @@ public sealed partial class InvitationService(
     /// </summary>
     public async Task<OrganizationDto> AcceptAsync(string token, CancellationToken ct)
     {
-        // UPDATED: accept ab idempotent hai - retry ya concurrent request par same user ko existing membership milti hai
         var now = clock.GetUtcNow().UtcDateTime;
         var hash = SecureToken.Hash(token);
         var userId = currentUser.UserId;
@@ -197,7 +196,7 @@ public sealed partial class InvitationService(
             );
         }
 
-        // UPDATED: inviter ki authority abhi bhi valid honi chahiye (demote/suspend/deactivate ke baad purani invitation kaam nahi karti)
+        // The inviter must still be authorized; after demotion/suspension/deactivation an old invitation no longer works.
         if (!await InviterStillAuthorizedAsync(invitation, ct))
         {
             throw InvalidInvitation();
@@ -207,7 +206,7 @@ public sealed partial class InvitationService(
         {
             if (await db.Memberships.AnyAsync(m => m.UserId == userId, ct))
             {
-                // UPDATED: pehle se member ho to existing membership (role unchanged) milti hai aur invitation consume ho jati hai
+                // An existing member keeps their membership (role unchanged) and the invitation is consumed.
                 var existing =
                     await ExistingAsync(invitation.TenantId, userId, ct)
                     ?? throw AppException.Conflict(

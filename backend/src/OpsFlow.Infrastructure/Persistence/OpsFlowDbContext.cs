@@ -14,7 +14,7 @@ using OpsFlow.Domain.Users;
 
 namespace OpsFlow.Infrastructure.Persistence;
 
-// UPDATED: IdentityUserContext hata diya; ab plain DbContext + domain-owned User/session/token entities
+// Plain DbContext (no ASP.NET Core Identity); users, sessions and tokens are domain-owned entities.
 public sealed class OpsFlowDbContext(
     DbContextOptions<OpsFlowDbContext> options,
     ITenantContext tenantContext
@@ -37,14 +37,15 @@ public sealed class OpsFlowDbContext(
     public DbSet<TenantSettings> Settings => Set<TenantSettings>();
     public DbSet<TenantTicketCounter> TicketCounters => Set<TenantTicketCounter>();
 
-    // UPDATED: Milestone 3 - chat, internal notes, attachments, notifications
     public DbSet<TicketMessage> TicketMessages => Set<TicketMessage>();
     public DbSet<TicketNote> TicketNotes => Set<TicketNote>();
     public DbSet<TicketAttachment> TicketAttachments => Set<TicketAttachment>();
     public DbSet<Notification> Notifications => Set<Notification>();
 
-    // UPDATED: Milestone 4 - no query filter on purpose: the dispatcher claims across tenants and then runs each event inside its own tenant scope; writes stay tenant-guarded by SaveChanges
+    // No query filter on purpose: the dispatcher claims across tenants and then runs each event inside its own tenant scope; writes stay tenant-guarded by SaveChanges
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+
+    public DbSet<TicketTask> TicketTasks => Set<TicketTask>();
 
     // Evaluated per query by EF; null (no tenant resolved) matches nothing, so tenant data fails closed.
     private Guid? CurrentTenantId => tenantContext.TenantId;
@@ -57,7 +58,7 @@ public sealed class OpsFlowDbContext(
         modelBuilder.Entity<Tenant>().HasQueryFilter(t => t.Id == CurrentTenantId);
         modelBuilder.Entity<Membership>().HasQueryFilter(m => m.TenantId == CurrentTenantId);
         modelBuilder.Entity<Invitation>().HasQueryFilter(i => i.TenantId == CurrentTenantId);
-        // UPDATED: Milestone 2 ke tenant-owned entities - har ek par automatic tenant filter (tenant na ho to koi row nahi)
+        // Every tenant-owned entity gets a tenant filter; without a resolved tenant no rows match.
         modelBuilder.Entity<Customer>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
         modelBuilder.Entity<TicketCategory>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
         modelBuilder.Entity<Ticket>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
@@ -73,6 +74,7 @@ public sealed class OpsFlowDbContext(
         modelBuilder.Entity<TicketNote>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
         modelBuilder.Entity<TicketAttachment>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
         modelBuilder.Entity<Notification>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<TicketTask>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
     }
 
     // Only the expected unique constraint is recognised; every other DbUpdateException must propagate.
@@ -149,10 +151,10 @@ public sealed class OpsFlowDbContext(
         };
     }
 
-    // UPDATED: Milestone 5 - analytics DB-side TimeSpan math sirf PostgreSQL par translate hota hai (SQLite sirf test provider hai)
+    // Analytics' DB-side TimeSpan math translates only on PostgreSQL (SQLite is just the test provider).
     public bool IsPostgreSql => Database.IsNpgsql();
 
-    // UPDATED: concurrent ticket writers ka deadlock victim 500 nahi, conflict hai
+    // A deadlock victim among concurrent ticket writers is a conflict, not a 500.
     public bool IsDeadlock(Exception exception)
     {
         for (var e = exception; e is not null; e = e.InnerException)
@@ -170,7 +172,7 @@ public sealed class OpsFlowDbContext(
         CancellationToken cancellationToken = default
     ) => Database.BeginTransactionAsync(cancellationToken);
 
-    // UPDATED: actor/assignee rows par FOR SHARE lock (transaction ke end tak) - authorization commit boundary tak valid rahe
+    // FOR SHARE lock on actor/assignee rows until the transaction ends, so the authorization stays valid up to commit.
     public async Task LockMembershipsAsync(
         IReadOnlyCollection<Guid> membershipIds,
         CancellationToken cancellationToken = default

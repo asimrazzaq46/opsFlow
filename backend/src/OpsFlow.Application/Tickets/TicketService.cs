@@ -33,7 +33,7 @@ public sealed partial class TicketService(
     /// </summary>
     public async Task<TicketDetailDto> CreateAsync(CreateTicketCommand cmd, CancellationToken ct)
     {
-        // UPDATED: actor aur (agar hon to) assignees ki rows lock ho kar transaction shuru; commit tak authorization/eligibility nahi badal sakti
+        // Starts the transaction with the actor's and any assignees' rows locked, so authorization/eligibility cannot change before commit.
         var (transaction, actor) = await access.BeginAuthorizedAsync(cmd.AssigneeMembershipIds, ct);
         await using var _ = transaction;
         var category =
@@ -180,7 +180,7 @@ public sealed partial class TicketService(
             );
         }
 
-        // UPDATED: notifications usi transaction mein persist hoti hain; live push commit ke baad
+        // Notifications persist in the same transaction; the live push happens after commit.
         await notifications.StageAsync(
             ticket,
             NotificationType.TicketCreated,
@@ -284,7 +284,7 @@ public sealed partial class TicketService(
             actor.IsCustomer ? null : meta.CreatedByUserId,
             assignees,
             sla
-        ); // UPDATED: staff user id customer ko nahi jata
+        ); // the staff user id is never sent to customers
     }
 
     public async Task<PagedResult<TicketSummaryDto>> ListAsync(
@@ -308,7 +308,7 @@ public sealed partial class TicketService(
         }
 
         var now = Now;
-        var (page, pageSize, skip) = Paging.Normalize(filter.Page, filter.PageSize, MaxPageSize); // UPDATED: overflow-safe paging
+        var (page, pageSize, skip) = Paging.Normalize(filter.Page, filter.PageSize, MaxPageSize); // overflow-safe paging
         var effective = access.EffectiveAssignments();
 
         // Authorization is applied FIRST, inside the query; every other filter only narrows what the caller may already see.
@@ -473,7 +473,7 @@ public sealed partial class TicketService(
         CancellationToken ct
     )
     {
-        var (transaction, actor) = await access.BeginAuthorizedAsync(null, ct); // UPDATED: edit bhi authorized transaction mein
+        var (transaction, actor) = await access.BeginAuthorizedAsync(null, ct); // edits also run in an authorized transaction
         await using var _ = transaction;
         var ticket =
             await access.Visible(actor).Where(t => t.Id == id).SingleOrDefaultAsync(ct)
@@ -591,7 +591,7 @@ public sealed partial class TicketService(
                     "Reload the ticket and retry."
                 );
             }
-            catch (Exception ex) when (db.IsDeadlock(ex)) // UPDATED: deadlock victim bhi conflict
+            catch (Exception ex) when (db.IsDeadlock(ex)) // a deadlock victim is a conflict too
             {
                 throw AppException.Conflict(
                     "The ticket was changed by someone else.",

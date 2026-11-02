@@ -24,7 +24,7 @@ public sealed class TicketCategoryService(
     {
         var role = await actor.RequireActiveRoleAsync(ct);
         var all = includeInactive && role is TenantRole.TenantOwner or TenantRole.Manager;
-        // UPDATED: role check upar ho chuka; cache mein tenant ki poori (inactive samet) list hai, filter role ke mutabiq yahan hota hai
+        // Role already checked above; the cache holds the tenant's full list (incl. inactive), filtered by role here.
         var categories = await cache.GetOrCreateAsync<List<TicketCategoryDto>>(
             actor.TenantId,
             CacheResources.Categories,
@@ -44,7 +44,7 @@ public sealed class TicketCategoryService(
         await using var transaction = await actor.BeginManagerAsync(
             "Only Owners and Managers can manage categories.",
             ct
-        ); // UPDATED: authorization commit tak valid
+        ); // authorization stays valid until commit
         var normalized = TicketCategory.Normalize(name);
         if (await db.TicketCategories.AnyAsync(c => c.NormalizedName == normalized, ct))
         {

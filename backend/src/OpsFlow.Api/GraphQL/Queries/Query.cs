@@ -18,7 +18,7 @@ namespace OpsFlow.Api.GraphQL;
 public sealed class Query
 {
     [Serial]
-    [Cost(10)] // UPDATED: har root field ka asli weight (analytics = kai aggregate queries)
+    [Cost(10)]
     public Task<PagedResult<TicketSummaryDto>> Tickets(
         [Service] TicketService svc,
         TicketFilterInput? filter,
@@ -26,7 +26,7 @@ public sealed class Query
     ) => svc.ListAsync(PageGuard.Check(filter ?? new TicketFilterInput()).ToFilter(), ct);
 
     [Serial]
-    [Cost(5)] // UPDATED: har root field ka asli weight (analytics = kai aggregate queries)
+    [Cost(5)]
     public Task<TicketDetailDto> Ticket(
         [Service] TicketService svc,
         Guid id,
@@ -34,7 +34,7 @@ public sealed class Query
     ) => svc.GetAsync(id, ct);
 
     [Serial]
-    [Cost(10)] // UPDATED: har root field ka asli weight (analytics = kai aggregate queries)
+    [Cost(10)]
     public Task<PagedResult<TicketActivityDto>> TicketActivity(
         [Service] TicketService svc,
         Guid ticketId,
@@ -44,7 +44,7 @@ public sealed class Query
     ) => svc.GetActivityAsync(ticketId, PageGuard.Page(page), PageGuard.Size(pageSize), ct);
 
     [Serial]
-    [Cost(5)] // UPDATED: har root field ka asli weight (analytics = kai aggregate queries)
+    [Cost(5)]
     public Task<TicketSlaDto> TicketSla(
         [Service] TicketService svc,
         Guid ticketId,
@@ -52,7 +52,7 @@ public sealed class Query
     ) => svc.GetSlaAsync(ticketId, ct);
 
     [Serial]
-    [Cost(10)] // UPDATED: har root field ka asli weight (analytics = kai aggregate queries)
+    [Cost(10)]
     public Task<PagedResult<CustomerDto>> Customers(
         [Service] CustomerService svc,
         string? search,
@@ -63,7 +63,7 @@ public sealed class Query
     ) => svc.ListAsync(search, isActive, PageGuard.Page(page), PageGuard.Size(pageSize), ct);
 
     [Serial]
-    [Cost(5)] // UPDATED: har root field ka asli weight (analytics = kai aggregate queries)
+    [Cost(5)]
     public Task<CustomerDto> Customer(
         [Service] CustomerService svc,
         Guid id,
@@ -71,7 +71,7 @@ public sealed class Query
     ) => svc.GetAsync(id, ct);
 
     [Serial]
-    [Cost(10)] // UPDATED: har root field ka asli weight (analytics = kai aggregate queries)
+    [Cost(10)]
     public Task<PagedResult<MemberDto>> TeamMembers(
         [Service] MembershipService svc,
         CancellationToken ct,
@@ -80,7 +80,7 @@ public sealed class Query
     ) => svc.ListAsync(PageGuard.Page(page), PageGuard.Size(pageSize), ct);
 
     [Serial]
-    [Cost(30)] // UPDATED: har root field ka asli weight (analytics = kai aggregate queries)
+    [Cost(30)]
     public Task<DashboardDto> Dashboard(
         [Service] AnalyticsService svc,
         AnalyticsFilterInput? filter,
@@ -88,16 +88,28 @@ public sealed class Query
     ) => svc.GetDashboardAsync((filter ?? new AnalyticsFilterInput()).ToFilter(), ct);
 
     [Serial]
-    [Cost(60)] // UPDATED: har root field ka asli weight (analytics = kai aggregate queries)
+    [Cost(60)]
     public Task<ReportDto> Report(
         [Service] AnalyticsService svc,
         AnalyticsFilterInput? filter,
         CancellationToken ct
     ) => svc.GetReportAsync((filter ?? new AnalyticsFilterInput()).ToFilter(), ct);
 
+    /// <summary>
+    /// Internal child-task progress for Kanban cards: ONE grouped query for the whole board instead of a request per card.
+    /// Customers are rejected; an Agent only gets tickets they are currently assigned to.
+    /// </summary>
+    [Serial]
+    [Cost(10)]
+    public Task<IReadOnlyList<TicketTaskProgressDto>> TicketTaskProgress(
+        [Service] TicketTaskService svc,
+        IReadOnlyList<Guid> ticketIds,
+        CancellationToken ct
+    ) => svc.GetProgressAsync(ticketIds, ct);
+
     /// <summary>Kanban columns come from the real workflow statuses; each column is one bounded, filtered ticket page.</summary>
     [Serial]
-    [Cost(40)] // UPDATED: har root field ka asli weight (analytics = kai aggregate queries)
+    [Cost(40)]
     public async Task<IReadOnlyList<KanbanColumn>> KanbanBoard(
         [Service] TicketService svc,
         KanbanFilterInput? filter,

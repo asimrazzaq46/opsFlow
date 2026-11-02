@@ -29,7 +29,7 @@ internal sealed class TenantRoleHandler(IOpsFlowDbContext db, TenantContext tena
         if (
             !Guid.TryParse(http.Request.RouteValues["tenantId"]?.ToString(), out var tenantId)
             || !Guid.TryParse(context.User.FindFirstValue(AuthClaims.Subject), out var userId)
-        ) // UPDATED: JWT "sub" claim
+        ) // JWT "sub" claim
         {
             return;
         }

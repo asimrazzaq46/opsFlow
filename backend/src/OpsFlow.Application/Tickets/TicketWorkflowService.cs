@@ -33,7 +33,7 @@ public sealed partial class TicketWorkflowService(
         CancellationToken ct
     )
     {
-        var (transaction, actor) = await access.BeginAuthorizedAsync(null, ct); // UPDATED: actor ki rows lock + current role, commit tak
+        var (transaction, actor) = await access.BeginAuthorizedAsync(null, ct); // locks the actor's rows and re-reads the current role until commit
         await using var _ = transaction;
         var ticket = await LoadAsync(actor, ticketId, expectedVersion, ct);
         if (target is TicketStatus.Open or TicketStatus.Assigned)
@@ -123,7 +123,7 @@ public sealed partial class TicketWorkflowService(
             );
         }
 
-        // UPDATED: status/resolve notification usi commit mein (staff + customer, actor ke baghair)
+        // Status/resolve notification in the same commit (staff + customer, excluding the actor).
         await notifications.StageAsync(
             ticket,
             target == TicketStatus.Resolved
@@ -180,7 +180,7 @@ public sealed partial class TicketWorkflowService(
             ?? throw AppException.Conflict("No active SLA policy exists for this priority.");
         var hasAssignees = await access
             .EffectiveAssignments()
-            .AnyAsync(a => a.TicketId == ticketId, ct); // UPDATED: sirf ELIGIBLE agents ginay jate hain
+            .AnyAsync(a => a.TicketId == ticketId, ct); // only ELIGIBLE agents count
 
         var now = Now;
         var old = ticket.Status;
@@ -262,7 +262,7 @@ public sealed partial class TicketWorkflowService(
                 "Reload the ticket and retry."
             );
         }
-        catch (Exception ex) when (db.IsDeadlock(ex)) // UPDATED: deadlock victim bhi conflict
+        catch (Exception ex) when (db.IsDeadlock(ex)) // a deadlock victim is a conflict too
         {
             throw AppException.Conflict(
                 "The ticket was changed by someone else.",
@@ -274,7 +274,7 @@ public sealed partial class TicketWorkflowService(
                 || db.IsUniqueViolation(ex, UniqueConstraintKind.ActivitySequence)
                 || db.IsUniqueViolation(ex, UniqueConstraintKind.NotificationDedup)
                 || db.IsUniqueViolation(ex, UniqueConstraintKind.OutboxDedup)
-            ) // UPDATED: concurrent writers ka activity-sequence clash bhi conflict hai, 500 nahi
+            ) // an activity-sequence clash between concurrent writers is a conflict, not a 500
         {
             throw AppException.Conflict(
                 "The ticket was changed by someone else.",

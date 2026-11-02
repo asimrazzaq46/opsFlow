@@ -372,7 +372,7 @@ public class TicketWorkflowTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Empty((await w.GetTicketAsync(w.Owner, ticket.Id)).Assignees!);
     }
 
-    [PostgresOnlyFact] // UPDATED: SQLite mein loser ki explicit transaction writer ko block karti hai; PostgreSQL row-level conflict hi asal scenario hai
+    [PostgresOnlyFact] // On SQLite the loser's explicit transaction blocks the other writer; the real scenario is a PostgreSQL row-level conflict
     public async Task Two_simultaneous_reopens_create_exactly_one_new_cycle()
     {
         var w = await TicketWorld.CreateAsync(factory);
@@ -414,7 +414,7 @@ public class TicketWorkflowTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(2, (await w.SlaAsync(ticket.Id)).Cycles.Count);
     }
 
-    [PostgresOnlyFact] // UPDATED: SQLite mein loser ki explicit transaction writer ko block karti hai; PostgreSQL row-level conflict hi asal scenario hai
+    [PostgresOnlyFact] // On SQLite the loser's explicit transaction blocks the other writer; the real scenario is a PostgreSQL row-level conflict
     public async Task Conflicting_simultaneous_transitions_never_overwrite_each_other()
     {
         var w = await TicketWorld.CreateAsync(factory);

@@ -28,7 +28,7 @@ public sealed partial class OrganizationService(
         using var scope = tenantContext.Begin(tenantId);
         db.Tenants.Add(Tenant.Create(tenantId, name, slug, now));
         db.Memberships.Add(Membership.Create(tenantId, userId, TenantRole.TenantOwner, now));
-        TenantDefaults.AddAll(db, tenantId, now); // UPDATED: settings, ticket counter, default categories aur SLA policies usi atomic SaveChanges mein
+        TenantDefaults.AddAll(db, tenantId, now); // settings, ticket counter, default categories and SLA policies in the same atomic SaveChanges
         try
         {
             await db.SaveChangesAsync(ct);
@@ -36,7 +36,7 @@ public sealed partial class OrganizationService(
         catch (DbUpdateException ex)
             when (db.IsUniqueViolation(ex, UniqueConstraintKind.TenantSlug))
         {
-            // UPDATED: sirf slug race 409 hai; doosri DB failures ab 500 ke tor par propagate hoti hain
+            // Only the slug race is a 409; other DB failures propagate as a 500.
             throw AppException.Conflict(
                 "The organization could not be created.",
                 "Please try again."

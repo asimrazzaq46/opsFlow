@@ -24,7 +24,7 @@ public sealed class SlaPolicyService(
             throw AppException.Forbidden("Customers cannot view SLA policies.");
         }
 
-        // UPDATED: staff-only data, role check upar ho chuka; tenant-wide cache-aside
+        // Staff-only data, role already checked above; tenant-wide cache-aside.
         return await cache.GetOrCreateAsync<List<SlaPolicyDto>>(
             actor.TenantId,
             CacheResources.SlaPolicies,
@@ -59,7 +59,7 @@ public sealed class SlaPolicyService(
         await using var transaction = await actor.BeginManagerAsync(
             "Only Owners and Managers can manage SLA policies.",
             ct
-        ); // UPDATED: authorization commit tak valid
+        ); // authorization stays valid until commit
         var policy = Build(() =>
             SlaPolicy.Create(
                 actor.TenantId,
@@ -120,7 +120,7 @@ public sealed class SlaPolicyService(
             await db.SlaPolicies.SingleOrDefaultAsync(p => p.Id == id, ct) ?? throw NotFound();
         if (!isActive && policy.IsActive)
         {
-            // UPDATED: har priority ke liye ek active policy zaroori hai (ek hi active ho sakti hai): deactivate karne ke bajaye targets edit karein
+            // Every priority needs exactly one active policy, so edit its targets instead of deactivating it.
             throw AppException.Conflict(
                 "A priority must keep an active SLA policy.",
                 "Edit the policy targets instead of deactivating it."

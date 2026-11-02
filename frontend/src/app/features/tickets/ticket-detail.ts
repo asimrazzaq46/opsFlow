@@ -8,11 +8,12 @@ import { TicketActions } from './ticket-actions';
 import { TicketAttachments } from './ticket-attachments';
 import { TicketChat } from './ticket-chat';
 import { TicketNotes } from './ticket-notes';
+import { TicketTasks } from './ticket-tasks';
 import { TicketsApi } from './tickets-api';
 
 @Component({
   selector: 'app-ticket-detail',
-  imports: [RouterLink, TranslatePipe, DatePipe, TicketChat, TicketNotes, TicketAttachments, TicketActions],
+  imports: [RouterLink, TranslatePipe, DatePipe, TicketChat, TicketNotes, TicketAttachments, TicketActions, TicketTasks],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <a routerLink="/tickets" class="text-sm text-brand underline">‹ {{ 'tickets.back' | translate }}</a>
@@ -33,6 +34,10 @@ import { TicketsApi } from './tickets-api';
         <p class="mt-3 whitespace-pre-wrap break-words">{{ t.description }}</p>
       </header>
       <div class="mt-6"><app-ticket-actions [ticket]="t" (changed)="refresh()" /></div>
+      <!-- Internal child tasks render for staff only (UX only; the API returns 403 to customers anyway) -->
+      @if (tenant.isStaff()) {
+        <div class="mb-6"><app-ticket-tasks [ticket]="t" /></div>
+      }
       <div class="mt-2 grid gap-6 lg:grid-cols-2">
         <app-ticket-chat [ticketId]="id()" />
         <div class="space-y-6">

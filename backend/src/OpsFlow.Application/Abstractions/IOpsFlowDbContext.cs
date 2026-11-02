@@ -33,7 +33,8 @@ public interface IOpsFlowDbContext
     DbSet<TicketNote> TicketNotes { get; }
     DbSet<TicketAttachment> TicketAttachments { get; }
     DbSet<Notification> Notifications { get; }
-    DbSet<OutboxMessage> OutboxMessages { get; } // UPDATED: Milestone 4 - transactional outbox
+    DbSet<OutboxMessage> OutboxMessages { get; }
+    DbSet<TicketTask> TicketTasks { get; }
     ChangeTracker ChangeTracker { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 

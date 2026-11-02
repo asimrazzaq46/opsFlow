@@ -29,7 +29,6 @@ import { HealthStatus } from '../shared/components/health-status';
           <div class="flex items-center gap-2 sm:gap-3">
             <app-health-status class="hidden sm:inline-flex" />
 
-            <!-- UPDATED: login ke baad workspace picker, notification center aur sign-out -->
             @if (auth.isAuthenticated()) {
               @if (tenant.organizations().length) {
                 <label class="sr-only" for="tenant-select">{{ 'tenant.label' | translate }}</label>
@@ -70,7 +69,7 @@ import { HealthStatus } from '../shared/components/health-status';
             </button>
           </div>
         </div>
-        <!-- UPDATED: Milestone 5 - role-aware navigation (UX only; the backend enforces access) -->
+        <!-- Role-aware navigation (UX only; the backend enforces access) -->
         @if (auth.isAuthenticated()) {
           <nav class="mx-auto max-w-6xl overflow-x-auto px-4 sm:px-6" [attr.aria-label]="'nav.menu' | translate">
             <ul class="flex gap-1 pb-2 text-sm font-medium">

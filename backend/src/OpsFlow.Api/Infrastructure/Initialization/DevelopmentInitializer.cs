@@ -38,7 +38,7 @@ public sealed class DevelopmentInitializer(
             );
         }
 
-        // UPDATED: pehle sirf verify tha; ab model drift -> (sirf Development + explicit flag) existing migrations apply -> verify, phir seeders
+        // Model drift check -> apply existing migrations (Development + explicit flag only) -> verify -> seeders.
         var autoApply = DevelopmentMigrationGuard.ShouldAutoApply(
             environment,
             database.Value.AutoApplyMigrationsOnStartup

@@ -15,7 +15,7 @@ internal static class MvcSetup
         services
             .AddControllers(o =>
             {
-                // MVC ka text/json hata diya; output mein application/*+json zaroori hai kyunke ProblemDetails application/problem+json hai
+                // Drop MVC's text/json; output keeps application/*+json because ProblemDetails is application/problem+json.
                 var input = o
                     .InputFormatters.OfType<SystemTextJsonInputFormatter>()
                     .Single()
@@ -25,12 +25,12 @@ internal static class MvcSetup
                 o.OutputFormatters.OfType<SystemTextJsonOutputFormatter>()
                     .Single()
                     .SupportedMediaTypes.Remove("text/json");
-                o.OutputFormatters.RemoveType<StringOutputFormatter>(); // text/plain response media type nahi chahiye
+                o.OutputFormatters.RemoveType<StringOutputFormatter>(); // no text/plain responses
             })
             .AddJsonOptions(o =>
             {
                 o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
-                o.AllowInputFormatterExceptionMessages = false; // malformed JSON par CLR type/path ki tafseel client ko nahi jati
+                o.AllowInputFormatterExceptionMessages = false; // malformed JSON never leaks CLR type/path details to the client
             });
         return services;
     }

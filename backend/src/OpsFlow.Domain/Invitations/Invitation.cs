@@ -29,7 +29,7 @@ public sealed class Invitation : ITenantOwned
     public Guid? AcceptedByUserId { get; private set; }
     public DateTime? RevokedAtUtc { get; private set; }
 
-    // UPDATED: normalization ab shared EmailAddress helper se (User ke saath consistent)
+    // Shared EmailAddress helper keeps normalization consistent with User.
     public static string Normalize(string email) => EmailAddress.Normalize(email);
 
     public static Invitation Create(
@@ -42,7 +42,7 @@ public sealed class Invitation : ITenantOwned
         TimeSpan lifetime
     )
     {
-        // UPDATED: Customer role bhi invite ho sakta hai (customer-linked ticket workflow ke liye); sirf roles ki range check hoti hai
+        // Customers can be invited too (customer-linked ticket workflow); only the role range is checked here.
         if (!Enum.IsDefined(role))
         {
             throw new ArgumentException("Unknown role.", nameof(role));

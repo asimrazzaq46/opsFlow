@@ -24,7 +24,7 @@ public sealed partial class MembershipService(
         CancellationToken ct
     )
     {
-        (page, pageSize, var skip) = Paging.Normalize(page, pageSize, MaxPageSize); // UPDATED: overflow-safe paging
+        (page, pageSize, var skip) = Paging.Normalize(page, pageSize, MaxPageSize); // overflow-safe paging
 
         var query = db.Memberships.Where(m => m.Role != TenantRole.Customer);
         var total = await query.CountAsync(ct);
@@ -83,7 +83,7 @@ public sealed partial class MembershipService(
     {
         for (var attempt = 0; attempt < MaxAttempts; attempt++)
         {
-            // UPDATED: stamp pehle, phir actor ki current (membership + user status) authorization; stamp har mutation par rotate hota hai
+            // Read the stamp first, then the actor's current authorization (membership + user status); every mutation rotates the stamp.
             var tenant = await db.Tenants.SingleAsync(ct);
             await actor.RequireOwnerAsync(ct);
 

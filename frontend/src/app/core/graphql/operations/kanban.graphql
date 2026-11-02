@@ -20,3 +20,12 @@ query KanbanBoard($filter: KanbanFilterInput, $perColumn: Int) {
     tickets { ...BoardTicket }
   }
 }
+
+# Internal child-task progress for the visible board cards (staff only; one request per board load)
+query TicketTaskProgress($ticketIds: [UUID!]!) {
+  ticketTaskProgress(ticketIds: $ticketIds) {
+    ticketId
+    totalTasks
+    completedTasks
+  }
+}

@@ -9,7 +9,7 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { debounceTime, merge } from 'rxjs';
 import { TenantService } from '../../core/auth/tenant.service';
 import { GraphqlClient } from '../../core/graphql/graphql-client';
-import { BoardTicketFragment, KanbanBoardDocument, KanbanBoardQuery } from '../../core/graphql/generated';
+import { BoardTicketFragment, KanbanBoardDocument, KanbanBoardQuery, TicketTaskProgressDocument } from '../../core/graphql/generated';
 import { RealtimeService } from '../../core/realtime/realtime.service';
 import { pascal, toRestStatus } from '../../shared/format';
 import { TicketsApi } from '../tickets/tickets-api';
@@ -74,6 +74,15 @@ const TARGETS: Record<string, string[]> = {
                       @if (t.categoryName) { <span>· {{ t.categoryName }}</span> }
                       @if (t.assigneeCount !== null) { <span>· {{ 'kanban.assignees' | translate: { n: t.assigneeCount } }}</span> }
                     </p>
+                    @if (progress().get(t.id); as p) {
+                      <a [routerLink]="['/tickets', t.id]" fragment="child-tasks" class="mt-2 flex items-center gap-2 text-xs text-muted hover:text-brand focus-visible:outline-2 focus-visible:outline-brand"
+                        [attr.aria-label]="'tasks.progress' | translate: { done: p.completedTasks, total: p.totalTasks }">
+                        <span class="h-1.5 flex-1 overflow-hidden rounded-full bg-surface" aria-hidden="true"><span class="block h-1.5 rounded-full bg-success" [style.width.%]="(p.completedTasks / p.totalTasks) * 100"></span></span>
+                        <span class="tabular-nums" aria-hidden="true">✓ {{ p.completedTasks }}/{{ p.totalTasks }}</span>
+                      </a>
+                    } @else if (tenant.isStaff() && t.status !== 'RESOLVED' && t.status !== 'CLOSED') {
+                      <a [routerLink]="['/tickets', t.id]" fragment="child-tasks" class="mt-2 inline-block text-xs text-muted hover:text-brand focus-visible:outline-2 focus-visible:outline-brand">+ {{ 'tasks.add' | translate }}</a>
+                    }
                     @if (t.resolutionDueAtUtc) {
                       <p class="mt-1 text-xs" [class]="t.isOverdue ? 'font-semibold text-danger' : 'text-muted'">
                         {{ (t.isOverdue ? 'kanban.overdue' : 'kanban.due') | translate }} <time [attr.datetime]="t.resolutionDueAtUtc">{{ t.resolutionDueAtUtc | date: 'short' }}</time></p>
@@ -114,6 +123,7 @@ export class Kanban {
   protected readonly error = signal(false);
   protected readonly message = signal<string | null>(null);
   protected readonly pending = signal<ReadonlySet<string>>(new Set());
+  protected readonly progress = signal<ReadonlyMap<string, { totalTasks: number; completedTasks: number }>>(new Map());
   protected readonly form = new FormGroup({
     search: new FormControl('', { nonNullable: true }),
     priority: new FormControl('', { nonNullable: true }),
@@ -129,6 +139,8 @@ export class Kanban {
     merge(this.realtime.on('notification.created'), this.realtime.reconnected)
       .pipe(debounceTime(1000), takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.load());
+    // A task change only affects the progress indicators, so the board itself is not reloaded.
+    this.realtime.on('ticket.task.changed').pipe(debounceTime(1000), takeUntilDestroyed(this.destroyRef)).subscribe(() => this.loadProgress());
   }
 
   protected load(): void {
@@ -139,10 +151,23 @@ export class Kanban {
       .query(KanbanBoardDocument, { perColumn: 20, filter: { search: search || null, priority: priority ? (priority.toUpperCase() as 'LOW') : null, overdue: overdue || null } })
       .subscribe({
         next: (r) => {
-          if (id === this.seq && this.pending().size === 0) this.board.set(r.kanbanBoard); // never overwrite a move in flight
+          if (id === this.seq && this.pending().size === 0) {
+            this.board.set(r.kanbanBoard); // never overwrite a move in flight
+            this.loadProgress();
+          }
         },
         error: () => this.error.set(true),
       });
+  }
+
+  /** ONE internal query for the whole board instead of a request per card; never issued for customers. */
+  private loadProgress(): void {
+    const ids = (this.board() ?? []).flatMap((c) => c.tickets.map((t) => t.id));
+    if (!this.tenant.isStaff() || !ids.length) return this.progress.set(new Map());
+    this.gql.query(TicketTaskProgressDocument, { ticketIds: ids }).subscribe({
+      next: (r) => this.progress.set(new Map(r.ticketTaskProgress.map((p) => [p.ticketId, p]))),
+      error: () => this.progress.set(new Map()), // optional indicator: the board itself stays usable
+    });
   }
 
   protected targets(t: BoardTicketFragment): string[] {

@@ -129,3 +129,15 @@ export type { ListTicketNotes$Params as ListTicketNotes$Params } from './fn/tick
 export { listTicketNotes as listTicketNotes } from './fn/ticket-notes/list-ticket-notes';
 export type { CreateTicketNote$Params as CreateTicketNote$Params } from './fn/ticket-notes/create-ticket-note';
 export { createTicketNote as createTicketNote } from './fn/ticket-notes/create-ticket-note';
+export type { ListTicketTasks$Params as ListTicketTasks$Params } from './fn/ticket-tasks/list-ticket-tasks';
+export { listTicketTasks as listTicketTasks } from './fn/ticket-tasks/list-ticket-tasks';
+export type { CreateTicketTask$Params as CreateTicketTask$Params } from './fn/ticket-tasks/create-ticket-task';
+export { createTicketTask as createTicketTask } from './fn/ticket-tasks/create-ticket-task';
+export type { UpdateTicketTask$Params as UpdateTicketTask$Params } from './fn/ticket-tasks/update-ticket-task';
+export { updateTicketTask as updateTicketTask } from './fn/ticket-tasks/update-ticket-task';
+export type { ChangeTicketTaskStatus$Params as ChangeTicketTaskStatus$Params } from './fn/ticket-tasks/change-ticket-task-status';
+export { changeTicketTaskStatus as changeTicketTaskStatus } from './fn/ticket-tasks/change-ticket-task-status';
+export type { ReassignTicketTask$Params as ReassignTicketTask$Params } from './fn/ticket-tasks/reassign-ticket-task';
+export { reassignTicketTask as reassignTicketTask } from './fn/ticket-tasks/reassign-ticket-task';
+export type { ReorderTicketTasks$Params as ReorderTicketTasks$Params } from './fn/ticket-tasks/reorder-ticket-tasks';
+export { reorderTicketTasks as reorderTicketTasks } from './fn/ticket-tasks/reorder-ticket-tasks';

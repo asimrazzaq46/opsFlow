@@ -49,7 +49,7 @@ internal sealed class SerialAttribute : ObjectFieldDescriptorAttribute
                 finally
                 {
                     gate.Semaphore.Release();
-                    if (watch.ElapsedMilliseconds >= GraphQlLog.SlowFieldMilliseconds) // UPDATED: slow-query warning (sirf field naam + muddat)
+                    if (watch.ElapsedMilliseconds >= GraphQlLog.SlowFieldMilliseconds) // slow-query warning logs only the field name and duration
                     {
                         GraphQlLog.SlowField(
                             ctx.Services.GetRequiredService<ILoggerFactory>().CreateLogger("OpsFlow.GraphQL"),
@@ -71,7 +71,7 @@ internal sealed class GraphQlGate
 /// <summary>Maps AppException to a stable, safe error code; everything else is masked.</summary>
 internal sealed class AppExceptionErrorFilter : IErrorFilter
 {
-    // UPDATED: pehle unexpected errors sirf mask hote the; ab server-side log bhi hote hain (client ko generic message)
+    // Unexpected errors are logged server-side; the client only gets a generic message.
     private static IError Unexpected(IError error)
     {
         GraphQlLog.Unexpected(GraphQlDiagnostics.Logger, error.Exception!, error.Path?.ToString());
@@ -118,7 +118,7 @@ internal static class GraphQlSetup
             .AddQueryType<Query>()
             .AddErrorFilter<AppExceptionErrorFilter>()
             .AddMaxExecutionDepthRule(12)
-            // UPDATED: root fields ke asli weights Query.cs mein; ek request ka total field cost 250 se upar reject (dashboard+report+board = 130)
+            // Root field weights live in Query.cs; a request whose total field cost exceeds 250 is rejected (dashboard + report + board = 130).
             .ModifyCostOptions(o =>
             {
                 o.MaxFieldCost = 250;
