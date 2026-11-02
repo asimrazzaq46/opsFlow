@@ -20,6 +20,7 @@ public interface IOpsFlowDbContext
     DbSet<UserToken> UserTokens { get; }
     DbSet<UserSession> UserSessions { get; }
     DbSet<RefreshToken> RefreshTokens { get; }
+    DbSet<UserExternalIdentity> UserExternalIdentities { get; }
     DbSet<Customer> Customers { get; }
     DbSet<TicketCategory> TicketCategories { get; }
     DbSet<Ticket> Tickets { get; }

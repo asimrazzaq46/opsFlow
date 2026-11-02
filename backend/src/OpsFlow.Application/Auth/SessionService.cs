@@ -47,8 +47,8 @@ public sealed partial class SessionService(
         var normalized = EmailAddress.Normalize(email);
         var user = await db.Users.SingleOrDefaultAsync(u => u.NormalizedEmail == normalized, ct);
 
-        // One generic failure for unknown account, lockout, wrong password, unverified and deactivated accounts.
-        if (user is null || user.IsLockedOut(now))
+        // One generic failure for unknown account, lockout, passwordless (external-only), wrong password, unverified and deactivated accounts.
+        if (user is null || user.IsLockedOut(now) || !user.HasPassword)
         {
             hasher.SimulateVerify(password);
             throw InvalidCredentials();
@@ -73,6 +73,37 @@ public sealed partial class SessionService(
         await db.SaveChangesAsync(ct);
         LogStarted(logger, user.Id, tokens.SessionId);
         return (tokens, user);
+    }
+
+    /// <summary>
+    /// Re-authenticates a signed-in user with their password for a security-sensitive step. Uses the same lockout counter as login, so
+    /// it cannot be used to guess passwords. Accounts without a local password are rejected: there is no passwordless fallback.
+    /// </summary>
+    public async Task VerifyPasswordAsync(Guid userId, string password, CancellationToken ct)
+    {
+        var now = Now;
+        var user = await db.Users.AsNoTracking().SingleAsync(u => u.Id == userId, ct);
+        if (!user.HasPassword)
+        {
+            throw AppException
+                .Forbidden(
+                    "This account has no password.",
+                    "Set a password with the password-reset flow first."
+                )
+                .WithCode("AUTH_PASSWORD_NOT_SET");
+        }
+
+        if (user.IsLockedOut(now))
+        {
+            hasher.SimulateVerify(password);
+            throw IncorrectPassword();
+        }
+
+        if (!hasher.Verify(user.PasswordHash, password))
+        {
+            await RegisterFailureAsync(user.Id, now, ct);
+            throw IncorrectPassword();
+        }
     }
 
     /// <summary>Starts a brand-new session for an already authenticated user (used after a password change).</summary>
@@ -308,6 +339,9 @@ public sealed partial class SessionService(
         AppException
             .Unauthorized("Invalid credentials or the account is not available.")
             .WithCode("AUTH_INVALID_CREDENTIALS");
+
+    private static AppException IncorrectPassword() =>
+        AppException.Validation("password", "The password is incorrect.");
 
     private static AppException InvalidRefresh() =>
         AppException

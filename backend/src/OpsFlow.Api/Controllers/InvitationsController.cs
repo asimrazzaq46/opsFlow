@@ -68,6 +68,31 @@ public sealed class InvitationsController(InvitationService invitations) : Contr
         return Created($"/api/v1/tenants/{tenantId}/invitations/{invitation.Id}", invitation);
     }
 
+    [HttpPost(
+        "tenants/{tenantId:guid}/invitations/{invitationId:guid}/resend",
+        Name = "ResendInvitation"
+    )]
+    [Authorize(Policy = AuthPolicies.TenantManager)]
+    [EnableRateLimiting(RateLimitPolicies.Sensitive)]
+    [EndpointSummary("Resend invitation")]
+    [EndpointDescription(
+        "Emails a pending or expired invitation again with a new one-time token and a fresh 72-hour expiry; every earlier link stops working. Role, email and organization are unchanged. "
+            + "Managers may resend Agent and Customer invitations only. Requires the Owner or Manager role in the tenant. "
+            + "409 INVITATION_NOT_RESENDABLE (accepted or revoked) or INVITATION_ALREADY_MEMBER (the invitee is already an active member); 429 INVITATION_RESEND_COOLDOWN within 2 minutes of the previous email. The response never contains the token."
+    )]
+    [ProducesResponseType<InvitationDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemResponse>(
+        StatusCodes.Status409Conflict,
+        "application/problem+json"
+    )]
+    public async Task<ActionResult<InvitationDto>> ResendInvitation(
+        Guid invitationId,
+        CancellationToken ct
+    )
+    {
+        return Ok(await invitations.ResendAsync(invitationId, ct));
+    }
+
     [HttpDelete(
         "tenants/{tenantId:guid}/invitations/{invitationId:guid}",
         Name = "RevokeInvitation"

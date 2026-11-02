@@ -19,6 +19,16 @@ export type { ResetPassword$Params as ResetPassword$Params } from './fn/auth/res
 export { resetPassword as resetPassword } from './fn/auth/reset-password';
 export type { GetCurrentUser$Params as GetCurrentUser$Params } from './fn/auth/get-current-user';
 export { getCurrentUser as getCurrentUser } from './fn/auth/get-current-user';
+export type { UpdateCurrentUser$Params as UpdateCurrentUser$Params } from './fn/auth/update-current-user';
+export { updateCurrentUser as updateCurrentUser } from './fn/auth/update-current-user';
+export type { CreateGoogleChallenge$Params as CreateGoogleChallenge$Params } from './fn/auth/create-google-challenge';
+export { createGoogleChallenge as createGoogleChallenge } from './fn/auth/create-google-challenge';
+export type { SignInWithGoogle$Params as SignInWithGoogle$Params } from './fn/auth/sign-in-with-google';
+export { signInWithGoogle as signInWithGoogle } from './fn/auth/sign-in-with-google';
+export type { CreateGoogleLinkChallenge$Params as CreateGoogleLinkChallenge$Params } from './fn/auth/create-google-link-challenge';
+export { createGoogleLinkChallenge as createGoogleLinkChallenge } from './fn/auth/create-google-link-challenge';
+export type { LinkGoogleAccount$Params as LinkGoogleAccount$Params } from './fn/auth/link-google-account';
+export { linkGoogleAccount as linkGoogleAccount } from './fn/auth/link-google-account';
 export type { LogoutAll$Params as LogoutAll$Params } from './fn/auth/logout-all';
 export { logoutAll as logoutAll } from './fn/auth/logout-all';
 export type { ListSessions$Params as ListSessions$Params } from './fn/auth/list-sessions';
@@ -47,6 +57,8 @@ export type { ListInvitations$Params as ListInvitations$Params } from './fn/invi
 export { listInvitations as listInvitations } from './fn/invitations/list-invitations';
 export type { CreateInvitation$Params as CreateInvitation$Params } from './fn/invitations/create-invitation';
 export { createInvitation as createInvitation } from './fn/invitations/create-invitation';
+export type { ResendInvitation$Params as ResendInvitation$Params } from './fn/invitations/resend-invitation';
+export { resendInvitation as resendInvitation } from './fn/invitations/resend-invitation';
 export type { RevokeInvitation$Params as RevokeInvitation$Params } from './fn/invitations/revoke-invitation';
 export { revokeInvitation as revokeInvitation } from './fn/invitations/revoke-invitation';
 export type { ListNotifications$Params as ListNotifications$Params } from './fn/notifications/list-notifications';

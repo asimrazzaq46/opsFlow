@@ -246,9 +246,9 @@ public class ApiContractTests(ApiFactory factory) : IClassFixture<ApiFactory>
     {
         var endpoints = factory.Services.GetRequiredService<EndpointDataSource>().Endpoints.OfType<RouteEndpoint>()
             .Where(e => e.RoutePattern.RawText!.StartsWith("api/", StringComparison.Ordinal)).ToList();
-        string[] anonymous = ["GetHealth", "Register", "ConfirmEmail", "ResendConfirmation", "Login", "RefreshSession", "Logout", "ForgotPassword", "ResetPassword"];
+        string[] anonymous = ["GetHealth", "Register", "ConfirmEmail", "ResendConfirmation", "Login", "RefreshSession", "Logout", "ForgotPassword", "ResetPassword", "CreateGoogleChallenge", "SignInWithGoogle"];
 
-        Assert.Equal(70, endpoints.Count); // 50 core + 11 messages/notes/attachments/notifications + 3 reports/settings + 6 ticket tasks; GraphQL is a separate, non-controller endpoint
+        Assert.Equal(76, endpoints.Count); // 50 core + 11 messages/notes/attachments/notifications + 3 reports/settings + 6 ticket tasks + 4 Google auth + profile update + invitation resend; GraphQL is a separate, non-controller endpoint
         Assert.All(endpoints, e => Assert.NotNull(e.Metadata.GetMetadata<ControllerActionDescriptor>())); // no Minimal API mapping left
         var routes = endpoints.Select(e => $"{e.Metadata.GetMetadata<HttpMethodMetadata>()!.HttpMethods.Single()} {e.RoutePattern.RawText!.TrimEnd('/')}").ToList();
         Assert.Equal(routes.Count, routes.Distinct().Count()); // no ambiguous routes
@@ -305,6 +305,7 @@ public class ApiContractTests(ApiFactory factory) : IClassFixture<ApiFactory>
         string[] anonymous =
         [
             "GetHealth", "Register", "ConfirmEmail", "ResendConfirmation", "Login", "RefreshSession", "Logout", "ForgotPassword", "ResetPassword",
+            "CreateGoogleChallenge", "SignInWithGoogle",
         ];
         var seen = new List<string>();
         foreach (var path in doc.GetProperty("paths").EnumerateObject())

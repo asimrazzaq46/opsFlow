@@ -104,7 +104,7 @@ public sealed class TenantsController(
     [Authorize(Policy = AuthPolicies.TenantStaff)]
     [EndpointSummary("Get organization settings")]
     [EndpointDescription(
-        "Returns the organization's reporting timezone (IANA id, UTC for organizations that never set one). Requires an Owner, Manager or Agent role in the tenant."
+        "Returns the effective organization settings: name, read-only slug and ticket number prefix, and the reporting timezone (IANA id, UTC for organizations that never set one). Requires an Owner, Manager or Agent role in the tenant."
     )]
     public async Task<ActionResult<TenantSettingsDto>> GetTenantSettings(CancellationToken ct)
     {
@@ -115,7 +115,7 @@ public sealed class TenantsController(
     [Authorize(Policy = AuthPolicies.TenantOwner)]
     [EndpointSummary("Update organization settings")]
     [EndpointDescription(
-        "Sets the reporting timezone used for day-based dashboards, reports and CSV exports. The value must be an exact IANA id such as Europe/Rome; a timezone detected by the browser is only a suggestion until an Owner saves it here. Existing SLA deadlines are never changed. Requires the Owner role in the tenant."
+        "Sets the reporting timezone used for day-based dashboards, reports and CSV exports and, optionally, renames the organization (name: 2-100 characters; omit or null to keep it). The timezone must be an exact IANA id such as Europe/Rome; a timezone detected by the browser is only a suggestion until an Owner saves it here. The slug, ticket number prefix, categories, SLA policies and existing SLA deadlines are never changed. The tenant always comes from the route. Requires the Owner role in the tenant; 409 when ownership changed concurrently."
     )]
     [ProducesResponseType<TenantSettingsDto>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemResponse>(
@@ -127,6 +127,6 @@ public sealed class TenantsController(
         CancellationToken ct
     )
     {
-        return Ok(await settings.UpdateReportingTimeZoneAsync(request.ReportingTimeZone, ct));
+        return Ok(await settings.UpdateAsync(request.ReportingTimeZone, request.Name, ct));
     }
 }

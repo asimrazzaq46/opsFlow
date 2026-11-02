@@ -36,7 +36,8 @@
     "customers": "Clienti",
     "team": "Team",
     "reports": "Report",
-    "menu": "Navigazione principale"
+    "menu": "Navigazione principale",
+    "account": "Account"
   },
   "auth": {
     "signIn": "Accedi",
@@ -44,7 +45,8 @@
     "password": "Password",
     "submit": "Accedi",
     "signOut": "Esci",
-    "invalid": "Accesso non riuscito. Controlla email e password."
+    "invalid": "Accesso non riuscito. Controlla email e password.",
+    "signingIn": "Accesso in corso…"
   },
   "tenant": {
     "label": "Spazio di lavoro",
@@ -339,5 +341,38 @@
     "sent": "Invito inviato.",
     "duplicate": "Esiste già un invito in sospeso o un'appartenenza.",
     "error": "Operazione sull'invito non riuscita."
+  },
+  "google": {
+    "or": "oppure",
+    "loading": "Caricamento accesso con Google…",
+    "unavailable": "Impossibile caricare l’accesso con Google.",
+    "signUpHint": "Nuovo su OpsFlow? Continua con Google per creare un account. Inviti e workspace funzionano come sempre.",
+    "verifyEmail": "Account creato. Conferma il tuo indirizzo email con il link che ti abbiamo inviato, poi accedi di nuovo con Google.",
+    "errors": {
+      "linkRequired": "Esiste già un account OpsFlow con questa email. Accedi con la password, poi collega Google in Account.",
+      "expired": "La richiesta di accesso con Google è scaduta. Riprova.",
+      "invalid": "Google non ha potuto confermare questo accesso. Riprova.",
+      "googleEmailUnverified": "Questo account Google non ha un indirizzo email verificato.",
+      "emailNotVerified": "Conferma il tuo indirizzo email con il link che ti abbiamo inviato prima di accedere.",
+      "disabled": "Questo account è disattivato.",
+      "identityConflict": "Questo account Google è già collegato a un altro account OpsFlow.",
+      "alreadyLinked": "Il tuo account è già collegato a un altro account Google.",
+      "passwordNotSet": "Imposta prima una password (usa \"Password dimenticata\") per collegare Google.",
+      "unavailable": "L’accesso con Google non è momentaneamente disponibile. Riprova tra poco.",
+      "wrongPassword": "La password non è corretta.",
+      "rateLimited": "Troppi tentativi. Attendi un minuto e riprova.",
+      "generic": "Accesso con Google non riuscito. Riprova."
+    }
+  },
+  "account": {
+    "title": "Account",
+    "loadError": "Impossibile caricare il tuo account.",
+    "google": "Accesso con Google",
+    "linked": "Il tuo account Google è collegato. Puoi accedere con Google.",
+    "linkedNow": "Account Google collegato. Ora puoi accedere con Google.",
+    "passwordRequired": "Il tuo account non ha una password. Impostala con \"Password dimenticata\" prima di collegare Google.",
+    "confirmPassword": "Conferma la tua password per collegare un account Google.",
+    "continue": "Continua",
+    "chooseGoogle": "Ora scegli l’account Google da collegare."
   }
 }

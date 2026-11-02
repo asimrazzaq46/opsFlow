@@ -372,4 +372,157 @@ public class InvitationTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal([HttpStatusCode.Created, HttpStatusCode.Conflict], results.Select(r => r.StatusCode).OrderBy(s => s).ToArray());
         Assert.Equal(1, await InvitationRowsAsync(email));
     }
+
+    // ---------------------------------------------------------------- resend
+
+    private string Resend(Guid tenantId, Guid invitationId) => $"/api/v1/tenants/{tenantId}/invitations/{invitationId}/resend";
+
+    private static async Task<string?> CodeAsync(HttpResponseMessage response) =>
+        (await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).TryGetProperty("code", out var code) ? code.GetString() : null;
+
+    [Fact]
+    public async Task Resend_rotates_the_token_restarts_the_expiry_and_invalidates_the_old_link()
+    {
+        var (owner, org) = await NewTenantAsync();
+        var email = $"resend-{Guid.NewGuid():N}@example.com";
+        var invite = await InviteAsync(owner, org.Id, email, "Manager");
+        var oldToken = ApiClient.InvitationTokenFrom(factory, email);
+        factory.Clock.Advance(TimeSpan.FromMinutes(5));
+
+        var response = await owner.PostAsync(Resend(org.Id, invite.Id));
+        var resent = await owner.ReadAsync<Invite>(response);
+        var newToken = ApiClient.InvitationTokenFrom(factory, email);
+
+        Assert.DoesNotContain(newToken, await response.Content.ReadAsStringAsync()); // the secret is only in the email
+        Assert.NotEqual(oldToken, newToken);
+        Assert.Equal("Manager", resent.Role);
+        Assert.Equal(invite.Id, resent.Id);
+        Assert.InRange(resent.ExpiresAtUtc - factory.Clock.GetUtcNow().UtcDateTime, TimeSpan.FromHours(71.9), TimeSpan.FromHours(72));
+        Assert.Equal(2, factory.Emails.Count(email));
+
+        var invitee = await ApiClient.RegisterAsync(factory, email);
+        Assert.Equal(HttpStatusCode.BadRequest, (await invitee.PostAsync("/api/v1/invitations/accept", new { token = oldToken })).StatusCode);
+        Assert.Equal("Manager", (await invitee.ReadAsync<OrgDto>(await invitee.PostAsync("/api/v1/invitations/accept", new { token = newToken }))).Role);
+
+        // Accepted invitations cannot be resent.
+        factory.Clock.Advance(TimeSpan.FromMinutes(5));
+        var again = await owner.PostAsync(Resend(org.Id, invite.Id));
+        Assert.Equal(HttpStatusCode.Conflict, again.StatusCode);
+        Assert.Equal("INVITATION_NOT_RESENDABLE", await CodeAsync(again));
+    }
+
+    [Fact]
+    public async Task Resend_has_a_cooldown_and_concurrent_resends_leave_exactly_one_valid_token()
+    {
+        var (owner, org) = await NewTenantAsync();
+        var email = $"cool-{Guid.NewGuid():N}@example.com";
+        var invite = await InviteAsync(owner, org.Id, email);
+
+        var tooSoon = await owner.PostAsync(Resend(org.Id, invite.Id));
+        Assert.Equal(HttpStatusCode.TooManyRequests, tooSoon.StatusCode);
+        Assert.Equal("INVITATION_RESEND_COOLDOWN", await CodeAsync(tooSoon));
+
+        factory.Clock.Advance(InvitationService.ResendCooldown);
+        var sentBefore = factory.Emails.Count(email);
+        var results = await Task.WhenAll(owner.PostAsync(Resend(org.Id, invite.Id)), owner.PostAsync(Resend(org.Id, invite.Id)));
+
+        Assert.Single(results, r => r.StatusCode == HttpStatusCode.OK);
+        Assert.All(results, r => Assert.True(r.StatusCode is HttpStatusCode.OK or HttpStatusCode.TooManyRequests or HttpStatusCode.Conflict, r.StatusCode.ToString()));
+        Assert.Equal(sentBefore + 1, factory.Emails.Count(email));
+        using var scope = factory.Services.CreateScope();
+        var stored = await scope.ServiceProvider.GetRequiredService<OpsFlowDbContext>().Invitations.IgnoreQueryFilters().Where(i => i.Id == invite.Id).Select(i => i.TokenHash).SingleAsync();
+        Assert.Equal(SecureToken.Hash(ApiClient.InvitationTokenFrom(factory, email)), stored);
+    }
+
+    [Fact]
+    public async Task Expired_invitations_can_be_resent_but_revoked_ones_cannot()
+    {
+        var (owner, org) = await NewTenantAsync();
+        var expiredEmail = $"exp-{Guid.NewGuid():N}@example.com";
+        var expired = await InviteAsync(owner, org.Id, expiredEmail);
+        var revoked = await InviteAsync(owner, org.Id, $"rev-{Guid.NewGuid():N}@example.com");
+        Assert.Equal(HttpStatusCode.NoContent, (await owner.DeleteAsync($"/api/v1/tenants/{org.Id}/invitations/{revoked.Id}")).StatusCode);
+        factory.Clock.Advance(TimeSpan.FromHours(73));
+        Assert.Equal(HttpStatusCode.OK, (await owner.RefreshAsync()).StatusCode); // the access token expired with the clock
+
+        Assert.Equal(HttpStatusCode.OK, (await owner.PostAsync(Resend(org.Id, expired.Id))).StatusCode);
+        var invitee = await ApiClient.RegisterAsync(factory, expiredEmail);
+        Assert.Equal(HttpStatusCode.OK, (await invitee.PostAsync("/api/v1/invitations/accept", new { token = ApiClient.InvitationTokenFrom(factory, expiredEmail) })).StatusCode);
+
+        var response = await owner.PostAsync(Resend(org.Id, revoked.Id));
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal("INVITATION_NOT_RESENDABLE", await CodeAsync(response));
+    }
+
+    [Fact]
+    public async Task Resend_is_refused_when_the_invitee_is_already_an_active_member()
+    {
+        var (owner, org) = await NewTenantAsync();
+        var agent = await ApiClient.AddMemberAsync(factory, owner, org.Id, "Agent");
+        var invite = await InviteAsync(owner, org.Id, agent.Email, "Manager");
+        factory.Clock.Advance(InvitationService.ResendCooldown);
+
+        var response = await owner.PostAsync(Resend(org.Id, invite.Id));
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal("INVITATION_ALREADY_MEMBER", await CodeAsync(response));
+    }
+
+    [Fact]
+    public async Task Resend_respects_the_permission_matrix_and_tenant_isolation()
+    {
+        var (owner, org) = await NewTenantAsync();
+        var manager = await ApiClient.AddMemberAsync(factory, owner, org.Id, "Manager");
+        var agent = await ApiClient.AddMemberAsync(factory, owner, org.Id, "Agent");
+        var managerInvite = await InviteAsync(owner, org.Id, $"m-{Guid.NewGuid():N}@example.com", "Manager");
+        var agentInvite = await InviteAsync(owner, org.Id, $"a-{Guid.NewGuid():N}@example.com", "Agent");
+        factory.Clock.Advance(InvitationService.ResendCooldown);
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await manager.PostAsync(Resend(org.Id, managerInvite.Id))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await agent.PostAsync(Resend(org.Id, agentInvite.Id))).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await factory.CreateClient().PostAsync(Resend(org.Id, agentInvite.Id), null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await manager.PostAsync(Resend(org.Id, agentInvite.Id))).StatusCode);
+
+        // Another tenant's owner can neither use this tenant's route nor reach the invitation through their own tenant.
+        var (otherOwner, otherOrg) = await NewTenantAsync();
+        factory.Clock.Advance(InvitationService.ResendCooldown);
+        Assert.Equal(HttpStatusCode.Forbidden, (await otherOwner.PostAsync(Resend(org.Id, managerInvite.Id))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await otherOwner.PostAsync(Resend(otherOrg.Id, managerInvite.Id))).StatusCode);
+    }
+
+    [PostgresOnlyFact]
+    public async Task A_resend_that_read_the_invitation_before_a_concurrent_accept_cannot_rotate_it_or_send_an_email()
+    {
+        var (owner, org) = await NewTenantAsync();
+        var ownerMembership = (await owner.MembersAsync(org.Id)).Single(m => m.UserId == owner.UserId).Id;
+        var email = $"race-{Guid.NewGuid():N}@example.com";
+        var invite = await InviteAsync(owner, org.Id, email, "Manager");
+        var invitee = await ApiClient.RegisterAsync(factory, email);
+        var token = ApiClient.InvitationTokenFrom(factory, email);
+        factory.Clock.Advance(InvitationService.ResendCooldown);
+        var sentBefore = factory.Emails.Count(email);
+
+        var (resender, resenderDb, resenderScope) = InviteAs(org.Id, ownerMembership, TenantRole.TenantOwner);
+        using (resenderScope)
+        {
+            // Freeze the resend after its "already a member?" check, i.e. with a stale view of the still-pending invitation.
+            factory.Gate.PauseAfterNextQuery(resenderDb, "\"NormalizedEmail\" = @");
+            var resending = Task.Run(() => resender.ResendAsync(invite.Id, CancellationToken.None));
+            Assert.True(await factory.Gate.WaitUntilPausedAsync());
+
+            Assert.Equal(HttpStatusCode.OK, (await invitee.PostAsync("/api/v1/invitations/accept", new { token })).StatusCode);
+            factory.Gate.Resume();
+
+            var error = await Assert.ThrowsAsync<AppException>(() => resending.WaitAsync(QueryGate.Timeout));
+            Assert.Equal(409, error.StatusCode);
+        }
+
+        Assert.Equal(sentBefore, factory.Emails.Count(email)); // no email for the failed resend
+        using var scope = factory.Services.CreateScope();
+        var stored = await scope.ServiceProvider.GetRequiredService<OpsFlowDbContext>().Invitations.IgnoreQueryFilters().AsNoTracking().SingleAsync(i => i.Id == invite.Id);
+        Assert.Equal(SecureToken.Hash(token), stored.TokenHash); // acceptance untouched: same token and expiry
+        Assert.Equal(invite.ExpiresAtUtc, stored.ExpiresAtUtc, TimeSpan.FromMilliseconds(1));
+        Assert.Equal(invitee.UserId, stored.AcceptedByUserId);
+        Assert.Equal(HttpStatusCode.OK, (await invitee.PostAsync("/api/v1/invitations/accept", new { token })).StatusCode); // idempotent retry still works
+    }
 }

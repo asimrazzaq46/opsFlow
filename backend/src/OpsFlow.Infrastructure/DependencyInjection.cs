@@ -15,7 +15,7 @@ using OpsFlow.Infrastructure.Storage;
 
 namespace OpsFlow.Infrastructure;
 
-public static class DependencyInjection
+public static partial class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(
         this IServiceCollection services,
@@ -33,6 +33,22 @@ public static class DependencyInjection
         services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
         services.AddSingleton<ITokenService, TokenService>(); // issues and validates both access and refresh JWTs
         services.AddScoped<ISessionValidator, SessionValidator>();
+
+        // Google sign-in is optional: without GoogleAuth:ClientId the endpoints answer AUTH_GOOGLE_DISABLED and password auth is unaffected.
+        var googleClientId = configuration[$"{GoogleAuthOptions.SectionName}:{nameof(GoogleAuthOptions.ClientId)}"];
+        if (
+            !string.IsNullOrWhiteSpace(googleClientId)
+            && !GoogleClientId().IsMatch(googleClientId)
+        )
+        {
+            throw new InvalidOperationException(
+                "GoogleAuth:ClientId must be a Google OAuth web client id ('<number>-<id>.apps.googleusercontent.com'). Leave it empty to disable Google sign-in."
+            );
+        }
+
+        services.Configure<GoogleAuthOptions>(configuration.GetSection(GoogleAuthOptions.SectionName));
+        services.AddSingleton<IGoogleIdTokenValidator, GoogleIdTokenValidator>();
+        services.AddSingleton<IOneTimeChallengeStore, InMemoryChallengeStore>(); // replaced by Redis below when configured
 
         // Attachments: private local storage behind the IAttachmentStorage abstraction
         services.Configure<AttachmentOptions>(
@@ -75,8 +91,12 @@ public static class DependencyInjection
             }
 
             services.Replace(ServiceDescriptor.Singleton<ITenantCache, RedisTenantCache>());
+            services.Replace(ServiceDescriptor.Singleton<IOneTimeChallengeStore, RedisChallengeStore>());
         }
 
         return services;
     }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^[0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com$")]
+    private static partial System.Text.RegularExpressions.Regex GoogleClientId();
 }

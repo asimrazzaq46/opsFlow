@@ -32,6 +32,9 @@ public sealed class User
 
     public bool IsEmailVerified => EmailVerifiedAtUtc is not null;
 
+    /// <summary>False for accounts created through an external provider: they have no local password (empty hash) until one is set via password reset.</summary>
+    public bool HasPassword => PasswordHash.Length > 0;
+
     public bool IsActive => Status == UserStatus.Active;
 
     public bool IsLockedOut(DateTime nowUtc) => LockoutEndUtc is { } end && end > nowUtc;
@@ -73,6 +76,19 @@ public sealed class User
         FailedLoginCount = 0;
         LockoutEndUtc = null;
         LastLoginAtUtc = nowUtc;
+        UpdatedAtUtc = nowUtc;
+    }
+
+    /// <summary>Records a sign-in through an external provider. The password lockout is deliberately left untouched.</summary>
+    public void RecordExternalLogin(DateTime nowUtc)
+    {
+        LastLoginAtUtc = nowUtc;
+        UpdatedAtUtc = nowUtc;
+    }
+
+    public void SetDisplayName(string displayName, DateTime nowUtc)
+    {
+        DisplayName = displayName;
         UpdatedAtUtc = nowUtc;
     }
 

@@ -24,6 +24,7 @@ public sealed class OpsFlowDbContext(
     public DbSet<UserToken> UserTokens => Set<UserToken>();
     public DbSet<UserSession> UserSessions => Set<UserSession>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<UserExternalIdentity> UserExternalIdentities => Set<UserExternalIdentity>();
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<Membership> Memberships => Set<Membership>();
     public DbSet<Invitation> Invitations => Set<Invitation>();
@@ -83,6 +84,14 @@ public sealed class OpsFlowDbContext(
         var (postgresIndex, sqliteColumn) = constraint switch
         {
             UniqueConstraintKind.UserEmail => ("IX_Users_NormalizedEmail", "Users.NormalizedEmail"),
+            UniqueConstraintKind.ExternalIdentitySubject => (
+                "IX_UserExternalIdentities_Provider_ProviderSubject",
+                "UserExternalIdentities.ProviderSubject"
+            ),
+            UniqueConstraintKind.ExternalIdentityUser => (
+                "IX_UserExternalIdentities_UserId_Provider",
+                "UserExternalIdentities.UserId"
+            ),
             UniqueConstraintKind.TenantSlug => ("IX_Tenants_Slug", "Tenants.Slug"),
             UniqueConstraintKind.MembershipUser => (
                 "IX_Memberships_TenantId_UserId",

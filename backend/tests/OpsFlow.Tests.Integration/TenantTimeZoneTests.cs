@@ -266,4 +266,68 @@ public class TenantTimeZoneTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.NotNull(definition);
         Assert.Contains("(\"TenantId\", \"UpdatedAtUtc\" DESC, \"Number\")", definition, StringComparison.Ordinal);
     }
+
+    // ---------------------------------------------------------------- organization name and effective settings
+
+    [Fact]
+    public async Task Owner_renames_the_organization_while_identifiers_and_defaults_stay_unchanged()
+    {
+        var w = await TicketWorld.CreateAsync(factory);
+        var before = await w.Manager.ReadAsync<JsonElement>(await w.Manager.GetAsync(w.Url("settings")));
+        Assert.Equal("UTC", before.GetProperty("reportingTimeZone").GetString());
+        Assert.Equal(w.Org.Name, before.GetProperty("name").GetString());
+        Assert.Equal("TKT", before.GetProperty("ticketNumberPrefix").GetString());
+        var categoriesBefore = (await w.Owner.GetAsync(w.Url("ticket-categories"))).Content.ReadAsStringAsync();
+
+        var updated = await w.Owner.ReadAsync<JsonElement>(await w.Owner.PutAsync(w.Url("settings"), new { reportingTimeZone = "Europe/Rome", name = "  Renamed Support  ", slug = "hijack", tenantId = Guid.NewGuid() }));
+
+        Assert.Equal("Renamed Support", updated.GetProperty("name").GetString());
+        Assert.Equal("Europe/Rome", updated.GetProperty("reportingTimeZone").GetString());
+        Assert.Equal(w.Org.Slug, updated.GetProperty("slug").GetString());
+        Assert.Equal("Renamed Support", (await w.Agent1.ReadAsync<OrgDto>(await w.Agent1.GetAsync($"/api/v1/tenants/{w.Org.Id}"))).Name);
+        Assert.Equal(await categoriesBefore, await (await w.Owner.GetAsync(w.Url("ticket-categories"))).Content.ReadAsStringAsync());
+
+        // Omitting the name keeps it; only the timezone changes.
+        var zoneOnly = await w.Owner.ReadAsync<JsonElement>(await w.Owner.PutAsync(w.Url("settings"), new { reportingTimeZone = "UTC" }));
+        Assert.Equal("Renamed Support", zoneOnly.GetProperty("name").GetString());
+    }
+
+    [Theory]
+    [InlineData("x")]
+    [InlineData("   ")]
+    [InlineData("Bad\u0007Name")]
+    public async Task Invalid_organization_names_are_rejected_and_nothing_changes(string name)
+    {
+        var w = await TicketWorld.CreateAsync(factory);
+        Assert.Equal(HttpStatusCode.BadRequest, (await w.Owner.PutAsync(w.Url("settings"), new { reportingTimeZone = "Europe/Rome", name })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await w.Owner.PutAsync(w.Url("settings"), new { reportingTimeZone = "Europe/Rome", name = new string('n', 101) })).StatusCode);
+        Assert.Equal("UTC", await StoredZoneAsync(w));
+        Assert.Equal(w.Org.Name, (await w.Owner.ReadAsync<OrgDto>(await w.Owner.GetAsync($"/api/v1/tenants/{w.Org.Id}"))).Name);
+    }
+
+    [Fact]
+    public async Task Only_the_owner_of_this_tenant_can_rename_it()
+    {
+        var a = await TicketWorld.CreateAsync(factory);
+        var b = await TicketWorld.CreateAsync(factory);
+
+        foreach (var who in new[] { a.Manager, a.Agent1, a.Customer, b.Owner })
+        {
+            Assert.Equal(HttpStatusCode.Forbidden, (await who.PutAsync(a.Url("settings"), new { reportingTimeZone = "UTC", name = "Taken Over" })).StatusCode);
+        }
+
+        Assert.Equal(a.Org.Name, (await a.Owner.ReadAsync<OrgDto>(await a.Owner.GetAsync($"/api/v1/tenants/{a.Org.Id}"))).Name);
+    }
+
+    [Fact]
+    public async Task Concurrent_renames_end_in_one_of_the_submitted_names()
+    {
+        var w = await TicketWorld.CreateAsync(factory);
+        var calls = await Task.WhenAll(
+            w.Owner.PutAsync(w.Url("settings"), new { reportingTimeZone = "UTC", name = "Name One" }),
+            w.Owner.PutAsync(w.Url("settings"), new { reportingTimeZone = "UTC", name = "Name Two" }));
+
+        Assert.All(calls, c => Assert.True(c.StatusCode is HttpStatusCode.OK or HttpStatusCode.Conflict, c.StatusCode.ToString()));
+        Assert.True((await w.Owner.ReadAsync<OrgDto>(await w.Owner.GetAsync($"/api/v1/tenants/{w.Org.Id}"))).Name is "Name One" or "Name Two");
+    }
 }

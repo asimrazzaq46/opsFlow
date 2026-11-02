@@ -1079,6 +1079,44 @@ namespace OpsFlow.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OpsFlow.Domain.Users.UserExternalIdentity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("LastLoginAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("ProviderSubject")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Provider", "ProviderSubject")
+                        .IsUnique();
+
+                    b.HasIndex("UserId", "Provider")
+                        .IsUnique();
+
+                    b.ToTable("UserExternalIdentities", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_UserExternalIdentities_Provider", "\"Provider\" IN ('Google')");
+                        });
+                });
+
             modelBuilder.Entity("OpsFlow.Domain.Users.UserSession", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1488,6 +1526,15 @@ namespace OpsFlow.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("SessionId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OpsFlow.Domain.Users.UserExternalIdentity", b =>
+                {
+                    b.HasOne("OpsFlow.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

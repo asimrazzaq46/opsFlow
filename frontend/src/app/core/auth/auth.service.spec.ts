@@ -69,4 +69,23 @@ describe('AuthService', () => {
     expect(realtime.stop).toHaveBeenCalled();
     expect(tenant.clear).toHaveBeenCalled();
   });
+
+  it('adopts a Google sign-in through the same in-memory session and sends only credential + challenge', () => {
+    invoke.mockReturnValueOnce(of(session(7)));
+    auth.loginWithGoogle({ credential: 'id-token', challengeId: 'c1' }).subscribe();
+
+    expect(invoke.mock.calls[1][1]).toEqual({ body: { credential: 'id-token', challengeId: 'c1' } });
+    expect(auth.accessToken()).toBe('access-7');
+    expect(realtime.start).toHaveBeenCalledTimes(2);
+    expect(localStorage.length + sessionStorage.length).toBe(0);
+  });
+
+  it('keeps the current session when Google registration still needs email confirmation', () => {
+    invoke.mockReturnValueOnce(of(null));
+    let result: AuthResponse | null | undefined;
+    auth.loginWithGoogle({ credential: 'id-token', challengeId: 'c1' }).subscribe((r) => (result = r));
+
+    expect(result).toBeNull();
+    expect(auth.accessToken()).toBe('access-1');
+  });
 });

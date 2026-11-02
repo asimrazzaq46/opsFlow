@@ -36,7 +36,8 @@
     "customers": "Customers",
     "team": "Team",
     "reports": "Reports",
-    "menu": "Main navigation"
+    "menu": "Main navigation",
+    "account": "Account"
   },
   "auth": {
     "signIn": "Sign in",
@@ -44,7 +45,8 @@
     "password": "Password",
     "submit": "Sign in",
     "signOut": "Sign out",
-    "invalid": "Sign-in failed. Check your email and password."
+    "invalid": "Sign-in failed. Check your email and password.",
+    "signingIn": "Signing in…"
   },
   "tenant": {
     "label": "Workspace",
@@ -339,5 +341,38 @@
     "sent": "Invitation sent.",
     "duplicate": "A pending invitation or membership already exists.",
     "error": "The invitation action failed."
+  },
+  "google": {
+    "or": "or",
+    "loading": "Loading Google sign-in…",
+    "unavailable": "Google sign-in could not be loaded.",
+    "signUpHint": "New to OpsFlow? Continue with Google to create an account. Invitations and workspaces work as usual.",
+    "verifyEmail": "Account created. Confirm your email address with the link we sent, then sign in with Google again.",
+    "errors": {
+      "linkRequired": "An OpsFlow account already uses this email. Sign in with your password, then link Google under Account.",
+      "expired": "The Google sign-in request expired. Please try again.",
+      "invalid": "Google could not confirm this sign-in. Please try again.",
+      "googleEmailUnverified": "This Google account has no verified email address.",
+      "emailNotVerified": "Confirm your email address with the link we sent before signing in.",
+      "disabled": "This account is deactivated.",
+      "identityConflict": "This Google account is already linked to a different OpsFlow account.",
+      "alreadyLinked": "Your account is already linked to another Google account.",
+      "passwordNotSet": "Set a password first (use \"Forgot password\") to link Google.",
+      "unavailable": "Google sign-in is temporarily unavailable. Please try again shortly.",
+      "wrongPassword": "The password is incorrect.",
+      "rateLimited": "Too many attempts. Please wait a minute and try again.",
+      "generic": "Google sign-in failed. Please try again."
+    }
+  },
+  "account": {
+    "title": "Account",
+    "loadError": "Could not load your account.",
+    "google": "Google sign-in",
+    "linked": "Your Google account is linked. You can sign in with Google.",
+    "linkedNow": "Google account linked. You can now sign in with Google.",
+    "passwordRequired": "Your account has no password. Set one with \"Forgot password\" before linking Google.",
+    "confirmPassword": "Confirm your password to link a Google account.",
+    "continue": "Continue",
+    "chooseGoogle": "Now choose the Google account to link."
   }
 }

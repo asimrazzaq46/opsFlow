@@ -29,5 +29,7 @@ public sealed class Tenant
             OwnerChangeStamp = Guid.NewGuid(),
         };
 
+    public void Rename(string name) => Name = name;
+
     public void RotateOwnerChangeStamp() => OwnerChangeStamp = Guid.NewGuid();
 }

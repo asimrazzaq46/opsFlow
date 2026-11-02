@@ -13,6 +13,8 @@ using Npgsql;
 using Testcontainers.PostgreSql;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using OpsFlow.Application.Abstractions;
+using OpsFlow.Application.Auth;
+using OpsFlow.Application.Common;
 using OpsFlow.Application.Outbox;
 using OpsFlow.Infrastructure.Persistence;
 
@@ -215,6 +217,42 @@ public sealed class PostgresOnlyFactAttribute : FactAttribute
 }
 
 /// <summary>Boots the real API on a throw-away database (own connection per DbContext, so concurrency tests are real).</summary>
+/// <summary>
+/// Stands in for Google's ID-token verification (never calls Google). A credential string maps to the claims a VALID token would carry;
+/// anything unknown is rejected exactly like a token with a wrong signature, issuer, audience or expiry.
+/// </summary>
+public sealed class FakeGoogleValidator : IGoogleIdTokenValidator
+{
+    private readonly ConcurrentDictionary<string, GoogleIdentity> _tokens = new();
+
+    public bool Unavailable { get; set; }
+
+    private int _calls;
+
+    public int Calls => Volatile.Read(ref _calls);
+
+    /// <summary>Registers a "valid" token and returns its credential string.</summary>
+    public string Issue(GoogleIdentity identity)
+    {
+        var credential = $"google-test-token-{Guid.NewGuid():N}";
+        _tokens[credential] = identity;
+        return credential;
+    }
+
+    public Task<GoogleIdentity> ValidateAsync(string idToken, CancellationToken cancellationToken)
+    {
+        Interlocked.Increment(ref _calls);
+        if (Unavailable)
+        {
+            throw new AppException(503, "Google sign-in is temporarily unavailable.").WithCode("AUTH_GOOGLE_UNAVAILABLE");
+        }
+
+        return _tokens.TryGetValue(idToken, out var identity)
+            ? Task.FromResult(identity)
+            : throw AppException.Unauthorized("The Google credential is invalid.").WithCode("AUTH_GOOGLE_TOKEN_INVALID");
+    }
+}
+
 public class ApiFactory : WebApplicationFactory<Program>
 {
     private readonly string _dbName = $"opsflow_test_{Guid.NewGuid():N}";
@@ -232,6 +270,12 @@ public class ApiFactory : WebApplicationFactory<Program>
 
     protected virtual int SensitivePermitLimit => 100_000;
 
+    public const string GoogleTestClientId = "123456789-opsflowtest.apps.googleusercontent.com";
+
+    protected virtual string GoogleClientId => GoogleTestClientId;
+
+    public FakeGoogleValidator Google { get; } = new();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
@@ -242,6 +286,7 @@ public class ApiFactory : WebApplicationFactory<Program>
             ["Auth:Jwt:SigningKey"] = "integration-test-signing-key-0123456789-abcdefghij",
             ["Auth:Password:Iterations"] = "1000", // fast hashing for tests only; production enforces >= 210000
             ["Database:AutoApplyMigrationsOnStartup"] = "false", // test hosts create and own the schema themselves
+            ["GoogleAuth:ClientId"] = GoogleClientId,
         }));
         builder.ConfigureServices(services =>
         {
@@ -263,6 +308,8 @@ public class ApiFactory : WebApplicationFactory<Program>
             services.AddSingleton<TimeProvider>(Clock);
             services.RemoveAll<IEmailService>();
             services.AddSingleton<IEmailService>(Emails);
+            services.RemoveAll<IGoogleIdTokenValidator>();
+            services.AddSingleton<IGoogleIdTokenValidator>(Google);
         });
     }
 
@@ -315,4 +362,9 @@ public class ApiFactory : WebApplicationFactory<Program>
 public sealed class RateLimitedApiFactory : ApiFactory
 {
     protected override int SensitivePermitLimit => 2;
+}
+
+public sealed class GoogleDisabledApiFactory : ApiFactory
+{
+    protected override string GoogleClientId => string.Empty;
 }

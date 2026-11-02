@@ -5,6 +5,7 @@
   <ItemGroup>
     <PackageVersion Include="HotChocolate.AspNetCore" Version="16.7.3" />
     <PackageVersion Include="HotChocolate.AspNetCore.Authorization" Version="16.7.3" />
+    <PackageVersion Include="Google.Apis.Auth" Version="1.78.0" />
     <PackageVersion Include="Hangfire.AspNetCore" Version="1.8.25" />
     <PackageVersion Include="Hangfire.Core" Version="1.8.25" />
     <PackageVersion Include="Hangfire.PostgreSql" Version="1.21.1" />

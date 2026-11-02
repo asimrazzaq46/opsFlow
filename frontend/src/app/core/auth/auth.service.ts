@@ -3,9 +3,10 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { Observable, catchError, finalize, of, shareReplay, tap, throwError } from 'rxjs';
 import { Api } from '../api/generated/api';
-import { login, logout, refreshSession } from '../api/generated/functions';
+import { login, logout, refreshSession, signInWithGoogle } from '../api/generated/functions';
 import { AuthResponse, UserInfo } from '../api/generated/models';
 import { RealtimeService } from '../realtime/realtime.service';
+import { GoogleCredential } from './google-identity.service';
 import { TenantService } from './tenant.service';
 
 export const HUB_URL = '/hubs/realtime';
@@ -30,10 +31,17 @@ export class AuthService {
   private timer: ReturnType<typeof setTimeout> | undefined;
 
   login(email: string, password: string): Observable<AuthResponse> {
-    return this.api.invoke(login, { body: { email, password } }).pipe(
+    return this.api.invoke(login, { body: { email, password } }).pipe(tap((r) => this.begin(r)));
+  }
+
+  /**
+   * Exchanges a Google credential for the regular OpsFlow session (same tokens and lifecycle as password login).
+   * Emits null when the new account must confirm its email first (202, no session).
+   */
+  loginWithGoogle(credential: GoogleCredential): Observable<AuthResponse | null> {
+    return this.api.invoke(signInWithGoogle, { body: credential }).pipe(
       tap((r) => {
-        this.adopt(r);
-        void this.realtime.start(HUB_URL, () => this._accessToken() ?? '');
+        if (r) this.begin(r);
       }),
     );
   }
@@ -80,6 +88,11 @@ export class AuthService {
     void this.realtime.stop();
     this.tenant.clear();
     void this.router.navigateByUrl('/login');
+  }
+
+  private begin(r: AuthResponse): void {
+    this.adopt(r);
+    void this.realtime.start(HUB_URL, () => this._accessToken() ?? '');
   }
 
   private adopt(r: AuthResponse): void {

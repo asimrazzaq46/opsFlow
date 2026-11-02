@@ -28,6 +28,9 @@ public sealed partial class InvitationService(
     // 72-hour expiry per the approved requirement.
     private static readonly TimeSpan Lifetime = TimeSpan.FromHours(72);
 
+    /// <summary>Minimum time between two emails for the same invitation.</summary>
+    public static readonly TimeSpan ResendCooldown = TimeSpan.FromMinutes(2);
+
     /// <summary>Permission matrix: Owners manage invitations of any staff role; Managers only Agent invitations.</summary>
     private static bool CanManage(TenantRole actorRole, TenantRole invitedRole) =>
         actorRole == TenantRole.TenantOwner
@@ -161,6 +164,105 @@ public sealed partial class InvitationService(
     }
 
     /// <summary>
+    /// Re-sends a pending or expired (but not accepted/revoked) invitation with a NEW token and a fresh 72-hour expiry; role, email and
+    /// tenant never change. The old token stops working in the same commit. Follows the same current-authorization + OwnerChangeStamp
+    /// protocol as create/revoke, so two concurrent resends cannot both commit: the loser retries and then hits the cooldown. Like
+    /// invitation creation, the email carries a one-time secret and is therefore sent directly (best effort) after the commit, never
+    /// through the durable outbox; if delivery fails the invitation can be resent again after the cooldown.
+    /// </summary>
+    public async Task<InvitationDto> ResendAsync(Guid invitationId, CancellationToken ct)
+    {
+        for (var attempt = 0; attempt < MaxAttempts; attempt++)
+        {
+            var tenant = await db.Tenants.SingleAsync(ct);
+            var actorRole = await actor.RequireActiveRoleAsync(ct);
+            var invitation =
+                await db.Invitations.AsNoTracking().SingleOrDefaultAsync(i => i.Id == invitationId, ct)
+                ?? throw AppException.NotFound("Invitation not found.");
+            if (!CanManage(actorRole, invitation.Role))
+            {
+                throw AppException.Forbidden("You can only resend Agent and Customer invitations.");
+            }
+
+            if (!invitation.IsOpen)
+            {
+                throw AppException
+                    .Conflict("The invitation was already accepted or revoked.")
+                    .WithCode("INVITATION_NOT_RESENDABLE");
+            }
+
+            if (
+                await db.Memberships.AnyAsync(
+                    m =>
+                        m.Status == MembershipStatus.Active
+                        && db.Users.Any(u => u.Id == m.UserId && u.NormalizedEmail == invitation.NormalizedEmail),
+                    ct
+                )
+            )
+            {
+                throw AppException
+                    .Conflict("This person is already an active member of the organization.")
+                    .WithCode("INVITATION_ALREADY_MEMBER");
+            }
+
+            var now = clock.GetUtcNow().UtcDateTime;
+            // The last send time is derived from the fixed lifetime, so no extra column is needed.
+            var lastSentAt = invitation.ExpiresAtUtc - Lifetime;
+            if (now - lastSentAt < ResendCooldown)
+            {
+                throw new AppException(
+                    429,
+                    "The invitation was sent moments ago.",
+                    $"Wait {ResendCooldown.TotalMinutes:0} minutes before resending it."
+                ).WithCode("INVITATION_RESEND_COOLDOWN");
+            }
+
+            var (token, hash) = SecureToken.Generate();
+            await using (var transaction = await db.BeginTransactionAsync(ct))
+            {
+                // Compare-and-swap on the token that was read: a concurrent accept, revoke or resend makes this match no row,
+                // and the retry then reports the current state (not resendable or cooldown) without sending an email.
+                var swapped = await db
+                    .Invitations.Where(i =>
+                        i.Id == invitation.Id
+                        && i.TokenHash == invitation.TokenHash
+                        && i.AcceptedAtUtc == null
+                        && i.RevokedAtUtc == null
+                    )
+                    .ExecuteUpdateAsync(
+                        s => s.SetProperty(i => i.TokenHash, hash).SetProperty(i => i.ExpiresAtUtc, now + Lifetime),
+                        ct
+                    );
+                if (swapped == 0)
+                {
+                    db.ChangeTracker.Clear();
+                    continue;
+                }
+
+                tenant.RotateOwnerChangeStamp();
+                try
+                {
+                    await db.SaveChangesAsync(ct);
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    db.ChangeTracker.Clear();
+                    continue; // disposing the transaction rolls the token swap back
+                }
+
+                await transaction.CommitAsync(ct);
+            }
+
+            invitation.Reissue(hash, now, Lifetime); // untracked copy: reflects the committed values for the email and response
+            LogResent(logger, invitation.Id, tenant.Id);
+            await SendAsync(invitation, token, ct);
+            return ToDto(invitation);
+        }
+
+        throw AppException.Conflict("The organization changed concurrently.", "Please retry.");
+    }
+
+    /// <summary>
     /// Accepts an invitation as the signed-in user. Their verified email must match the invited address.
     /// Retry-safe: the same user repeating (or racing) the request gets the membership they already have.
     /// </summary>
@@ -214,25 +316,58 @@ public sealed partial class InvitationService(
                     );
                 await db
                     .Invitations.Where(i =>
-                        i.Id == invitation.Id && i.AcceptedAtUtc == null && i.RevokedAtUtc == null
+                        i.Id == invitation.Id
+                        && i.TokenHash == hash
+                        && i.AcceptedAtUtc == null
+                        && i.RevokedAtUtc == null
                     )
                     .ExecuteUpdateAsync(s => s.SetProperty(i => i.RevokedAtUtc, now), ct);
                 return existing;
             }
 
-            invitation.Accept(userId, now);
+            await using var transaction = await db.BeginTransactionAsync(ct);
+            // Conditional claim: only succeeds while THIS token is still current and pending, so a concurrent resend, revoke
+            // or accept cannot both succeed with it.
+            var claimed = await db
+                .Invitations.Where(i =>
+                    i.Id == invitation.Id
+                    && i.TokenHash == hash
+                    && i.AcceptedAtUtc == null
+                    && i.RevokedAtUtc == null
+                    && i.ExpiresAtUtc > now
+                )
+                .ExecuteUpdateAsync(
+                    s => s.SetProperty(i => i.AcceptedAtUtc, now).SetProperty(i => i.AcceptedByUserId, userId),
+                    ct
+                );
+            if (claimed == 0)
+            {
+                await transaction.RollbackAsync(ct);
+                var acceptedBy = await db
+                    .Invitations.AsNoTracking()
+                    .Where(i => i.Id == invitation.Id)
+                    .Select(i => i.AcceptedByUserId)
+                    .SingleAsync(ct);
+                // The same user's concurrent request won: idempotent success, as for a repeated accept.
+                return acceptedBy == userId
+                    ? await ExistingAsync(invitation.TenantId, userId, ct) ?? throw InvalidInvitation()
+                    : throw InvalidInvitation();
+            }
+
             db.Memberships.Add(
                 Membership.Create(invitation.TenantId, userId, invitation.Role, now)
             );
             try
             {
                 await db.SaveChangesAsync(ct);
+                await transaction.CommitAsync(ct);
             }
             catch (DbUpdateException ex)
                 when (db.IsUniqueViolation(ex, UniqueConstraintKind.MembershipUser))
             {
-                // A concurrent accept by the same user wins the unique (TenantId, UserId) index; treat as success.
+                // The user became a member concurrently; the claim is rolled back and the existing membership returned.
                 db.ChangeTracker.Clear();
+                await transaction.RollbackAsync(ct);
                 return await ExistingAsync(invitation.TenantId, userId, ct)
                     ?? throw AppException.Conflict(
                         "The invitation could not be accepted.",
@@ -322,6 +457,12 @@ public sealed partial class InvitationService(
         Guid tenantId,
         TenantRole role
     );
+
+    [LoggerMessage(
+        Level = LogLevel.Information,
+        Message = "Invitation {InvitationId} of tenant {TenantId} resent with a new token"
+    )]
+    private static partial void LogResent(ILogger logger, Guid invitationId, Guid tenantId);
 
     [LoggerMessage(
         Level = LogLevel.Information,

@@ -24,6 +24,7 @@ public static class DependencyInjection
         services.AddScoped<UserTokenService>();
         services.AddScoped<SessionService>();
         services.AddScoped<AccountService>();
+        services.AddScoped<GoogleAuthService>();
         services.AddScoped<OrganizationService>();
         services.AddScoped<ActorAccess>();
         services.AddScoped<TenantDefaultsService>();

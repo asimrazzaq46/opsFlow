@@ -1,0 +1,16 @@
+:host {
+  display: block;
+}
+
+/* Google renders its own iframe; keep it from overflowing narrow screens. */
+.google-button {
+  min-height: 44px;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+/* While a request runs the official button stays visible but cannot start a second sign-in. */
+.google-button.is-busy {
+  opacity: 0.5;
+  pointer-events: none;
+}

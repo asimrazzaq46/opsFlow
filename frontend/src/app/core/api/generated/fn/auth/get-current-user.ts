@@ -7,12 +7,12 @@ import { filter, map } from 'rxjs/operators';
 import { StrictHttpResponse } from '../../strict-http-response';
 import { RequestBuilder } from '../../request-builder';
 
-import { UserInfo } from '../../models/user-info';
+import { UserProfileDto } from '../../models/user-profile-dto';
 
 export interface GetCurrentUser$Params {
 }
 
-export function getCurrentUser(http: HttpClient, rootUrl: string, params?: GetCurrentUser$Params, context?: HttpContext): Observable<StrictHttpResponse<UserInfo>> {
+export function getCurrentUser(http: HttpClient, rootUrl: string, params?: GetCurrentUser$Params, context?: HttpContext): Observable<StrictHttpResponse<UserProfileDto>> {
   const rb = new RequestBuilder(rootUrl, getCurrentUser.PATH, 'get');
   if (params) {
   }
@@ -22,7 +22,7 @@ export function getCurrentUser(http: HttpClient, rootUrl: string, params?: GetCu
   ).pipe(
     filter((r: any): r is HttpResponse<any> => r instanceof HttpResponse),
     map((r: HttpResponse<any>) => {
-      return r as StrictHttpResponse<UserInfo>;
+      return r as StrictHttpResponse<UserProfileDto>;
     })
   );
 }

@@ -416,7 +416,7 @@
           "Auth"
         ],
         "summary": "Get current user",
-        "description": "Returns the profile of the authenticated user.",
+        "description": "Returns the profile of the authenticated user, including which sign-in methods are available (local password, linked Google account). Never returns password hashes or tokens.",
         "operationId": "GetCurrentUser",
         "responses": {
           "200": {
@@ -424,7 +424,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/UserInfo"
+                  "$ref": "#/components/schemas/UserProfileDto"
                 }
               }
             }
@@ -435,6 +435,365 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded; retry later.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Update current user profile",
+        "description": "Updates the authenticated user's own display name (trimmed, 2-100 characters, no control characters). The user is always taken from the access token; email, password, status and memberships cannot be changed here. Access tokens carry no display name, so no token refresh is needed.",
+        "operationId": "UpdateCurrentUser",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProfileRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfileDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid Bearer access token.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed; see `errors` for the offending fields.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded; retry later.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/google/challenge": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Start Google sign-in",
+        "description": "Anonymous. Issues a one-time challenge for the Google Identity Services button: a nonce to pass to google.accounts.id.initialize, an opaque challengeId to send back with the credential, its expiry (about 5 minutes) and the public Google client id. Usable for sign-in only. 404 AUTH_GOOGLE_DISABLED when Google sign-in is not configured; 503 AUTH_GOOGLE_UNAVAILABLE when the challenge store is unavailable.",
+        "operationId": "CreateGoogleChallenge",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoogleChallenge"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded; retry later.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/google": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Sign in or register with Google",
+        "description": "Anonymous. Verifies the Google ID token (signature, issuer, audience, expiry, authorized party, verified email) and its nonce against the one-time sign-in challenge, which is consumed. A linked Google account receives the regular OpsFlow token pair (200, same body as login). A new Google account is registered without any organization membership: Gmail and Google Workspace addresses are signed in immediately; other addresses get a confirmation email first (202, no tokens). Errors: 400 AUTH_GOOGLE_CHALLENGE_INVALID (missing, expired, replayed or mismatched challenge), 401 AUTH_GOOGLE_TOKEN_INVALID, 403 AUTH_GOOGLE_EMAIL_NOT_VERIFIED / AUTH_EMAIL_NOT_VERIFIED / AUTH_ACCOUNT_DISABLED, 409 AUTH_GOOGLE_LINK_REQUIRED (an account with this email exists: sign in with the password and link Google; accounts are never linked by email), 503 AUTH_GOOGLE_UNAVAILABLE.",
+        "operationId": "SignInWithGoogle",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoogleCredentialRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed; see `errors` for the offending fields.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded; retry later.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/google/link/challenge": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Start Google account linking",
+        "description": "Re-authenticates the signed-in user with their current password (counts towards the login lockout) and issues a one-time challenge bound to this user that is usable for linking only. Accounts without a local password get 403 AUTH_PASSWORD_NOT_SET; a wrong password is a 400 validation error.",
+        "operationId": "CreateGoogleLinkChallenge",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoogleLinkChallengeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoogleChallenge"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid Bearer access token.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed; see `errors` for the offending fields.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded; retry later.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/google/link": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Link a Google account",
+        "description": "Links the verified Google account to the signed-in user. Requires a link challenge issued to this same user; a sign-in challenge is rejected. Repeating the request for the same Google account is a no-op. Memberships and roles are never changed. Errors: 400 AUTH_GOOGLE_CHALLENGE_INVALID, 401 AUTH_GOOGLE_TOKEN_INVALID, 403 AUTH_GOOGLE_EMAIL_NOT_VERIFIED, 409 AUTH_GOOGLE_IDENTITY_CONFLICT (linked to another user) or AUTH_GOOGLE_ALREADY_LINKED (this user has a different Google account), 503 AUTH_GOOGLE_UNAVAILABLE.",
+        "operationId": "LinkGoogleAccount",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoogleCredentialRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid Bearer access token.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed; see `errors` for the offending fields.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemResponse"
                 }
               }
             }
@@ -1454,6 +1813,104 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ValidationProblemResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded; retry later.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/invitations/{invitationId}/resend": {
+      "post": {
+        "tags": [
+          "Invitations"
+        ],
+        "summary": "Resend invitation",
+        "description": "Emails a pending or expired invitation again with a new one-time token and a fresh 72-hour expiry; every earlier link stops working. Role, email and organization are unchanged. Managers may resend Agent and Customer invitations only. Requires the Owner or Manager role in the tenant. 409 INVITATION_NOT_RESENDABLE (accepted or revoked) or INVITATION_ALREADY_MEMBER (the invitee is already an active member); 429 INVITATION_RESEND_COOLDOWN within 2 minutes of the previous email. The response never contains the token.",
+        "operationId": "ResendInvitation",
+        "parameters": [
+          {
+            "name": "invitationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "path",
+            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid Bearer access token.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no active membership with a sufficient role in this tenant.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The resource does not exist or is not visible to the caller.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
                 }
               }
             }
@@ -2841,7 +3298,7 @@
           "Tenants"
         ],
         "summary": "Get organization settings",
-        "description": "Returns the organization's reporting timezone (IANA id, UTC for organizations that never set one). Requires an Owner, Manager or Agent role in the tenant.",
+        "description": "Returns the effective organization settings: name, read-only slug and ticket number prefix, and the reporting timezone (IANA id, UTC for organizations that never set one). Requires an Owner, Manager or Agent role in the tenant.",
         "operationId": "GetTenantSettings",
         "parameters": [
           {
@@ -2898,7 +3355,7 @@
           "Tenants"
         ],
         "summary": "Update organization settings",
-        "description": "Sets the reporting timezone used for day-based dashboards, reports and CSV exports. The value must be an exact IANA id such as Europe/Rome; a timezone detected by the browser is only a suggestion until an Owner saves it here. Existing SLA deadlines are never changed. Requires the Owner role in the tenant.",
+        "description": "Sets the reporting timezone used for day-based dashboards, reports and CSV exports and, optionally, renames the organization (name: 2-100 characters; omit or null to keep it). The timezone must be an exact IANA id such as Europe/Rome; a timezone detected by the browser is only a suggestion until an Owner saves it here. The slug, ticket number prefix, categories, SLA policies and existing SLA deadlines are never changed. The tenant always comes from the route. Requires the Owner role in the tenant; 409 when ownership changed concurrently.",
         "operationId": "UpdateTenantSettings",
         "parameters": [
           {
@@ -6536,6 +6993,56 @@
           }
         }
       },
+      "GoogleChallenge": {
+        "required": [
+          "challengeId",
+          "nonce",
+          "expiresAtUtc",
+          "clientId"
+        ],
+        "type": "object",
+        "properties": {
+          "challengeId": {
+            "type": "string"
+          },
+          "nonce": {
+            "type": "string"
+          },
+          "expiresAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "clientId": {
+            "type": "string"
+          }
+        }
+      },
+      "GoogleCredentialRequest": {
+        "required": [
+          "credential",
+          "challengeId"
+        ],
+        "type": "object",
+        "properties": {
+          "credential": {
+            "type": "string"
+          },
+          "challengeId": {
+            "type": "string"
+          }
+        }
+      },
+      "GoogleLinkChallengeRequest": {
+        "required": [
+          "password"
+        ],
+        "type": "object",
+        "properties": {
+          "password": {
+            "type": "string"
+          }
+        }
+      },
       "HealthResponse": {
         "required": [
           "status",
@@ -7426,11 +7933,23 @@
       },
       "TenantSettingsDto": {
         "required": [
-          "reportingTimeZone"
+          "reportingTimeZone",
+          "name",
+          "slug",
+          "ticketNumberPrefix"
         ],
         "type": "object",
         "properties": {
           "reportingTimeZone": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "ticketNumberPrefix": {
             "type": "string"
           }
         }
@@ -8076,6 +8595,17 @@
           }
         }
       },
+      "UpdateProfileRequest": {
+        "required": [
+          "displayName"
+        ],
+        "type": "object",
+        "properties": {
+          "displayName": {
+            "type": "string"
+          }
+        }
+      },
       "UpdateSlaPolicyRequest": {
         "required": [
           "responseMinutes",
@@ -8109,6 +8639,12 @@
         "properties": {
           "reportingTimeZone": {
             "type": "string"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -8207,6 +8743,34 @@
           },
           "displayName": {
             "type": "string"
+          }
+        }
+      },
+      "UserProfileDto": {
+        "required": [
+          "id",
+          "email",
+          "displayName",
+          "hasPassword",
+          "googleLinked"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "hasPassword": {
+            "type": "boolean"
+          },
+          "googleLinked": {
+            "type": "boolean"
           }
         }
       },

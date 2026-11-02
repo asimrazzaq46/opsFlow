@@ -73,4 +73,11 @@ public sealed class Invitation : ITenantOwned
     }
 
     public void Revoke(DateTime nowUtc) => RevokedAtUtc = nowUtc;
+
+    /// <summary>Replaces the token (every earlier link stops working) and restarts the expiry window; role and tenant never change.</summary>
+    public void Reissue(string tokenHash, DateTime nowUtc, TimeSpan lifetime)
+    {
+        TokenHash = tokenHash;
+        ExpiresAtUtc = nowUtc + lifetime;
+    }
 }

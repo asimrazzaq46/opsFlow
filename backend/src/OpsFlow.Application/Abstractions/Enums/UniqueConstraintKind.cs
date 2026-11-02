@@ -4,6 +4,8 @@ namespace OpsFlow.Application.Abstractions;
 public enum UniqueConstraintKind
 {
     UserEmail,
+    ExternalIdentitySubject,
+    ExternalIdentityUser,
     TenantSlug,
     MembershipUser,
     OpenInvitation,

@@ -266,9 +266,39 @@ public sealed partial class AccountService(
         throw AppException.Conflict("The organization changed concurrently.", "Please retry.");
     }
 
-    public async Task<User> GetAsync(Guid userId, CancellationToken ct) =>
-        await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Id == userId, ct)
-        ?? throw AppException.NotFound("User not found.");
+    public async Task<UserProfileDto> GetProfileAsync(Guid userId, CancellationToken ct) =>
+        await db
+            .Users.AsNoTracking()
+            .Where(u => u.Id == userId)
+            .Select(u => new UserProfileDto(
+                u.Id,
+                u.Email,
+                u.DisplayName,
+                u.PasswordHash != string.Empty,
+                db.UserExternalIdentities.Any(i =>
+                    i.UserId == u.Id && i.Provider == ExternalIdentityProvider.Google
+                )
+            ))
+            .SingleOrDefaultAsync(ct) ?? throw AppException.NotFound("User not found.");
+
+    /// <summary>Only the display name is editable here; email, password, status and memberships have their own protected flows.</summary>
+    public async Task<UserProfileDto> UpdateDisplayNameAsync(
+        Guid userId,
+        string displayName,
+        CancellationToken ct
+    )
+    {
+        var name = DisplayNameRules.Validate(displayName, "displayName");
+        var user = await db.Users.SingleAsync(u => u.Id == userId, ct);
+        if (user.DisplayName != name)
+        {
+            user.SetDisplayName(name, Now);
+            await db.SaveChangesAsync(ct);
+            LogDisplayNameChanged(logger, userId);
+        }
+
+        return await GetProfileAsync(userId, ct);
+    }
 
     private Task<User?> FindByEmailAsync(string address, CancellationToken ct)
     {
@@ -276,7 +306,7 @@ public sealed partial class AccountService(
         return db.Users.SingleOrDefaultAsync(u => u.NormalizedEmail == normalized, ct);
     }
 
-    private async Task SendVerificationAsync(User user, CancellationToken ct)
+    internal async Task SendVerificationAsync(User user, CancellationToken ct)
     {
         var raw = await tokens.IssueAsync(
             user.Id,
@@ -359,6 +389,9 @@ public sealed partial class AccountService(
         Message = "User {UserId} deactivated; all sessions revoked"
     )]
     private static partial void LogDeactivated(ILogger logger, Guid userId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "User {UserId} changed their display name")]
+    private static partial void LogDisplayNameChanged(ILogger logger, Guid userId);
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Sending an authentication email failed")]
     private static partial void LogEmailFailed(ILogger logger, Exception exception);

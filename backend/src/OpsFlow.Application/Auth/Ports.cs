@@ -54,3 +54,31 @@ public interface ISessionValidator
         CancellationToken cancellationToken
     );
 }
+
+/// <summary>Claims of a Google ID token whose signature, issuer, audience, authorized party and lifetime were already verified.</summary>
+public sealed record GoogleIdentity(
+    string Subject,
+    string? Email,
+    bool EmailVerified,
+    string? HostedDomain,
+    string? Nonce,
+    string? Name
+);
+
+public interface IGoogleIdTokenValidator
+{
+    /// <summary>
+    /// Verifies the ID token cryptographically against Google's published keys and the configured client id. Throws an
+    /// <see cref="Common.AppException"/>: 401 for an invalid token, 503 when Google's keys cannot be retrieved.
+    /// </summary>
+    Task<GoogleIdentity> ValidateAsync(string idToken, CancellationToken cancellationToken);
+}
+
+/// <summary>Shared short-lived store for one-time authentication challenges. Implementations must make <see cref="TakeAsync"/> atomic.</summary>
+public interface IOneTimeChallengeStore
+{
+    Task AddAsync(string key, string value, TimeSpan lifetime, CancellationToken cancellationToken);
+
+    /// <summary>Returns and deletes the value in one atomic step, so a challenge can be consumed at most once; null when missing or expired.</summary>
+    Task<string?> TakeAsync(string key, CancellationToken cancellationToken);
+}

@@ -17,6 +17,7 @@ namespace OpsFlow.Api.Controllers;
 public sealed class AuthController(
     AccountService accounts,
     SessionService sessions,
+    GoogleAuthService google,
     ICurrentUser current
 ) : ControllerBase
 {
@@ -141,10 +142,98 @@ public sealed class AuthController(
     [HttpGet("me", Name = "GetCurrentUser")]
     [Authorize]
     [EndpointSummary("Get current user")]
-    [EndpointDescription("Returns the profile of the authenticated user.")]
-    public async Task<ActionResult<UserInfo>> GetCurrentUser(CancellationToken ct)
+    [EndpointDescription(
+        "Returns the profile of the authenticated user, including which sign-in methods are available (local password, linked Google account). Never returns password hashes or tokens."
+    )]
+    public async Task<ActionResult<UserProfileDto>> GetCurrentUser(CancellationToken ct)
     {
-        return Ok(ToInfo(await accounts.GetAsync(current.UserId, ct)));
+        return Ok(await accounts.GetProfileAsync(current.UserId, ct));
+    }
+
+    [HttpPut("me", Name = "UpdateCurrentUser")]
+    [Authorize]
+    [EndpointSummary("Update current user profile")]
+    [EndpointDescription(
+        "Updates the authenticated user's own display name (trimmed, 2-100 characters, no control characters). The user is always taken from the access token; email, password, status and memberships cannot be changed here. Access tokens carry no display name, so no token refresh is needed."
+    )]
+    [ProducesResponseType<UserProfileDto>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<UserProfileDto>> UpdateCurrentUser(
+        UpdateProfileRequest request,
+        CancellationToken ct
+    )
+    {
+        return Ok(await accounts.UpdateDisplayNameAsync(current.UserId, request.DisplayName, ct));
+    }
+
+    [HttpPost("google/challenge", Name = "CreateGoogleChallenge")]
+    [AllowAnonymous]
+    [EndpointSummary("Start Google sign-in")]
+    [EndpointDescription(
+        "Anonymous. Issues a one-time challenge for the Google Identity Services button: a nonce to pass to google.accounts.id.initialize, an opaque challengeId to send back with the credential, its expiry (about 5 minutes) and the public Google client id. Usable for sign-in only. 404 AUTH_GOOGLE_DISABLED when Google sign-in is not configured; 503 AUTH_GOOGLE_UNAVAILABLE when the challenge store is unavailable."
+    )]
+    [ProducesResponseType<GoogleChallenge>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemResponse>(StatusCodes.Status503ServiceUnavailable, "application/problem+json")]
+    public async Task<ActionResult<GoogleChallenge>> CreateGoogleChallenge(CancellationToken ct)
+    {
+        NoStore();
+        return Ok(await google.CreateSignInChallengeAsync(ct));
+    }
+
+    [HttpPost("google", Name = "SignInWithGoogle")]
+    [AllowAnonymous]
+    [EndpointSummary("Sign in or register with Google")]
+    [EndpointDescription(
+        "Anonymous. Verifies the Google ID token (signature, issuer, audience, expiry, authorized party, verified email) and its nonce against the one-time sign-in challenge, which is consumed. "
+            + "A linked Google account receives the regular OpsFlow token pair (200, same body as login). A new Google account is registered without any organization membership: Gmail and Google Workspace addresses are signed in immediately; other addresses get a confirmation email first (202, no tokens). "
+            + "Errors: 400 AUTH_GOOGLE_CHALLENGE_INVALID (missing, expired, replayed or mismatched challenge), 401 AUTH_GOOGLE_TOKEN_INVALID, 403 AUTH_GOOGLE_EMAIL_NOT_VERIFIED / AUTH_EMAIL_NOT_VERIFIED / AUTH_ACCOUNT_DISABLED, "
+            + "409 AUTH_GOOGLE_LINK_REQUIRED (an account with this email exists: sign in with the password and link Google; accounts are never linked by email), 503 AUTH_GOOGLE_UNAVAILABLE."
+    )]
+    [ProducesResponseType<AuthResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status202Accepted)]
+    [ProducesResponseType<ProblemResponse>(StatusCodes.Status401Unauthorized, "application/problem+json")]
+    [ProducesResponseType<ProblemResponse>(StatusCodes.Status403Forbidden, "application/problem+json")]
+    [ProducesResponseType<ProblemResponse>(StatusCodes.Status409Conflict, "application/problem+json")]
+    [ProducesResponseType<ProblemResponse>(StatusCodes.Status503ServiceUnavailable, "application/problem+json")]
+    public async Task<ActionResult<AuthResponse>> SignInWithGoogle(
+        GoogleCredentialRequest request,
+        CancellationToken ct
+    )
+    {
+        var result = await google.SignInAsync(request.Credential, request.ChallengeId, UserAgent, ct);
+        return result.Tokens is { } tokens ? TokenResponse(tokens, result.User) : Accepted();
+    }
+
+    [HttpPost("google/link/challenge", Name = "CreateGoogleLinkChallenge")]
+    [Authorize]
+    [EndpointSummary("Start Google account linking")]
+    [EndpointDescription(
+        "Re-authenticates the signed-in user with their current password (counts towards the login lockout) and issues a one-time challenge bound to this user that is usable for linking only. Accounts without a local password get 403 AUTH_PASSWORD_NOT_SET; a wrong password is a 400 validation error."
+    )]
+    [ProducesResponseType<GoogleChallenge>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemResponse>(StatusCodes.Status503ServiceUnavailable, "application/problem+json")]
+    public async Task<ActionResult<GoogleChallenge>> CreateGoogleLinkChallenge(
+        GoogleLinkChallengeRequest request,
+        CancellationToken ct
+    )
+    {
+        NoStore();
+        return Ok(await google.CreateLinkChallengeAsync(current.UserId, request.Password, ct));
+    }
+
+    [HttpPost("google/link", Name = "LinkGoogleAccount")]
+    [Authorize]
+    [EndpointSummary("Link a Google account")]
+    [EndpointDescription(
+        "Links the verified Google account to the signed-in user. Requires a link challenge issued to this same user; a sign-in challenge is rejected. Repeating the request for the same Google account is a no-op. Memberships and roles are never changed. "
+            + "Errors: 400 AUTH_GOOGLE_CHALLENGE_INVALID, 401 AUTH_GOOGLE_TOKEN_INVALID, 403 AUTH_GOOGLE_EMAIL_NOT_VERIFIED, 409 AUTH_GOOGLE_IDENTITY_CONFLICT (linked to another user) or AUTH_GOOGLE_ALREADY_LINKED (this user has a different Google account), 503 AUTH_GOOGLE_UNAVAILABLE."
+    )]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType<ProblemResponse>(StatusCodes.Status409Conflict, "application/problem+json")]
+    [ProducesResponseType<ProblemResponse>(StatusCodes.Status503ServiceUnavailable, "application/problem+json")]
+    public async Task<IActionResult> LinkGoogleAccount(GoogleCredentialRequest request, CancellationToken ct)
+    {
+        await google.LinkAsync(current.UserId, request.Credential, request.ChallengeId, ct);
+        return NoContent();
     }
 
     [HttpPost("logout-all", Name = "LogoutAll")]
@@ -234,11 +323,16 @@ public sealed class AuthController(
     private string? UserAgent =>
         Request.Headers.UserAgent.ToString() is { Length: > 0 } ua ? ua : null;
 
-    // Responses carrying tokens must never be stored by browsers or intermediaries.
-    private ActionResult<AuthResponse> TokenResponse(SessionTokens tokens, User user)
+    // Responses carrying tokens or one-time challenges must never be stored by browsers or intermediaries.
+    private void NoStore()
     {
         Response.Headers.CacheControl = "no-store";
         Response.Headers.Pragma = "no-cache";
+    }
+
+    private ActionResult<AuthResponse> TokenResponse(SessionTokens tokens, User user)
+    {
+        NoStore();
         return Ok(
             new AuthResponse(
                 tokens.AccessToken,
