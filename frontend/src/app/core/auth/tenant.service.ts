@@ -1,4 +1,5 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
+import { Observable, finalize, tap } from 'rxjs';
 import { Api } from '../api/generated/api';
 import { listMyOrganizations } from '../api/generated/functions';
 import { OrganizationDto } from '../api/generated/models';
@@ -18,28 +19,32 @@ export class TenantService {
   readonly role = computed(() => this.current()?.role ?? null);
   readonly isStaff = computed(() => this.role() !== null && this.role() !== 'Customer');
 
-  load(): void {
+  /** Reloads the memberships from the server; a selection that is no longer authorized falls back to the first workspace. */
+  load(): Observable<OrganizationDto[]> {
     this.loading.set(true);
     this.error.set(false);
-    this.api.invoke(listMyOrganizations, {}).subscribe({
-      next: (orgs) => {
-        this.organizations.set(orgs);
-        if (!orgs.some((o) => o.id === this.selectedId())) this.selectedId.set(orgs[0]?.id ?? null);
-        this.loading.set(false);
-      },
-      error: () => {
-        this.error.set(true);
-        this.loading.set(false);
-      },
-    });
+    return this.api.invoke(listMyOrganizations, {}).pipe(
+      tap({
+        next: (orgs) => {
+          this.organizations.set(orgs);
+          if (!orgs.some((o) => o.id === this.selectedId())) this.selectedId.set(orgs[0]?.id ?? null);
+        },
+        error: () => this.error.set(true),
+      }),
+      finalize(() => this.loading.set(false)),
+    );
   }
 
-  select(id: string): void {
+  /** Only ids returned by the server can become active; tenant-scoped views react to `tenantId` and reload. */
+  select(id: string): boolean {
+    if (!this.organizations().some((o) => o.id === id)) return false;
     this.selectedId.set(id);
+    return true;
   }
 
   clear(): void {
     this.organizations.set([]);
     this.selectedId.set(null);
+    this.error.set(false);
   }
 }

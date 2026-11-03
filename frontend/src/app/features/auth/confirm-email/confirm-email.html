@@ -1,0 +1,106 @@
+<div class="relative overflow-hidden">
+  <div class="pointer-events-none absolute -top-24 left-1/2 h-[360px] w-[720px] max-w-full -translate-x-1/2 bg-gradient-to-b from-primary-fixed/25 via-surface-container/40 to-transparent opacity-70 blur-3xl" aria-hidden="true"></div>
+
+  <div class="relative mx-auto flex max-w-xl flex-col items-center">
+    <!-- Flow progress: create account, confirm email, sign in -->
+    <div class="mb-6 w-full">
+      <div class="mb-1 flex items-center gap-1">
+        <span class="ops-chip bg-surface-container-highest text-on-surface-variant">{{ 'authFlow.confirm.step' | translate }}</span>
+        <span class="text-label-caps uppercase tracking-wider text-primary">{{ 'authFlow.confirm.stepName' | translate }}</span>
+      </div>
+      <div class="grid w-full grid-cols-3 gap-1.5" aria-hidden="true">
+        <div class="h-1 rounded-full bg-primary"></div>
+        <div class="h-1 rounded-full" [class]="view() === 'confirmed' ? 'bg-primary' : 'bg-primary-container'"></div>
+        <div class="h-1 rounded-full bg-surface-container-high"></div>
+      </div>
+    </div>
+
+    <section class="w-full overflow-hidden rounded-lg bg-surface-container-lowest shadow-[0_12px_36px_-6px_rgba(19,27,46,0.08),0_2px_8px_rgba(19,27,46,0.04)]" aria-labelledby="confirm-title" aria-live="polite">
+      <div class="bg-gradient-to-b from-surface-container-low/70 to-surface-container-lowest px-6 pt-6 pb-4">
+        <div class="relative mb-4 w-fit">
+          <div class="grid size-12 place-items-center rounded-lg text-on-primary shadow-[0_4px_16px_rgba(0,74,198,0.25)]"
+            [class]="view() === 'invalid' ? 'bg-error' : 'bg-primary-container'">
+            <span class="ms text-[24px]" [class.animate-spin]="view() === 'verifying'" aria-hidden="true">{{ view() === 'confirmed' ? 'mark_email_read' : view() === 'invalid' ? 'link_off' : view() === 'verifying' ? 'progress_activity' : 'mail' }}</span>
+          </div>
+          @if (view() === 'confirmed') {
+            <div class="absolute -right-1 -bottom-1 grid size-5 place-items-center rounded-full bg-surface-container-lowest shadow-sm">
+              <span class="ms text-[13px] text-secondary [font-variation-settings:'FILL'_1]" aria-hidden="true">verified</span>
+            </div>
+          }
+        </div>
+
+        @switch (view()) {
+          @case ('verifying') {
+            <h1 id="confirm-title" class="mb-1 text-headline-lg tracking-tight text-on-surface">{{ 'authFlow.confirm.verifyingTitle' | translate }}</h1>
+            <p class="text-body-md text-on-surface-variant" role="status">{{ 'authFlow.confirm.verifyingText' | translate }}</p>
+          }
+          @case ('confirmed') {
+            <h1 id="confirm-title" class="mb-1 text-headline-lg tracking-tight text-on-surface">{{ 'authFlow.confirm.confirmedTitle' | translate }}</h1>
+            <p class="text-body-md text-on-surface-variant" role="status">{{ 'authFlow.confirm.confirmedText' | translate }}</p>
+          }
+          @case ('invalid') {
+            <h1 id="confirm-title" class="mb-1 text-headline-lg tracking-tight text-on-surface">{{ 'authFlow.confirm.invalidTitle' | translate }}</h1>
+            <p class="text-body-md text-on-surface-variant" role="alert">{{ (error() ?? 'authFlow.confirm.invalidText') | translate }}</p>
+          }
+          @default {
+            <h1 id="confirm-title" class="mb-1 text-headline-lg tracking-tight text-on-surface">{{ 'authFlow.confirm.inboxTitle' | translate }}</h1>
+            <p class="text-body-md leading-relaxed text-on-surface-variant">
+              {{ 'authFlow.confirm.inboxText' | translate }}
+              @if (sentTo(); as address) {
+                <span class="mt-1 inline-flex max-w-full items-center gap-1 rounded-xs bg-surface-container px-1.5 py-0.5 font-mono text-mono-data font-semibold break-all text-on-surface">{{ address }}</span>
+              }
+            </p>
+          }
+        }
+      </div>
+
+      <div class="px-6 pt-2 pb-6">
+        @if (view() === 'confirmed') {
+          <a routerLink="/login" [queryParams]="{ returnUrl: safeReturn() }" class="ops-btn-primary w-full">
+            <span>{{ 'authFlow.confirm.continue' | translate }}</span>
+            <span class="ms text-[18px]" aria-hidden="true">arrow_forward</span>
+          </a>
+        } @else if (view() !== 'verifying') {
+          <form class="space-y-3" (ngSubmit)="resend()" novalidate>
+            <label for="resend-email" class="ops-label">{{ 'authFlow.confirm.resendLabel' | translate }}</label>
+            <div class="flex flex-col gap-2 sm:flex-row">
+              <div class="relative flex flex-1 items-center">
+                <span class="ms pointer-events-none absolute left-3 text-[18px] text-on-surface-variant" aria-hidden="true">alternate_email</span>
+                <input id="resend-email" type="email" autocomplete="email" inputmode="email" [formControl]="email" [placeholder]="'authFlow.emailPlaceholder' | translate"
+                  [attr.aria-invalid]="email.invalid && email.touched ? 'true' : null" class="ops-input pl-9 font-mono text-mono-data" />
+              </div>
+              <button type="submit" class="ops-btn-secondary h-10 shrink-0" [disabled]="resendBusy()" [attr.aria-busy]="resendBusy()">
+                <span class="ms text-[16px]" [class.animate-spin]="resendBusy()" aria-hidden="true">{{ resendBusy() ? 'progress_activity' : 'send' }}</span>
+                {{ 'authFlow.confirm.resend' | translate }}
+              </button>
+            </div>
+            @if (email.invalid && email.touched) {
+              <p class="ops-error">{{ 'authFlow.validation.email' | translate }}</p>
+            }
+            @if (resendResult(); as result) {
+              @if (result === 'sent') {
+                <p role="status" class="flex items-start gap-2 rounded-sm bg-secondary-container/60 p-3 text-body-sm text-on-secondary-container">
+                  <span class="ms text-[16px]" aria-hidden="true">outgoing_mail</span>{{ 'authFlow.confirm.resent' | translate }}
+                </p>
+              } @else {
+                <p role="alert" class="rounded-sm bg-error-container p-3 text-body-sm text-on-error-container">{{ result | translate }}</p>
+              }
+            }
+          </form>
+
+          <p class="mt-4 flex items-start gap-1 text-body-sm text-on-surface-variant">
+            <span class="ms text-[15px] text-outline" aria-hidden="true">mark_email_unread</span>
+            {{ 'authFlow.confirm.spamHint' | translate }}
+          </p>
+        }
+      </div>
+    </section>
+
+    <div class="mt-6 flex w-full flex-col items-center justify-between gap-3 px-1 text-on-surface-variant sm:flex-row">
+      <a routerLink="/login" [queryParams]="{ returnUrl: safeReturn() }" class="ops-link flex items-center gap-1.5 text-body-sm text-on-surface-variant hover:text-on-surface">
+        <span class="ms text-[16px]" aria-hidden="true">arrow_back</span>{{ 'authFlow.backToSignIn' | translate }}
+      </a>
+      <a routerLink="/register" class="ops-link text-body-sm font-medium">{{ 'authFlow.confirm.otherEmail' | translate }}</a>
+    </div>
+  </div>
+</div>

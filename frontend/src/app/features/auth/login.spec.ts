@@ -1,20 +1,19 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Router } from '@angular/router';
+import { provideRouter } from '@angular/router';
 import { provideTranslateService } from '@ngx-translate/core';
 import { Subject, of, throwError } from 'rxjs';
 import { AuthResponse } from '../../core/api/generated/models';
 import { AuthService } from '../../core/auth/auth.service';
 import { GoogleCredential, GoogleIdentityService } from '../../core/auth/google-identity.service';
-import { TenantService } from '../../core/auth/tenant.service';
+import { PostSignIn } from '../../core/auth/post-sign-in';
 import { Login } from './login';
 
 const session = { accessToken: 'a', refreshToken: 'r' } as AuthResponse;
 
 describe('Login', () => {
   const auth = { login: vi.fn(), loginWithGoogle: vi.fn() };
-  const tenant = { load: vi.fn() };
-  const router = { navigateByUrl: vi.fn() };
+  const postSignIn = { enter: vi.fn() };
   const google = { render: vi.fn(), release: vi.fn() };
   let fixture: ComponentFixture<Login>;
   let onCredential: ((c: GoogleCredential) => void) | undefined;
@@ -33,9 +32,9 @@ describe('Login', () => {
       imports: [Login],
       providers: [
         provideTranslateService(),
+        provideRouter([]),
         { provide: AuthService, useValue: auth },
-        { provide: TenantService, useValue: tenant },
-        { provide: Router, useValue: router },
+        { provide: PostSignIn, useValue: postSignIn },
         { provide: GoogleIdentityService, useValue: google },
       ],
     });
@@ -55,8 +54,7 @@ describe('Login', () => {
     await fixture.whenStable();
 
     expect(auth.loginWithGoogle).toHaveBeenCalledWith(credential);
-    expect(tenant.load).toHaveBeenCalled();
-    expect(router.navigateByUrl).toHaveBeenCalledWith('/dashboard');
+    expect(postSignIn.enter).toHaveBeenCalledWith(null);
   });
 
   it('ignores a second credential while a request runs and fetches a new challenge only afterwards', async () => {
@@ -80,7 +78,7 @@ describe('Login', () => {
     await fixture.whenStable();
 
     expect(text()).toContain('google.errors.linkRequired');
-    expect(router.navigateByUrl).not.toHaveBeenCalled();
+    expect(postSignIn.enter).not.toHaveBeenCalled();
   });
 
   it('asks a new account to confirm its email when no session is issued', async () => {
@@ -89,7 +87,7 @@ describe('Login', () => {
     await fixture.whenStable();
 
     expect(text()).toContain('google.verifyEmail');
-    expect(router.navigateByUrl).not.toHaveBeenCalled();
+    expect(postSignIn.enter).not.toHaveBeenCalled();
   });
 
   it('keeps password sign-in working', async () => {
@@ -98,7 +96,29 @@ describe('Login', () => {
     fixture.componentInstance['submit']();
     await fixture.whenStable();
     expect(auth.login).toHaveBeenCalledWith('a@b.it', 'pw');
-    expect(router.navigateByUrl).toHaveBeenCalledWith('/dashboard');
+    expect(postSignIn.enter).toHaveBeenCalledWith(null);
+  });
+
+  it('shows one generic message for rejected credentials and never follows an external return URL', async () => {
+    fixture.componentRef.setInput('returnUrl', '//evil.test');
+    auth.login.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 401 })));
+    fixture.componentInstance['form'].setValue({ email: 'a@b.it', password: 'bad' });
+    fixture.componentInstance['submit']();
+    await fixture.whenStable();
+    expect(text()).toContain('auth.invalid');
+
+    auth.login.mockReturnValue(of(session));
+    fixture.componentInstance['submit']();
+    await fixture.whenStable();
+    expect(postSignIn.enter).toHaveBeenCalledWith(null);
+  });
+
+  it('does not submit an invalid form', async () => {
+    fixture.componentInstance['form'].setValue({ email: 'not-an-email', password: '' });
+    fixture.componentInstance['submit']();
+    await fixture.whenStable();
+    expect(auth.login).not.toHaveBeenCalled();
+    expect(text()).toContain('authFlow.validation.email');
   });
 
   it('hides Google entirely when it is not configured', async () => {

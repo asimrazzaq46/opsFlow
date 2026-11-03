@@ -1,8 +1,10 @@
 import { HttpErrorResponse } from '@angular/common/http';
+import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideTranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 import { UserProfileDto } from '../../core/api/generated/models';
+import { AuthService } from '../../core/auth/auth.service';
 import { GoogleCredential, GoogleIdentityService } from '../../core/auth/google-identity.service';
 import { AccountApi } from './account-api';
 import { AccountSecurity } from './account-security';
@@ -17,7 +19,8 @@ const me = (over: Partial<UserProfileDto> = {}): UserProfileDto => ({
 });
 
 describe('AccountSecurity', () => {
-  const account = { profile: vi.fn(), linkGoogle: vi.fn() };
+  const account = { profile: vi.fn(), linkGoogle: vi.fn(), sessions: vi.fn(() => of([])), revokeSession: vi.fn(), logoutAll: vi.fn() };
+  const auth = { changePassword: vi.fn(), logout: vi.fn(), clear: vi.fn(), updateUser: vi.fn(), user: signal(null) };
   const google = { render: vi.fn(), release: vi.fn() };
   let fixture: ComponentFixture<AccountSecurity>;
   let onCredential: ((c: GoogleCredential) => void) | undefined;
@@ -43,7 +46,12 @@ describe('AccountSecurity', () => {
     });
     TestBed.configureTestingModule({
       imports: [AccountSecurity],
-      providers: [provideTranslateService(), { provide: AccountApi, useValue: account }, { provide: GoogleIdentityService, useValue: google }],
+      providers: [
+        provideTranslateService(),
+        { provide: AccountApi, useValue: account },
+        { provide: AuthService, useValue: auth },
+        { provide: GoogleIdentityService, useValue: google },
+      ],
     });
   });
 

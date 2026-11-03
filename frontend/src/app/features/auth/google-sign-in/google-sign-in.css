@@ -2,11 +2,17 @@
   display: block;
 }
 
-/* Google renders its own iframe; keep it from overflowing narrow screens. */
+/* Google renders its own iframe; the full-width wrapper centers it and keeps it from overflowing narrow screens. */
 .google-button {
+  display: flex;
+  justify-content: center;
   min-height: 44px;
   max-width: 100%;
   overflow: hidden;
+}
+
+.google-button.hidden {
+  display: none;
 }
 
 /* While a request runs the official button stays visible but cannot start a second sign-in. */

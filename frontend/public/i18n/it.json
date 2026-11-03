@@ -37,7 +37,8 @@
     "team": "Team",
     "reports": "Report",
     "menu": "Navigazione principale",
-    "account": "Account"
+    "account": "Account",
+    "workspaces": "Workspace"
   },
   "auth": {
     "signIn": "Accedi",
@@ -340,7 +341,42 @@
     "empty": "Nessun invito in sospeso.",
     "sent": "Invito inviato.",
     "duplicate": "Esiste già un invito in sospeso o un'appartenenza.",
-    "error": "Operazione sull'invito non riuscita."
+    "error": "Operazione sull'invito non riuscita.",
+    "accept": {
+      "eyebrow": "Invito",
+      "workspace": "Invito al workspace",
+      "title": "Sei stato invitato in un workspace",
+      "subtitle": "Accetta l'invito per entrare nel workspace con il ruolo scelto da chi ti ha invitato.",
+      "missingText": "Il link di invito è incompleto. Apri di nuovo il link dall'email di invito.",
+      "detailsTitle": "Prima di accettare",
+      "rules": {
+        "email": "L'email confermata del tuo account deve corrispondere all'indirizzo invitato.",
+        "role": "Il ruolo è assegnato dal workspace e non può essere modificato qui.",
+        "expiry": "Gli inviti scadono e funzionano una sola volta."
+      },
+      "signedInAs": "Accesso effettuato come",
+      "role": "Il tuo ruolo",
+      "actionTitle": "Entra nel workspace",
+      "submit": "Accetta invito",
+      "accepting": "Accettazione…",
+      "switchAccount": "Usa un altro account",
+      "signInTitle": "Accedi per continuare",
+      "signInText": "Accedi con l'indirizzo email invitato. Tornerai qui per accettare.",
+      "signIn": "Accedi per accettare",
+      "register": "Crea un account",
+      "registerHint": "Nuovo su OpsFlow? Registrati con l'indirizzo invitato, conferma l'email e poi apri di nuovo questo link di invito.",
+      "joinedTitle": "Sei entrato in {{name}}",
+      "joinedText": "La tua iscrizione è attiva.",
+      "open": "Apri workspace",
+      "toWorkspaces": "Vai ai workspace",
+      "invalidTitle": "Invito non valido",
+      "invalidText": "Questo invito non è valido, è già stato usato, revocato o è scaduto. Richiedi un nuovo invito.",
+      "mismatchTitle": "Indirizzo email diverso",
+      "mismatchText": "L'invito è stato inviato a un altro indirizzo oppure la tua email non è ancora confermata. Accedi con l'account invitato.",
+      "conflictTitle": "Impossibile entrare",
+      "conflictText": "Il workspace è stato modificato nel frattempo. Riprova.",
+      "failedTitle": "Impossibile accettare l'invito"
+    }
   },
   "google": {
     "or": "oppure",
@@ -365,7 +401,7 @@
     }
   },
   "account": {
-    "title": "Account",
+    "title": "Impostazioni account",
     "loadError": "Impossibile caricare il tuo account.",
     "google": "Accesso con Google",
     "linked": "Il tuo account Google è collegato. Puoi accedere con Google.",
@@ -373,6 +409,254 @@
     "passwordRequired": "Il tuo account non ha una password. Impostala con \"Password dimenticata\" prima di collegare Google.",
     "confirmPassword": "Conferma la tua password per collegare un account Google.",
     "continue": "Continua",
-    "chooseGoogle": "Ora scegli l’account Google da collegare."
+    "chooseGoogle": "Ora scegli l’account Google da collegare.",
+    "subtitle": "Gestisci profilo, password, metodi di accesso e sessioni attive.",
+    "profile": {
+      "title": "Profilo",
+      "subtitle": "Il tuo nome è visibile al team in ticket e commenti.",
+      "name": "Nome completo",
+      "password": "Password",
+      "emailHint": "L'indirizzo email non può essere modificato.",
+      "save": "Salva modifiche",
+      "saved": "Profilo salvato.",
+      "saveError": "Impossibile salvare il profilo."
+    },
+    "password": {
+      "title": "Password",
+      "subtitle": "Cambiarla disconnette tutti gli altri dispositivi.",
+      "current": "Password attuale",
+      "submit": "Cambia password",
+      "changed": "Password cambiata. Gli altri dispositivi sono stati disconnessi.",
+      "wrongCurrent": "La password attuale non è corretta.",
+      "failed": "Impossibile cambiare la password."
+    },
+    "sessions": {
+      "title": "Sessioni attive",
+      "subtitle": "Dispositivi attualmente collegati al tuo account.",
+      "count": "{{count}} attive",
+      "thisDevice": "Questo dispositivo",
+      "unknownDevice": "Dispositivo sconosciuto",
+      "lastUsed": "Ultimo uso {{when}}",
+      "started": "accesso {{when}}",
+      "revoke": "Disconnetti",
+      "logoutAll": "Disconnetti tutte le sessioni",
+      "confirmAll": "Verrai disconnesso anche qui.",
+      "confirm": "Disconnetti ovunque",
+      "empty": "Nessuna sessione attiva.",
+      "loadError": "Impossibile caricare le sessioni.",
+      "revokeError": "Impossibile disconnettere la sessione."
+    }
+  },
+  "authFlow": {
+    "emailPlaceholder": "nome@azienda.com",
+    "newPasswordPlaceholder": "Crea una password",
+    "showPassword": "Mostra password",
+    "hidePassword": "Nascondi password",
+    "backToSignIn": "Torna all'accesso",
+    "validation": {
+      "email": "Inserisci un indirizzo email valido.",
+      "name": "Usa da 2 a 100 caratteri."
+    },
+    "errors": {
+      "generic": "Si è verificato un errore. Riprova.",
+      "network": "Impossibile raggiungere il server. Controlla la connessione e riprova.",
+      "rateLimited": "Troppi tentativi. Attendi un minuto e riprova."
+    },
+    "password": {
+      "new": "Nuova password",
+      "confirm": "Conferma password",
+      "confirmPlaceholder": "Ripeti la password",
+      "minLength": "Almeno {{min}} caratteri",
+      "minShort": "Min. {{min}} caratteri",
+      "match": "Le password coincidono",
+      "mismatch": "Le password non coincidono",
+      "rulesTitle": "Requisiti della password"
+    },
+    "login": {
+      "eyebrow": "Accesso",
+      "title": "Accedi a OpsFlow",
+      "subtitle": "Usa email e password oppure continua con Google.",
+      "forgot": "Password dimenticata?",
+      "noAccount": "Non hai un account?",
+      "register": "Crea un account",
+      "invitationHint": "Accedi con l'indirizzo email a cui è stato inviato l'invito. Dopo l'accesso tornerai all'invito.",
+      "deviceSession": "Resti connesso su questo dispositivo finché non esci o la sessione scade",
+      "isolation": "Dati isolati per workspace"
+    },
+    "aside": {
+      "eyebrow": "Operazioni di assistenza",
+      "title": "Ticket, SLA e il tuo team in un unico workspace.",
+      "footer": "Un account · più workspace · accesso basato sui ruoli",
+      "tickets": {
+        "title": "Gestione ticket",
+        "text": "I clienti aprono ticket; i manager li smistano e li assegnano agli agenti."
+      },
+      "sla": {
+        "title": "Monitoraggio SLA",
+        "text": "Obiettivi di risposta e risoluzione per priorità, con avvisi di ritardo."
+      },
+      "board": {
+        "title": "Bacheca Kanban",
+        "text": "Sposta il lavoro tra gli stati con aggiornamenti in tempo reale per tutto il team."
+      },
+      "workspaces": {
+        "title": "Più workspace",
+        "text": "Fai parte di più organizzazioni e passa dall'una all'altra con un solo account."
+      }
+    },
+    "register": {
+      "crumbStep": "Passo 1",
+      "crumbName": "Crea account",
+      "eyebrow": "Nuovo account",
+      "title": "Crea il tuo account OpsFlow",
+      "subtitle": "L'account è personale. Dopo l'accesso potrai creare un workspace o accettare un invito.",
+      "name": "Nome completo",
+      "namePlaceholder": "es. Ada Lovelace",
+      "emailHint": "Prima di poter accedere invieremo un link di conferma a questo indirizzo.",
+      "submit": "Crea account",
+      "submitting": "Creazione account…",
+      "invalid": "Controlla i campi evidenziati e riprova.",
+      "haveAccount": "Hai già un account?",
+      "signIn": "Accedi",
+      "multiEyebrow": "Workspace",
+      "multiTitle": "Un account, più organizzazioni",
+      "multiText": "Puoi far parte di più workspace e passare dall'uno all'altro. Il tuo ruolo è definito per ogni workspace dal proprietario o dai manager.",
+      "nextTitle": "Cosa succede dopo",
+      "next": {
+        "confirm": "Apri il link di conferma che ti inviamo via email.",
+        "signIn": "Accedi con email e password.",
+        "workspace": "Crea il tuo workspace oppure accetta un invito del tuo team."
+      },
+      "teamTitle": "Entri in un team esistente?",
+      "teamText": "Chiedi a un proprietario o a un manager di invitare il tuo indirizzo email, poi apri il link dell'invito dopo l'accesso."
+    },
+    "confirm": {
+      "step": "Passo 2 di 3",
+      "stepName": "Conferma email",
+      "inboxTitle": "Conferma il tuo indirizzo email",
+      "inboxText": "Se l'indirizzo può essere registrato, ti abbiamo inviato un link di conferma. Apri il link per attivare l'account.",
+      "verifyingTitle": "Conferma dell'email in corso…",
+      "verifyingText": "Attendi mentre verifichiamo il link di conferma.",
+      "confirmedTitle": "Email confermata",
+      "confirmedText": "Il tuo indirizzo email è confermato. Ora puoi accedere.",
+      "invalidTitle": "Questo link non può essere usato",
+      "invalidText": "Il link di conferma non è valido, è già stato usato o è scaduto. Richiedine uno nuovo qui sotto.",
+      "continue": "Continua all'accesso",
+      "resendLabel": "Invia un nuovo link di conferma",
+      "resend": "Invia link",
+      "resent": "Se esiste un account non confermato per questo indirizzo, è in arrivo un nuovo link.",
+      "spamHint": "Non lo trovi? Controlla la cartella spam o posta indesiderata.",
+      "otherEmail": "Usa un'altra email"
+    },
+    "forgot": {
+      "crumb": "Recupero account",
+      "crumbName": "Reimposta password",
+      "title": "Reimposta la password",
+      "subtitle": "Inserisci l'indirizzo email del tuo account e ti invieremo un link per scegliere una nuova password.",
+      "submit": "Invia link di reimpostazione",
+      "sending": "Invio…",
+      "acceptedTitle": "Richiesta ricevuta",
+      "acceptedText": "Se {{email}} appartiene a un account attivo e confermato, a breve riceverai un link di reimpostazione.",
+      "again": "Usa un altro indirizzo",
+      "back": "Ricordi la password? Torna all'accesso",
+      "howTitle": "Come funziona il recupero",
+      "policy": {
+        "eligible": {
+          "title": "Solo account confermati",
+          "text": "I link vengono inviati solo ad account attivi con email confermata."
+        },
+        "single": {
+          "title": "Monouso e a tempo",
+          "text": "Ogni link funziona una sola volta e scade dopo poco tempo."
+        },
+        "sessions": {
+          "title": "Disconnessione ovunque",
+          "text": "Impostare una nuova password chiude tutte le sessioni su ogni dispositivo."
+        }
+      },
+      "googleTitle": "Registrato con Google?",
+      "googleText": "Puoi usare questo modulo per aggiungere una password al tuo account; l'accesso con Google continua a funzionare."
+    },
+    "reset": {
+      "eyebrow": "Reimpostazione password",
+      "title": "Scegli una nuova password",
+      "subtitle": "La nuova password sostituisce la precedente e ti disconnette da tutti i dispositivi.",
+      "linkFor": "Link di reimpostazione per:",
+      "submit": "Aggiorna password",
+      "policy": "La password non rispetta i requisiti.",
+      "doneTitle": "Password aggiornata",
+      "doneText": "La password è stata cambiata e tutte le sessioni sono state chiuse. Accedi con la nuova password.",
+      "invalidTitle": "Questo link non può essere usato",
+      "invalidText": "Il link non è valido, è già stato usato o è scaduto. Richiedi un nuovo link.",
+      "requestNew": "Richiedi un nuovo link",
+      "afterTitle": "Dopo la reimpostazione",
+      "after": {
+        "sessions": {
+          "title": "Tutte le sessioni terminano",
+          "text": "Ogni dispositivo collegato a questo account viene disconnesso."
+        },
+        "google": {
+          "title": "Accesso con Google",
+          "text": "Un account Google collegato resta collegato e continua a funzionare."
+        }
+      },
+      "notYouTitle": "Non l'hai richiesto tu?",
+      "notYouText": "Ignora l'email. La password cambia solo quando invii questo modulo."
+    }
+  },
+  "workspaces": {
+    "select": {
+      "eyebrow": "Workspace",
+      "title": "Seleziona un workspace",
+      "welcome": "Bentornato, {{name}}",
+      "search": "Cerca workspace per nome",
+      "current": "Attuale",
+      "open": "Apri workspace",
+      "continue": "Continua",
+      "openNamed": "Apri {{name}}",
+      "loadError": "Impossibile caricare i tuoi workspace.",
+      "emptyTitle": "Nessun workspace",
+      "emptyText": "Crea un workspace per iniziare oppure apri il link di invito ricevuto dal tuo team.",
+      "noMatch": "Nessun workspace corrisponde alla ricerca.",
+      "clear": "Cancella ricerca",
+      "newEyebrow": "Nuovo workspace",
+      "newTitle": "Ti serve uno spazio separato per un altro team o cliente?",
+      "newText": "Crea un workspace con ticket, membri, categorie e policy SLA propri. Ne diventerai il proprietario.",
+      "create": "Crea workspace",
+      "signedInAs": "Accesso effettuato come"
+    },
+    "setup": {
+      "eyebrow": "Nuovo workspace",
+      "title": "Crea un workspace",
+      "subtitle": "Un workspace è un'organizzazione isolata con ticket, membri e impostazioni propri.",
+      "name": "Nome del workspace",
+      "nameLimit": "2–100 caratteri",
+      "namePlaceholder": "es. Assistenza Acme",
+      "nameLength": "Usa da 2 a 100 caratteri.",
+      "nameHint": "Da questo nome viene generato un identificativo breve (slug).",
+      "submit": "Crea workspace",
+      "creating": "Creazione…",
+      "cancel": "Torna ai workspace",
+      "invalid": "Il nome non è valido. Usa da 2 a 100 caratteri.",
+      "providedTitle": "Configurato per te",
+      "provided": {
+        "owner": {
+          "title": "Sei il proprietario",
+          "text": "Controllo completo di membri, ruoli e impostazioni."
+        },
+        "defaults": {
+          "title": "Categorie predefinite",
+          "text": "Impostazioni e categorie dei ticket vengono create automaticamente."
+        },
+        "sla": {
+          "title": "Policy SLA predefinite",
+          "text": "Obiettivi di risposta e risoluzione per priorità, pronti da modificare."
+        },
+        "team": {
+          "title": "Invita il tuo team",
+          "text": "Aggiungi manager, agenti e clienti dalla pagina Team."
+        }
+      }
+    }
   }
 }

@@ -37,7 +37,8 @@
     "team": "Team",
     "reports": "Reports",
     "menu": "Main navigation",
-    "account": "Account"
+    "account": "Account",
+    "workspaces": "Workspaces"
   },
   "auth": {
     "signIn": "Sign in",
@@ -340,7 +341,42 @@
     "empty": "No pending invitations.",
     "sent": "Invitation sent.",
     "duplicate": "A pending invitation or membership already exists.",
-    "error": "The invitation action failed."
+    "error": "The invitation action failed.",
+    "accept": {
+      "eyebrow": "Invitation",
+      "workspace": "Workspace invitation",
+      "title": "You have been invited to a workspace",
+      "subtitle": "Accept the invitation to join the workspace with the role chosen by the person who invited you.",
+      "missingText": "This invitation link is incomplete. Open the link from your invitation email again.",
+      "detailsTitle": "Before you accept",
+      "rules": {
+        "email": "Your account's confirmed email must match the invited address.",
+        "role": "Your role is assigned by the workspace; you cannot change it here.",
+        "expiry": "Invitations expire and work only once."
+      },
+      "signedInAs": "Signed in as",
+      "role": "Your role",
+      "actionTitle": "Join workspace",
+      "submit": "Accept invitation",
+      "accepting": "Accepting…",
+      "switchAccount": "Use a different account",
+      "signInTitle": "Sign in to continue",
+      "signInText": "Sign in with the invited email address. You will return here to accept.",
+      "signIn": "Sign in to accept",
+      "register": "Create an account",
+      "registerHint": "New to OpsFlow? Register with the invited address, confirm your email, then open this invitation link again.",
+      "joinedTitle": "You joined {{name}}",
+      "joinedText": "Your membership is active.",
+      "open": "Open workspace",
+      "toWorkspaces": "Go to workspaces",
+      "invalidTitle": "Invitation not valid",
+      "invalidText": "This invitation is invalid, already used, revoked or expired. Ask for a new invitation.",
+      "mismatchTitle": "Different email address",
+      "mismatchText": "This invitation was sent to another email address, or your email is not confirmed yet. Sign in with the invited account.",
+      "conflictTitle": "Could not join",
+      "conflictText": "The workspace changed in the meantime. Please try again.",
+      "failedTitle": "Could not accept the invitation"
+    }
   },
   "google": {
     "or": "or",
@@ -365,7 +401,7 @@
     }
   },
   "account": {
-    "title": "Account",
+    "title": "Account settings",
     "loadError": "Could not load your account.",
     "google": "Google sign-in",
     "linked": "Your Google account is linked. You can sign in with Google.",
@@ -373,6 +409,254 @@
     "passwordRequired": "Your account has no password. Set one with \"Forgot password\" before linking Google.",
     "confirmPassword": "Confirm your password to link a Google account.",
     "continue": "Continue",
-    "chooseGoogle": "Now choose the Google account to link."
+    "chooseGoogle": "Now choose the Google account to link.",
+    "subtitle": "Manage your profile, password, sign-in methods and active sessions.",
+    "profile": {
+      "title": "Profile",
+      "subtitle": "Your name is shown to your team in tickets and comments.",
+      "name": "Full name",
+      "password": "Password",
+      "emailHint": "Your email address cannot be changed.",
+      "save": "Save changes",
+      "saved": "Profile saved.",
+      "saveError": "Your profile could not be saved."
+    },
+    "password": {
+      "title": "Password",
+      "subtitle": "Changing it signs out all other devices.",
+      "current": "Current password",
+      "submit": "Change password",
+      "changed": "Password changed. Other devices were signed out.",
+      "wrongCurrent": "The current password is incorrect.",
+      "failed": "The password could not be changed."
+    },
+    "sessions": {
+      "title": "Active sessions",
+      "subtitle": "Devices currently signed in to your account.",
+      "count": "{{count}} active",
+      "thisDevice": "This device",
+      "unknownDevice": "Unknown device",
+      "lastUsed": "Last used {{when}}",
+      "started": "signed in {{when}}",
+      "revoke": "Sign out",
+      "logoutAll": "Sign out all sessions",
+      "confirmAll": "This also signs you out here.",
+      "confirm": "Sign out everywhere",
+      "empty": "No active sessions.",
+      "loadError": "Sessions could not be loaded.",
+      "revokeError": "The session could not be signed out."
+    }
+  },
+  "authFlow": {
+    "emailPlaceholder": "name@company.com",
+    "newPasswordPlaceholder": "Create a password",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "backToSignIn": "Back to sign in",
+    "validation": {
+      "email": "Enter a valid email address.",
+      "name": "Use between 2 and 100 characters."
+    },
+    "errors": {
+      "generic": "Something went wrong. Please try again.",
+      "network": "The server could not be reached. Check your connection and try again.",
+      "rateLimited": "Too many attempts. Please wait a minute and try again."
+    },
+    "password": {
+      "new": "New password",
+      "confirm": "Confirm password",
+      "confirmPlaceholder": "Repeat the password",
+      "minLength": "At least {{min}} characters",
+      "minShort": "Min. {{min}} characters",
+      "match": "Passwords match",
+      "mismatch": "Passwords do not match",
+      "rulesTitle": "Password requirements"
+    },
+    "login": {
+      "eyebrow": "Sign in",
+      "title": "Sign in to OpsFlow",
+      "subtitle": "Use your email and password, or continue with Google.",
+      "forgot": "Forgot password?",
+      "noAccount": "No account yet?",
+      "register": "Create an account",
+      "invitationHint": "Sign in with the email address the invitation was sent to. You will return to the invitation afterwards.",
+      "deviceSession": "Stays signed in on this device until you sign out or the session expires",
+      "isolation": "Data isolated per workspace"
+    },
+    "aside": {
+      "eyebrow": "Service operations",
+      "title": "Tickets, SLAs and your team in one workspace.",
+      "footer": "One account · several workspaces · role-based access",
+      "tickets": {
+        "title": "Ticket management",
+        "text": "Customers raise tickets; managers triage and assign them to agents."
+      },
+      "sla": {
+        "title": "SLA tracking",
+        "text": "Response and resolution targets per priority, with overdue alerts."
+      },
+      "board": {
+        "title": "Kanban board",
+        "text": "Move work through statuses with real-time updates for the whole team."
+      },
+      "workspaces": {
+        "title": "Multiple workspaces",
+        "text": "Belong to several organizations and switch between them with one account."
+      }
+    },
+    "register": {
+      "crumbStep": "Step 1",
+      "crumbName": "Create account",
+      "eyebrow": "New account",
+      "title": "Create your OpsFlow account",
+      "subtitle": "Your account is personal. Create a workspace or accept an invitation once you are signed in.",
+      "name": "Full name",
+      "namePlaceholder": "e.g. Ada Lovelace",
+      "emailHint": "We send a confirmation link to this address before you can sign in.",
+      "submit": "Create account",
+      "submitting": "Creating account…",
+      "invalid": "Check the highlighted fields and try again.",
+      "haveAccount": "Already have an account?",
+      "signIn": "Sign in instead",
+      "multiEyebrow": "Workspaces",
+      "multiTitle": "One account, several organizations",
+      "multiText": "You can belong to more than one workspace and switch between them. Your role is set per workspace by its owner or managers.",
+      "nextTitle": "What happens next",
+      "next": {
+        "confirm": "Open the confirmation link we email to you.",
+        "signIn": "Sign in with your email and password.",
+        "workspace": "Create your own workspace or accept an invitation from your team."
+      },
+      "teamTitle": "Joining an existing team?",
+      "teamText": "Ask an owner or manager to invite your email address, then open the invitation link after signing in."
+    },
+    "confirm": {
+      "step": "Step 2 of 3",
+      "stepName": "Email confirmation",
+      "inboxTitle": "Confirm your email address",
+      "inboxText": "If this address can be registered, we have sent a confirmation link to it. Open the link to activate your account.",
+      "verifyingTitle": "Confirming your email…",
+      "verifyingText": "Please wait while we check your confirmation link.",
+      "confirmedTitle": "Email confirmed",
+      "confirmedText": "Your email address is confirmed. You can now sign in.",
+      "invalidTitle": "This link cannot be used",
+      "invalidText": "The confirmation link is invalid, already used or expired. Request a new one below.",
+      "continue": "Continue to sign in",
+      "resendLabel": "Send a new confirmation link",
+      "resend": "Send link",
+      "resent": "If an unconfirmed account exists for this address, a new link is on its way.",
+      "spamHint": "Not in your inbox? Check your spam or junk folder.",
+      "otherEmail": "Use a different email"
+    },
+    "forgot": {
+      "crumb": "Account recovery",
+      "crumbName": "Reset password",
+      "title": "Reset your password",
+      "subtitle": "Enter the email address of your account and we will send you a link to choose a new password.",
+      "submit": "Send reset link",
+      "sending": "Sending…",
+      "acceptedTitle": "Request received",
+      "acceptedText": "If {{email}} belongs to an active, confirmed account, a reset link will arrive shortly.",
+      "again": "Use another address",
+      "back": "Remember your password? Back to sign in",
+      "howTitle": "How recovery works",
+      "policy": {
+        "eligible": {
+          "title": "Confirmed accounts only",
+          "text": "Reset links are sent only to active accounts with a confirmed email."
+        },
+        "single": {
+          "title": "Single use, time-limited",
+          "text": "Each link works once and expires after a short time."
+        },
+        "sessions": {
+          "title": "Signed out everywhere",
+          "text": "Setting a new password ends all existing sessions on every device."
+        }
+      },
+      "googleTitle": "Signed up with Google?",
+      "googleText": "You can use this form to add a password to your account; Google sign-in keeps working."
+    },
+    "reset": {
+      "eyebrow": "Password reset",
+      "title": "Choose a new password",
+      "subtitle": "The new password replaces the old one and signs you out on every device.",
+      "linkFor": "Reset link for:",
+      "submit": "Update password",
+      "policy": "The password does not meet the requirements.",
+      "doneTitle": "Password updated",
+      "doneText": "Your password was changed and all sessions were signed out. Sign in with the new password.",
+      "invalidTitle": "This reset link cannot be used",
+      "invalidText": "The link is invalid, already used or expired. Request a new reset link.",
+      "requestNew": "Request a new link",
+      "afterTitle": "After the reset",
+      "after": {
+        "sessions": {
+          "title": "All sessions end",
+          "text": "Every device signed in to this account is signed out."
+        },
+        "google": {
+          "title": "Google sign-in",
+          "text": "A linked Google account stays linked and keeps working."
+        }
+      },
+      "notYouTitle": "Didn't request this?",
+      "notYouText": "Ignore the email. Your password only changes when this form is submitted."
+    }
+  },
+  "workspaces": {
+    "select": {
+      "eyebrow": "Workspaces",
+      "title": "Select a workspace",
+      "welcome": "Welcome back, {{name}}",
+      "search": "Search workspaces by name",
+      "current": "Current",
+      "open": "Open workspace",
+      "continue": "Continue",
+      "openNamed": "Open {{name}}",
+      "loadError": "Your workspaces could not be loaded.",
+      "emptyTitle": "No workspace yet",
+      "emptyText": "Create a workspace to get started, or open the invitation link you received from your team.",
+      "noMatch": "No workspace matches your search.",
+      "clear": "Clear search",
+      "newEyebrow": "New workspace",
+      "newTitle": "Need a separate space for another team or client?",
+      "newText": "Create a workspace with its own tickets, members, categories and SLA policies. You become its owner.",
+      "create": "Create workspace",
+      "signedInAs": "Signed in as"
+    },
+    "setup": {
+      "eyebrow": "New workspace",
+      "title": "Create a workspace",
+      "subtitle": "A workspace is an isolated organization with its own tickets, members and settings.",
+      "name": "Workspace name",
+      "nameLimit": "2–100 characters",
+      "namePlaceholder": "e.g. Acme Support",
+      "nameLength": "Use between 2 and 100 characters.",
+      "nameHint": "A short identifier (slug) is generated from this name.",
+      "submit": "Create workspace",
+      "creating": "Creating…",
+      "cancel": "Back to workspaces",
+      "invalid": "The name is not valid. Use between 2 and 100 characters.",
+      "providedTitle": "Set up for you",
+      "provided": {
+        "owner": {
+          "title": "You are the owner",
+          "text": "Full control of members, roles and settings."
+        },
+        "defaults": {
+          "title": "Default categories",
+          "text": "Ticket settings and categories are created automatically."
+        },
+        "sla": {
+          "title": "Default SLA policies",
+          "text": "Response and resolution targets per priority, ready to adjust."
+        },
+        "team": {
+          "title": "Invite your team",
+          "text": "Add managers, agents and customers from the Team page."
+        }
+      }
+    }
   }
 }

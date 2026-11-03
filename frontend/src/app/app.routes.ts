@@ -1,12 +1,20 @@
 import { Routes } from '@angular/router';
-import { authGuard } from './core/auth/auth.guard';
+import { authGuard, guestGuard } from './core/auth/auth.guard';
 
 export const routes: Routes = [
   {
     path: '',
     loadComponent: () => import('./features/home/home').then((m) => m.Home),
   },
-  { path: 'login', loadComponent: () => import('./features/auth/login').then((m) => m.Login) },
+  { path: 'login', canActivate: [guestGuard], loadComponent: () => import('./features/auth/login').then((m) => m.Login) },
+  { path: 'register', canActivate: [guestGuard], loadComponent: () => import('./features/auth/register/register').then((m) => m.Register) },
+  { path: 'forgot-password', canActivate: [guestGuard], loadComponent: () => import('./features/auth/forgot-password/forgot-password').then((m) => m.ForgotPassword) },
+  // Paths below are fixed by the links the API puts in its emails.
+  { path: 'auth/confirm-email', loadComponent: () => import('./features/auth/confirm-email/confirm-email').then((m) => m.ConfirmEmail) },
+  { path: 'auth/reset-password', loadComponent: () => import('./features/auth/reset-password/reset-password').then((m) => m.ResetPassword) },
+  { path: 'invitations/accept', loadComponent: () => import('./features/workspaces/accept-invitation/accept-invitation').then((m) => m.AcceptInvitation) },
+  { path: 'workspaces', canActivate: [authGuard], loadComponent: () => import('./features/workspaces/workspace-select/workspace-select').then((m) => m.WorkspaceSelect) },
+  { path: 'workspaces/new', canActivate: [authGuard], loadComponent: () => import('./features/workspaces/workspace-setup/workspace-setup').then((m) => m.WorkspaceSetup) },
   { path: 'tickets', canActivate: [authGuard], loadComponent: () => import('./features/tickets/ticket-list').then((m) => m.TicketList) },
   { path: 'tickets/new', canActivate: [authGuard], loadComponent: () => import('./features/tickets/ticket-create').then((m) => m.TicketCreate) },
   { path: 'tickets/:id', canActivate: [authGuard], loadComponent: () => import('./features/tickets/ticket-detail').then((m) => m.TicketDetail) },

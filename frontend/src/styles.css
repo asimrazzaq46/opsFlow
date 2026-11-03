@@ -53,3 +53,175 @@ body {
   @apply bg-surface text-fg antialiased;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
+
+/* OpsFlow Precision (Stitch) palette used by the account, onboarding and workspace screens. */
+:root {
+  --ops-primary: #004ac6;
+  --ops-primary-container: #2563eb;
+  --ops-on-primary: #ffffff;
+  --ops-primary-fixed: #dbe1ff;
+  --ops-on-primary-fixed: #00174b;
+  --ops-secondary: #006a61;
+  --ops-secondary-container: #86f2e4;
+  --ops-on-secondary-container: #006f66;
+  --ops-tertiary: #943700;
+  --ops-error: #ba1a1a;
+  --ops-error-container: #ffdad6;
+  --ops-on-error-container: #93000a;
+  --ops-surface-container-lowest: #ffffff;
+  --ops-surface-container-low: #f2f3ff;
+  --ops-surface-container: #eaedff;
+  --ops-surface-container-high: #e2e7ff;
+  --ops-surface-container-highest: #dae2fd;
+  --ops-on-surface: #131b2e;
+  --ops-on-surface-variant: #434655;
+  --ops-outline: #737686;
+  --ops-outline-variant: #c3c6d7;
+  --ops-inverse-surface: #283044;
+  --ops-inverse-on-surface: #eef0ff;
+}
+
+[data-theme="dark"] {
+  --ops-primary: #8fb0ff;
+  --ops-primary-container: #2563eb;
+  --ops-on-primary: #ffffff;
+  --ops-primary-fixed: rgba(59, 130, 246, 0.18);
+  --ops-on-primary-fixed: #c7d7ff;
+  --ops-secondary: #4fd1c5;
+  --ops-secondary-container: rgba(45, 212, 191, 0.16);
+  --ops-on-secondary-container: #7ee8dc;
+  --ops-tertiary: #ffb596;
+  --ops-error: #fca5a5;
+  --ops-error-container: rgba(239, 68, 68, 0.16);
+  --ops-on-error-container: #fecaca;
+  --ops-surface-container-lowest: #0f172a;
+  --ops-surface-container-low: #141e33;
+  --ops-surface-container: #1e293b;
+  --ops-surface-container-high: #243247;
+  --ops-surface-container-highest: #334155;
+  --ops-on-surface: #f8fafc;
+  --ops-on-surface-variant: #a3b1c6;
+  --ops-outline: #7c8aa0;
+  --ops-outline-variant: #334155;
+  --ops-inverse-surface: #111a2e;
+  --ops-inverse-on-surface: #eef0ff;
+}
+
+@theme inline {
+  --color-primary: var(--ops-primary);
+  --color-primary-container: var(--ops-primary-container);
+  --color-on-primary: var(--ops-on-primary);
+  --color-primary-fixed: var(--ops-primary-fixed);
+  --color-on-primary-fixed: var(--ops-on-primary-fixed);
+  --color-secondary: var(--ops-secondary);
+  --color-secondary-container: var(--ops-secondary-container);
+  --color-on-secondary-container: var(--ops-on-secondary-container);
+  --color-tertiary: var(--ops-tertiary);
+  --color-error: var(--ops-error);
+  --color-error-container: var(--ops-error-container);
+  --color-on-error-container: var(--ops-on-error-container);
+  --color-surface-container-lowest: var(--ops-surface-container-lowest);
+  --color-surface-container-low: var(--ops-surface-container-low);
+  --color-surface-container: var(--ops-surface-container);
+  --color-surface-container-high: var(--ops-surface-container-high);
+  --color-surface-container-highest: var(--ops-surface-container-highest);
+  --color-on-surface: var(--ops-on-surface);
+  --color-on-surface-variant: var(--ops-on-surface-variant);
+  --color-outline: var(--ops-outline);
+  --color-outline-variant: var(--ops-outline-variant);
+  --color-inverse-surface: var(--ops-inverse-surface);
+  --color-inverse-on-surface: var(--ops-inverse-on-surface);
+}
+
+@theme {
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --text-headline-xl: 2rem;
+  --text-headline-xl--line-height: 2.5rem;
+  --text-headline-xl--letter-spacing: -0.025em;
+  --text-headline-xl--font-weight: 600;
+  --text-headline-lg: 1.5rem;
+  --text-headline-lg--line-height: 2rem;
+  --text-headline-lg--letter-spacing: -0.02em;
+  --text-headline-lg--font-weight: 600;
+  --text-headline-md: 1.125rem;
+  --text-headline-md--line-height: 1.5rem;
+  --text-headline-md--letter-spacing: -0.015em;
+  --text-headline-md--font-weight: 600;
+  --text-headline-sm: 0.875rem;
+  --text-headline-sm--line-height: 1.25rem;
+  --text-headline-sm--letter-spacing: -0.01em;
+  --text-headline-sm--font-weight: 600;
+  --text-body-lg: 1rem;
+  --text-body-lg--line-height: 1.5rem;
+  --text-body-md: 0.875rem;
+  --text-body-md--line-height: 1.25rem;
+  --text-body-sm: 0.75rem;
+  --text-body-sm--line-height: 1rem;
+  --text-label-caps: 0.6875rem;
+  --text-label-caps--line-height: 0.875rem;
+  --text-label-caps--letter-spacing: 0.06em;
+  --text-label-caps--font-weight: 600;
+  --text-mono-timer: 0.75rem;
+  --text-mono-timer--line-height: 1rem;
+  --text-mono-timer--letter-spacing: 0.02em;
+  --text-mono-timer--font-weight: 600;
+  --text-mono-data: 0.8125rem;
+  --text-mono-data--line-height: 1.125rem;
+  --text-mono-data--letter-spacing: -0.01em;
+}
+
+/* Own icon class: Google's unlayered `.material-symbols-outlined` rule would beat Tailwind's layered size utilities. */
+@layer base {
+  .ms {
+    display: inline-block;
+    font-family: "Material Symbols Outlined";
+    font-weight: normal;
+    font-style: normal;
+    font-size: 24px;
+    line-height: 1;
+    letter-spacing: normal;
+    text-transform: none;
+    white-space: nowrap;
+    direction: ltr;
+    font-feature-settings: "liga";
+    font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 20;
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+  }
+}
+
+@layer components {
+
+  .ops-card {
+    @apply rounded-lg bg-surface-container-lowest shadow-sm;
+  }
+
+  .ops-label {
+    @apply block text-label-caps uppercase text-on-surface-variant;
+  }
+
+  .ops-input {
+    @apply h-10 w-full rounded-sm bg-surface-container-low px-3 text-body-md text-on-surface shadow-sm transition-all outline-none placeholder:text-outline focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container aria-invalid:ring-2 aria-invalid:ring-error disabled:opacity-60;
+  }
+
+  .ops-btn-primary {
+    @apply inline-flex h-11 items-center justify-center gap-2 rounded-sm bg-primary-container px-6 text-headline-sm text-on-primary shadow-[0_2px_8px_rgba(37,99,235,0.25)] transition-colors hover:bg-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-container active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-[#1d4ed8];
+  }
+
+  .ops-btn-secondary {
+    @apply inline-flex h-10 items-center justify-center gap-2 rounded-sm bg-surface-container px-4 text-headline-sm text-on-surface shadow-sm transition-colors hover:bg-surface-container-high focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-container disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .ops-link {
+    @apply rounded-xs text-primary transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-container;
+  }
+
+  .ops-chip {
+    @apply inline-flex items-center gap-1 rounded-xs px-1.5 py-0.5 font-mono text-mono-timer;
+  }
+
+  .ops-error {
+    @apply mt-1 flex items-start gap-1 text-body-sm text-error;
+  }
+}

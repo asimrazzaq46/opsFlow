@@ -1,24 +1,33 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, signal, viewChild } from '@angular/core';
 import { rxResource } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { TranslatePipe } from '@ngx-translate/core';
+import { UserProfileDto } from '../../core/api/generated/models';
+import { AuthService } from '../../core/auth/auth.service';
 import { GoogleCredential, googleErrorKey } from '../../core/auth/google-identity.service';
+import { TenantService } from '../../core/auth/tenant.service';
 import { GoogleSignIn } from '../auth/google-sign-in/google-sign-in';
 import { AccountApi } from './account-api';
+import { AccountPassword } from './account-password/account-password';
+import { AccountProfile } from './account-profile/account-profile';
+import { AccountSessions } from './account-sessions/account-sessions';
 
 /**
- * Minimal sign-in methods page: shows whether Google is linked and links it after a password re-authentication.
- * The password only lives in this form while linking and is sent once per challenge.
+ * Account settings: profile, password, Google linking and device sessions, all backed by `/auth/*` endpoints for the signed-in user.
+ * Google linking needs a password re-authentication first; that password only lives in this form and is sent once per challenge.
  */
 @Component({
   selector: 'app-account-security',
-  imports: [ReactiveFormsModule, TranslatePipe, GoogleSignIn],
+  imports: [ReactiveFormsModule, TranslatePipe, GoogleSignIn, AccountProfile, AccountPassword, AccountSessions],
   templateUrl: './account-security.html',
   styleUrl: './account-security.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class AccountSecurity {
   private readonly account = inject(AccountApi);
+  private readonly auth = inject(AuthService);
+  protected readonly tenant = inject(TenantService);
+  private readonly sessionList = viewChild(AccountSessions);
 
   protected readonly profile = rxResource({ stream: () => this.account.profile() });
   protected readonly password = new FormControl('', { nonNullable: true, validators: [Validators.required] });
@@ -27,6 +36,15 @@ export class AccountSecurity {
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly linked = signal(false);
+
+  protected profileSaved(p: UserProfileDto): void {
+    this.profile.set(p);
+    this.auth.updateUser({ displayName: p.displayName });
+  }
+
+  protected passwordChanged(): void {
+    this.sessionList()?.reload();
+  }
 
   protected confirm(): void {
     if (this.password.invalid || this.busy()) return;

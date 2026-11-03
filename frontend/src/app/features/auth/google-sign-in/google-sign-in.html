@@ -7,10 +7,10 @@
     </div>
   }
   @if (state() === 'loading') {
-    <p class="text-sm text-muted" role="status">{{ 'google.loading' | translate }}</p>
+    <p class="text-center text-sm text-muted" role="status">{{ 'google.loading' | translate }}</p>
   }
   @if (state() === 'error') {
-    <div class="flex flex-wrap items-center gap-3" role="alert">
+    <div class="flex flex-wrap items-center justify-center gap-3" role="alert">
       <p class="text-sm text-danger">{{ 'google.unavailable' | translate }}</p>
       <button type="button" (click)="retry()" [disabled]="busy()"
         class="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-brand">

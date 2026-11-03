@@ -10,13 +10,15 @@ const withToken = (req: HttpRequest<unknown>, token: string | null) =>
 
 /** Bearer token for same-origin API calls only; one refresh + one retry on 401. */
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
-  if (!req.url.startsWith('/api/') || ANONYMOUS.some((u) => req.url.startsWith(u))) return next(req);
+  if (!req.url.startsWith('/api/') || ANONYMOUS.some((u) => req.url.startsWith(u)))
+    return next(req);
 
   const auth = inject(AuthService);
   const hadToken = auth.accessToken() !== null;
   return next(withToken(req, auth.accessToken())).pipe(
     catchError((err: unknown) => {
-      if (!(err instanceof HttpErrorResponse) || err.status !== 401 || !hadToken) return throwError(() => err);
+      if (!(err instanceof HttpErrorResponse) || err.status !== 401 || !hadToken)
+        return throwError(() => err);
       return auth.refresh().pipe(
         switchMap((r) => next(withToken(req, r.accessToken))),
         catchError(() => throwError(() => err)),

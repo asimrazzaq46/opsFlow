@@ -39,13 +39,13 @@ describe('GoogleIdentityService', () => {
 
   it('initializes the SDK with the challenge nonce and never enables auto-select or One Tap', async () => {
     invoke.mockReturnValueOnce(of(challenge(1)));
-    const handle = await service.render(host, 'signIn', { locale: 'it', theme: 'dark' }, vi.fn());
+    const handle = await service.render(host, 'signIn', { locale: 'it' }, vi.fn());
 
     expect(handle).not.toBeNull();
     expect(invoke.mock.calls[0][0]).toBe(createGoogleChallenge);
     const config = gis.initialize.mock.calls[0][0];
     expect(config).toMatchObject({ client_id: '123-test.apps.googleusercontent.com', nonce: 'nonce-1', auto_select: false, ux_mode: 'popup' });
-    expect(gis.renderButton).toHaveBeenCalledWith(host, expect.objectContaining({ locale: 'it', theme: 'filled_black' }));
+    expect(gis.renderButton).toHaveBeenCalledWith(host, expect.objectContaining({ locale: 'it', theme: 'filled_blue', text: 'continue_with' }));
     expect(localStorage.length + sessionStorage.length).toBe(0);
   });
 
@@ -53,7 +53,7 @@ describe('GoogleIdentityService', () => {
     delete (window as GoogleWindow).google;
     invoke.mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 404, error: { code: 'AUTH_GOOGLE_DISABLED' } })));
 
-    expect(await service.render(host, 'signIn', { locale: 'en', theme: 'light' }, vi.fn())).toBeNull();
+    expect(await service.render(host, 'signIn', { locale: 'en' }, vi.fn())).toBeNull();
     expect(document.head.querySelector(`script[src="${GIS_SCRIPT_URL}"]`)).toBeNull();
   });
 
@@ -61,8 +61,8 @@ describe('GoogleIdentityService', () => {
     const first = vi.fn();
     const second = vi.fn();
     invoke.mockReturnValueOnce(of(challenge(1))).mockReturnValueOnce(of(challenge(2)));
-    await service.render(host, 'signIn', { locale: 'en', theme: 'light' }, first);
-    const handle = await service.render(host, 'signIn', { locale: 'en', theme: 'light' }, second);
+    await service.render(host, 'signIn', { locale: 'en' }, first);
+    const handle = await service.render(host, 'signIn', { locale: 'en' }, second);
 
     callbackOf(0)({ credential: 'stale-token' }); // superseded registration
     expect(first).not.toHaveBeenCalled();
@@ -74,7 +74,7 @@ describe('GoogleIdentityService', () => {
 
     invoke.mockReturnValueOnce(of(challenge(3)));
     const third = vi.fn();
-    const released = await service.render(host, 'signIn', { locale: 'en', theme: 'light' }, third);
+    const released = await service.render(host, 'signIn', { locale: 'en' }, third);
     service.release(released!.id);
     callbackOf(2)({ credential: 'late' });
     expect(third).not.toHaveBeenCalled();
@@ -85,14 +85,14 @@ describe('GoogleIdentityService', () => {
   it('ignores a credential that arrives after the challenge expired', async () => {
     const onCredential = vi.fn();
     invoke.mockReturnValueOnce(of(challenge(1, -1)));
-    await service.render(host, 'signIn', { locale: 'en', theme: 'light' }, onCredential);
+    await service.render(host, 'signIn', { locale: 'en' }, onCredential);
     callbackOf(0)({ credential: 'too-late' });
     expect(onCredential).not.toHaveBeenCalled();
   });
 
   it('requests a link challenge with the password for account linking', async () => {
     invoke.mockReturnValueOnce(of(challenge(1)));
-    await service.render(host, 'link', { locale: 'en', theme: 'light', password: 'pw' }, vi.fn());
+    await service.render(host, 'link', { locale: 'en', password: 'pw' }, vi.fn());
     expect(invoke.mock.calls[0][0]).toBe(createGoogleLinkChallenge);
     expect(invoke.mock.calls[0][1]).toEqual({ body: { password: 'pw' } });
     expect(gis.initialize.mock.calls[0][0]).toMatchObject({ context: 'use' });
@@ -102,7 +102,7 @@ describe('GoogleIdentityService', () => {
     delete (window as GoogleWindow).google;
     invoke.mockImplementation(() => of(challenge(1)));
 
-    const failing = service.render(host, 'signIn', { locale: 'en', theme: 'light' }, vi.fn());
+    const failing = service.render(host, 'signIn', { locale: 'en' }, vi.fn());
     await Promise.resolve();
     await Promise.resolve();
     const script = document.head.querySelector<HTMLScriptElement>(`script[src="${GIS_SCRIPT_URL}"]`)!;
@@ -110,8 +110,8 @@ describe('GoogleIdentityService', () => {
     await expect(failing).rejects.toThrow();
     expect(document.head.querySelectorAll(`script[src="${GIS_SCRIPT_URL}"]`).length).toBe(0);
 
-    const a = service.render(host, 'signIn', { locale: 'en', theme: 'light' }, vi.fn());
-    const b = service.render(host, 'signIn', { locale: 'en', theme: 'light' }, vi.fn());
+    const a = service.render(host, 'signIn', { locale: 'en' }, vi.fn());
+    const b = service.render(host, 'signIn', { locale: 'en' }, vi.fn());
     await Promise.resolve();
     await Promise.resolve();
     const scripts = document.head.querySelectorAll<HTMLScriptElement>(`script[src="${GIS_SCRIPT_URL}"]`);

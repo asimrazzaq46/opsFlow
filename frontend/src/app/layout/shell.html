@@ -24,12 +24,19 @@
             </select>
           }
           <app-notification-center />
+          <a routerLink="/workspaces" routerLinkActive="bg-brand text-brand-fg" [routerLinkActiveOptions]="{ exact: true }" class="rounded-lg border border-border px-2.5 py-1 text-xs font-semibold focus-visible:outline-2 focus-visible:outline-brand">
+            {{ 'nav.workspaces' | translate }}
+          </a>
           <a routerLink="/account" routerLinkActive="bg-brand text-brand-fg" class="rounded-lg border border-border px-2.5 py-1 text-xs font-semibold focus-visible:outline-2 focus-visible:outline-brand">
             {{ 'nav.account' | translate }}
           </a>
           <button type="button" class="rounded-lg border border-border px-2.5 py-1 text-xs font-semibold focus-visible:outline-2 focus-visible:outline-brand" (click)="auth.logout()">
             {{ 'auth.signOut' | translate }}
           </button>
+        } @else {
+          <a routerLink="/login" class="rounded-lg border border-border px-2.5 py-1 text-xs font-semibold focus-visible:outline-2 focus-visible:outline-brand">
+            {{ 'auth.signIn' | translate }}
+          </a>
         }
 
         <div role="group" [attr.aria-label]="'shell.language' | translate" class="flex rounded-lg border border-border p-0.5">

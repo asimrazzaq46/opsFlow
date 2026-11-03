@@ -1,0 +1,118 @@
+<div class="relative">
+  <div class="pointer-events-none absolute -top-32 -left-20 size-96 rounded-full bg-primary-fixed/20 blur-3xl" aria-hidden="true"></div>
+  <div class="pointer-events-none absolute top-1/2 -right-32 size-80 rounded-full bg-secondary-container/25 blur-3xl" aria-hidden="true"></div>
+
+  <div class="relative mx-auto flex max-w-6xl flex-col gap-6">
+    <div class="flex max-w-2xl flex-col gap-1 pb-2">
+      <div class="flex items-center gap-1">
+        <span class="ops-chip bg-surface-container-high uppercase tracking-wider text-primary">{{ 'workspaces.select.eyebrow' | translate }}</span>
+      </div>
+      <h1 class="text-headline-lg tracking-tight text-on-surface sm:text-headline-xl">{{ 'workspaces.select.title' | translate }}</h1>
+      @if (auth.user(); as me) {
+        <p class="text-body-md text-on-surface-variant">
+          {{ 'workspaces.select.welcome' | translate: { name: me.displayName } }}
+          <span class="font-mono text-mono-data break-all text-on-surface">({{ me.email }})</span>
+        </p>
+      }
+    </div>
+
+    @if (tenant.organizations().length > 3) {
+      <div class="flex items-center rounded-lg bg-surface-container-lowest p-1 shadow-md transition-shadow focus-within:shadow-lg">
+        <span class="ms pointer-events-none pl-3 text-[22px] text-on-surface-variant" aria-hidden="true">search</span>
+        <label for="org-search" class="sr-only">{{ 'workspaces.select.search' | translate }}</label>
+        <input id="org-search" type="search" autocomplete="off" [value]="query()" (input)="search($event)" [placeholder]="'workspaces.select.search' | translate"
+          class="w-full bg-transparent px-3 py-2 text-body-md text-on-surface placeholder:text-outline focus:outline-none" />
+      </div>
+    }
+
+    @if (tenant.loading() && !tenant.organizations().length) {
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3" role="status" [attr.aria-label]="'common.loading' | translate">
+        @for (i of [1, 2, 3]; track i) {
+          <div class="h-48 animate-pulse rounded-lg bg-surface-container-low"></div>
+        }
+      </div>
+    } @else if (tenant.error() && !tenant.organizations().length) {
+      <div class="flex flex-col items-center gap-2 rounded-lg bg-surface-container-low py-8 text-center" role="alert">
+        <span class="ms text-[28px] text-error" aria-hidden="true">cloud_off</span>
+        <p class="text-body-md text-on-surface">{{ 'workspaces.select.loadError' | translate }}</p>
+        <button type="button" class="ops-btn-secondary" (click)="reload()">{{ 'common.retry' | translate }}</button>
+      </div>
+    } @else if (!tenant.organizations().length) {
+      <div class="flex flex-col items-center gap-2 rounded-lg bg-surface-container-low px-4 py-8 text-center">
+        <div class="grid size-12 place-items-center rounded-full bg-surface-container-high text-outline"><span class="ms text-[24px]" aria-hidden="true">domain_disabled</span></div>
+        <h2 class="text-headline-md text-on-surface">{{ 'workspaces.select.emptyTitle' | translate }}</h2>
+        <p class="max-w-md text-body-md text-on-surface-variant">{{ 'workspaces.select.emptyText' | translate }}</p>
+      </div>
+    } @else {
+      <ul class="grid grid-cols-1 items-stretch gap-4 md:grid-cols-2 lg:grid-cols-3">
+        @for (org of filtered(); track org.id) {
+          @let active = org.id === tenant.tenantId();
+          <li class="group relative flex flex-col justify-between rounded-lg bg-surface-container-lowest p-4 shadow-md transition-all duration-200 hover:shadow-xl">
+            @if (active) {
+              <span class="absolute -top-2.5 right-6 flex items-center gap-1 rounded-full bg-primary-container px-2.5 py-0.5 font-mono text-mono-timer tracking-wider text-on-primary uppercase shadow-sm">
+                <span class="ms text-[12px]" aria-hidden="true">star</span>{{ 'workspaces.select.current' | translate }}
+              </span>
+            }
+            <div class="flex flex-col gap-3 pt-1">
+              <div class="flex items-center gap-3">
+                <div class="grid size-12 shrink-0 place-items-center rounded-lg text-headline-lg shadow-sm"
+                  [class]="active ? 'bg-primary-container text-on-primary' : 'bg-surface-container text-primary'" aria-hidden="true">{{ initials(org.name) }}</div>
+                <div class="flex min-w-0 flex-col">
+                  <h2 class="truncate text-headline-md tracking-tight text-on-surface transition-colors group-hover:text-primary">{{ org.name }}</h2>
+                  <span class="truncate font-mono text-mono-data text-on-surface-variant">{{ org.slug }}</span>
+                </div>
+              </div>
+              <div class="flex flex-wrap items-center gap-1">
+                <span class="rounded-xs px-1.5 py-0.5 text-label-caps uppercase"
+                  [class]="org.role === 'Customer' ? 'bg-surface-container-high text-on-surface' : org.role === 'Agent' ? 'bg-secondary-container text-on-secondary-container' : 'bg-surface-container text-primary'">
+                  {{ 'roles.' + org.role | translate }}
+                </span>
+              </div>
+            </div>
+            <div class="pt-4">
+              <button type="button" (click)="open(org)" [attr.aria-label]="'workspaces.select.openNamed' | translate: { name: org.name }"
+                [class]="active ? 'ops-btn-primary h-10 w-full' : 'ops-btn-secondary w-full'" class="group/btn">
+                <span>{{ (active ? 'workspaces.select.continue' : 'workspaces.select.open') | translate }}</span>
+                <span class="ms text-[18px] transition-transform group-hover/btn:translate-x-1" aria-hidden="true">arrow_forward</span>
+              </button>
+            </div>
+          </li>
+        } @empty {
+          <li class="col-span-full flex flex-col items-center gap-2 rounded-lg bg-surface-container-low py-8 text-center">
+            <h2 class="text-headline-md text-on-surface">{{ 'workspaces.select.noMatch' | translate }}</h2>
+            <button type="button" class="ops-btn-secondary" (click)="query.set('')">{{ 'workspaces.select.clear' | translate }}</button>
+          </li>
+        }
+      </ul>
+    }
+
+    <div class="relative flex flex-col justify-between gap-4 overflow-hidden rounded-lg bg-gradient-to-r from-surface-container-high via-surface-container to-surface-container-low p-6 shadow-md md:flex-row md:items-center">
+      <div class="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent" aria-hidden="true"></div>
+      <div class="relative flex max-w-xl flex-col gap-1">
+        <div class="flex items-center gap-2">
+          <span class="ms text-[20px] text-primary" aria-hidden="true">add_business</span>
+          <span class="font-mono text-mono-timer font-bold tracking-wider text-primary uppercase">{{ 'workspaces.select.newEyebrow' | translate }}</span>
+        </div>
+        <h2 class="text-headline-lg tracking-tight text-on-surface">{{ 'workspaces.select.newTitle' | translate }}</h2>
+        <p class="text-body-md text-on-surface-variant">{{ 'workspaces.select.newText' | translate }}</p>
+      </div>
+      <a routerLink="/workspaces/new" class="relative inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-sm bg-on-surface px-6 py-3 text-headline-sm text-surface-container-lowest shadow-md transition-all hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-container sm:w-auto">
+        <span class="ms text-[20px]" aria-hidden="true">add_circle</span>
+        <span>{{ 'workspaces.select.create' | translate }}</span>
+      </a>
+    </div>
+
+    <div class="flex flex-col items-center justify-between gap-3 pb-4 text-body-sm text-on-surface-variant sm:flex-row">
+      @if (auth.user(); as me) {
+        <div class="flex flex-wrap items-center justify-center gap-1 sm:justify-start">
+          <span>{{ 'workspaces.select.signedInAs' | translate }}</span>
+          <span class="font-mono text-mono-data font-semibold break-all text-on-surface">{{ me.email }}</span>
+        </div>
+      }
+      <button type="button" (click)="auth.logout()" class="flex items-center gap-1 rounded-xs text-error transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-primary-container">
+        <span class="ms text-[16px]" aria-hidden="true">logout</span>
+        <span>{{ 'auth.signOut' | translate }}</span>
+      </button>
+    </div>
+  </div>
+</div>

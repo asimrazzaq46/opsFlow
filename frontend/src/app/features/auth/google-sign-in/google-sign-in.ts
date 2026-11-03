@@ -3,7 +3,6 @@ import {
 } from '@angular/core';
 import { TranslatePipe } from '@ngx-translate/core';
 import { GoogleButtonHandle, GoogleCredential, GoogleIdentityService, GooglePurpose } from '../../../core/auth/google-identity.service';
-import { ThemeService } from '../../../core/services/theme.service';
 import { LanguageService } from '../../../i18n/language.service';
 
 /** Renew the challenge shortly before it expires so a click never sends a nonce the server already discarded. */
@@ -26,7 +25,6 @@ type ButtonState = 'loading' | 'ready' | 'disabled' | 'error';
 export class GoogleSignIn {
   private readonly google = inject(GoogleIdentityService);
   private readonly language = inject(LanguageService);
-  private readonly theme = inject(ThemeService);
 
   readonly purpose = input<GooglePurpose>('signIn');
   /** Linking only: the password that re-authenticates the user when the challenge is issued. */
@@ -70,7 +68,7 @@ export class GoogleSignIn {
       const handle = await this.google.render(
         this.host().nativeElement,
         this.purpose(),
-        { locale: this.language.current(), theme: this.theme.theme(), password: this.password() ?? undefined },
+        { locale: this.language.current(), password: this.password() ?? undefined },
         (c) => this.receive(c),
       );
       if (this.destroyed || generation !== this.generation) {

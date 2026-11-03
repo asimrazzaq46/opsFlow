@@ -1,0 +1,74 @@
+<div class="mx-auto flex w-full max-w-7xl flex-col gap-6">
+  <div class="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+    <section class="relative overflow-hidden rounded-lg bg-surface-container-lowest p-6 shadow-sm lg:col-span-8" aria-labelledby="setup-title">
+      <div class="pointer-events-none absolute -top-8 -right-8 size-44 rounded-full bg-primary/5 blur-2xl" aria-hidden="true"></div>
+      <div class="relative mb-3 flex items-start justify-between gap-3">
+        <div>
+          <div class="mb-2 inline-flex items-center gap-1.5 rounded-xs bg-surface-container-high px-1 py-0.5 font-mono text-mono-timer text-on-surface-variant uppercase">
+            <span class="size-1.5 rounded-full bg-primary" aria-hidden="true"></span>
+            {{ 'workspaces.setup.eyebrow' | translate }}
+          </div>
+          <h1 id="setup-title" class="text-headline-lg tracking-tight text-on-surface">{{ 'workspaces.setup.title' | translate }}</h1>
+          <p class="mt-1 text-body-md text-on-surface-variant">{{ 'workspaces.setup.subtitle' | translate }}</p>
+        </div>
+        <div class="grid size-10 shrink-0 place-items-center rounded-sm bg-surface-container text-primary">
+          <span class="ms text-[24px]" aria-hidden="true">corporate_fare</span>
+        </div>
+      </div>
+
+      <form class="relative mt-4 flex flex-col gap-4" (ngSubmit)="submit()" novalidate>
+        <div class="flex flex-col gap-1.5">
+          <label class="flex items-center justify-between text-label-caps uppercase text-on-surface-variant" for="org-name">
+            <span>{{ 'workspaces.setup.name' | translate }} <span class="text-error" aria-hidden="true">*</span></span>
+            <span class="font-mono text-mono-data normal-case">{{ 'workspaces.setup.nameLimit' | translate }}</span>
+          </label>
+          <input id="org-name" type="text" autocomplete="organization" maxlength="100" [formControl]="name" [placeholder]="'workspaces.setup.namePlaceholder' | translate"
+            [attr.aria-invalid]="name.invalid && (name.touched || submitted()) ? 'true' : null" aria-describedby="org-name-hint" [readonly]="busy()"
+            class="ops-input h-11 rounded-sm" />
+          @if (name.invalid && (name.touched || submitted())) {
+            <p class="ops-error">{{ (name.hasError('required') ? 'validation.required' : 'workspaces.setup.nameLength') | translate }}</p>
+          }
+          <p id="org-name-hint" class="text-body-sm text-on-surface-variant">{{ 'workspaces.setup.nameHint' | translate }}</p>
+        </div>
+
+        @if (error(); as key) {
+          <p role="alert" class="rounded-sm bg-error-container p-3 text-body-sm text-on-error-container">{{ key | translate }}</p>
+        }
+
+        <div class="flex flex-col-reverse items-center justify-between gap-3 pt-3 sm:flex-row">
+          <a routerLink="/workspaces" class="inline-flex w-full items-center justify-center gap-1.5 rounded-sm px-4 py-2.5 text-body-md text-on-surface transition-colors hover:bg-surface-container-high focus-visible:outline-2 focus-visible:outline-primary-container sm:w-auto">
+            <span class="ms text-[18px]" aria-hidden="true">arrow_back</span>
+            <span>{{ 'workspaces.setup.cancel' | translate }}</span>
+          </a>
+          <button type="submit" class="ops-btn-primary w-full sm:w-auto" [disabled]="busy()" [attr.aria-busy]="busy()">
+            @if (busy()) {
+              <span class="ms animate-spin text-[18px]" aria-hidden="true">progress_activity</span>
+              <span>{{ 'workspaces.setup.creating' | translate }}</span>
+            } @else {
+              <span>{{ 'workspaces.setup.submit' | translate }}</span>
+              <span class="ms text-[18px]" aria-hidden="true">arrow_forward</span>
+            }
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <aside class="flex flex-col gap-4 rounded-lg bg-surface-container-lowest p-6 shadow-sm lg:col-span-4" aria-labelledby="setup-provided">
+      <div class="flex items-center gap-2">
+        <span class="ms text-[20px] text-primary" aria-hidden="true">dns</span>
+        <h2 id="setup-provided" class="text-headline-md text-on-surface">{{ 'workspaces.setup.providedTitle' | translate }}</h2>
+      </div>
+      <ul class="flex flex-col gap-3 rounded-sm bg-surface-container-low p-3">
+        @for (p of provided; track p.key) {
+          <li class="flex items-start gap-2 rounded-xs bg-surface-container-lowest p-2 shadow-sm">
+            <span class="shrink-0 rounded-xs bg-primary-fixed p-1.5 text-primary"><span class="ms block text-[18px]" aria-hidden="true">{{ p.icon }}</span></span>
+            <span class="flex flex-col">
+              <span class="font-mono text-mono-timer text-on-surface">{{ 'workspaces.setup.provided.' + p.key + '.title' | translate }}</span>
+              <span class="text-body-sm text-on-surface-variant">{{ 'workspaces.setup.provided.' + p.key + '.text' | translate }}</span>
+            </span>
+          </li>
+        }
+      </ul>
+    </aside>
+  </div>
+</div>

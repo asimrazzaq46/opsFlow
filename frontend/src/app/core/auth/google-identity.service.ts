@@ -18,7 +18,6 @@ export interface GoogleCredential {
 
 export interface GoogleButtonOptions {
   locale: string;
-  theme: 'light' | 'dark';
   /** Only for linking: the password that re-authenticates the signed-in user when the challenge is issued. */
   password?: string;
 }
@@ -99,15 +98,16 @@ export class GoogleIdentityService {
       use_fedcm_for_button: true,
     });
     host.replaceChildren();
+    // Official blue button in both app themes; it is centered by the host's CSS and sized to the available form width.
     gis.renderButton(host, {
       type: 'standard',
-      theme: options.theme === 'dark' ? 'filled_black' : 'outline',
+      theme: 'filled_blue',
       size: 'large',
-      text: purpose === 'link' ? 'continue_with' : 'signin_with',
+      text: 'continue_with',
       shape: 'rectangular',
       logo_alignment: 'left',
       locale: options.locale,
-      width: Math.max(200, Math.min(400, host.clientWidth || 320)),
+      width: Math.max(200, Math.min(400, (host.parentElement ?? host).clientWidth || 320)),
     });
     return { id: registration.id, expiresAt: registration.expiresAt };
   }

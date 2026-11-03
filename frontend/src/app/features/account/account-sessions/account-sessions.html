@@ -1,0 +1,70 @@
+<section class="flex flex-col gap-4 rounded-lg bg-surface-container-lowest p-6 shadow-sm" aria-labelledby="sessions-title">
+  <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+    <div>
+      <div class="flex flex-wrap items-center gap-2">
+        <h2 id="sessions-title" class="text-headline-lg text-on-surface">{{ 'account.sessions.title' | translate }}</h2>
+        @if (sessions.value(); as list) {
+          <span class="rounded-full bg-surface-container px-2 py-0.5 font-mono text-mono-timer font-semibold text-on-surface">{{ 'account.sessions.count' | translate: { count: list.length } }}</span>
+        }
+      </div>
+      <p class="mt-0.5 text-body-sm text-on-surface-variant">{{ 'account.sessions.subtitle' | translate }}</p>
+    </div>
+    @if (confirmAll()) {
+      <div class="flex flex-wrap items-center gap-2" role="group" [attr.aria-label]="'account.sessions.logoutAll' | translate">
+        <span class="text-body-sm text-on-surface">{{ 'account.sessions.confirmAll' | translate }}</span>
+        <button type="button" class="ops-btn-secondary h-9 bg-error-container text-on-error-container hover:opacity-90" (click)="logoutAll()" [disabled]="busyId() !== null">
+          {{ 'account.sessions.confirm' | translate }}
+        </button>
+        <button type="button" class="ops-btn-secondary h-9" (click)="confirmAll.set(false)" [disabled]="busyId() !== null">{{ 'common.cancel' | translate }}</button>
+      </div>
+    } @else {
+      <button type="button" class="ops-btn-secondary shrink-0 self-start bg-error-container text-on-error-container hover:opacity-90" (click)="confirmAll.set(true)">
+        <span class="ms text-[18px]" aria-hidden="true">logout</span>
+        <span>{{ 'account.sessions.logoutAll' | translate }}</span>
+      </button>
+    }
+  </div>
+
+  @if (error(); as key) {
+    <p role="alert" class="rounded-sm bg-error-container p-3 text-body-sm text-on-error-container">{{ key | translate }}</p>
+  }
+
+  @if (sessions.isLoading() && !sessions.hasValue()) {
+    <p class="text-body-sm text-on-surface-variant" role="status">{{ 'common.loading' | translate }}</p>
+  } @else if (sessions.error()) {
+    <div class="flex items-center gap-3" role="alert">
+      <p class="text-body-sm text-error">{{ 'account.sessions.loadError' | translate }}</p>
+      <button type="button" class="ops-btn-secondary h-9" (click)="reload()">{{ 'common.retry' | translate }}</button>
+    </div>
+  } @else {
+    <ul class="space-y-3">
+      @for (s of sessions.value() ?? []; track s.id) {
+        <li class="flex flex-col justify-between gap-3 rounded-lg bg-surface-container-low p-4 md:flex-row md:items-center">
+          <div class="flex min-w-0 items-start gap-3 sm:items-center">
+            <div class="grid size-10 shrink-0 place-items-center rounded-sm bg-surface-container-lowest text-primary shadow-sm">
+              <span class="ms text-[22px]" aria-hidden="true">{{ s.userAgent && (s.userAgent.includes('Mobile') || s.userAgent.includes('Android')) ? 'smartphone' : 'computer' }}</span>
+            </div>
+            <div class="flex min-w-0 flex-col">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="truncate text-headline-sm text-on-surface" [attr.title]="s.userAgent">{{ deviceLabel(s.userAgent) ?? ('account.sessions.unknownDevice' | translate) }}</span>
+                @if (s.isCurrent) {
+                  <span class="rounded-xs bg-secondary px-2 py-0.5 text-label-caps text-white uppercase dark:text-[#0f172a]">{{ 'account.sessions.thisDevice' | translate }}</span>
+                }
+              </div>
+              <span class="font-mono text-mono-timer text-on-surface-variant">
+                {{ 'account.sessions.lastUsed' | translate: { when: when(s.lastUsedAtUtc) } }} · {{ 'account.sessions.started' | translate: { when: when(s.createdAtUtc) } }}
+              </span>
+            </div>
+          </div>
+          <button type="button" class="ops-btn-secondary h-9 shrink-0 self-start bg-surface-container-lowest md:self-auto" (click)="revoke(s)" [disabled]="busyId() !== null"
+            [attr.aria-busy]="busyId() === s.id">
+            <span class="ms text-[16px]" aria-hidden="true">{{ s.isCurrent ? 'logout' : 'block' }}</span>
+            {{ (s.isCurrent ? 'auth.signOut' : 'account.sessions.revoke') | translate }}
+          </button>
+        </li>
+      } @empty {
+        <li class="text-body-sm text-on-surface-variant">{{ 'account.sessions.empty' | translate }}</li>
+      }
+    </ul>
+  }
+</section>
