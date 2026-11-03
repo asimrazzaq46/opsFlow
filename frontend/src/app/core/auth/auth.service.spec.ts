@@ -5,7 +5,7 @@ import { Subject, of, throwError } from 'rxjs';
 import { Api } from '../api/generated/api';
 import { AuthResponse } from '../api/generated/models';
 import { RealtimeService } from '../realtime/realtime.service';
-import { AuthService, SESSION_STORAGE_KEY, parseStoredSession } from './auth.service';
+import { AuthService, HUB_URL, SESSION_STORAGE_KEY, parseStoredSession } from './auth.service';
 import { TenantService } from './tenant.service';
 
 const session = (n: number): AuthResponse => ({
@@ -18,7 +18,7 @@ const session = (n: number): AuthResponse => ({
 });
 
 describe('AuthService', () => {
-  const realtime = { start: vi.fn(), restart: vi.fn(), stop: vi.fn() };
+  const realtime = { start: vi.fn(), restart: vi.fn(), stop: vi.fn(), state: vi.fn(() => 'connected') };
   const tenant = { clear: vi.fn() };
   const invoke = vi.fn();
   let auth: AuthService;
@@ -134,8 +134,128 @@ describe('AuthService', () => {
   });
 });
 
+describe('AuthService realtime session handling', () => {
+  const realtime = { start: vi.fn(), restart: vi.fn(), stop: vi.fn(), state: vi.fn(() => 'connected') };
+  const invoke = vi.fn();
+  const navigate = vi.fn();
+  let auth: AuthService;
+  const me = { id: 'u1', email: 'a@b.c', displayName: 'A' };
+  const nearExpiry = (n: number): AuthResponse => ({ ...session(n), expiresAtUtc: new Date(Date.now() + 30_000).toISOString() });
+  const tokenFactory = () => realtime.start.mock.calls.at(-1)![1] as () => Promise<string>;
+  const sessionCheck = () => (realtime.start.mock.calls.at(-1)![2] as { checkSession: () => Promise<string> }).checkSession();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    invoke.mockReset();
+    navigate.mockReset();
+    realtime.state.mockReturnValue('connected');
+    localStorage.clear();
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: Api, useValue: { invoke } },
+        { provide: Router, useValue: { navigateByUrl: navigate } },
+        { provide: RealtimeService, useValue: realtime },
+        { provide: TenantService, useValue: { clear: vi.fn() } },
+      ],
+    });
+    auth = TestBed.inject(AuthService);
+    invoke.mockReturnValueOnce(of(session(1)));
+    auth.login('a@b.c', 'pw').subscribe();
+  });
+
+  it('starts the hub with a token factory and a session check', () => {
+    expect(realtime.start).toHaveBeenCalledWith(HUB_URL, expect.any(Function), { checkSession: expect.any(Function) });
+  });
+
+  it('hands the hub the current token without rotating anything while the session is healthy', async () => {
+    expect(await tokenFactory()()).toBe('access-1');
+    expect(await tokenFactory()()).toBe('access-1');
+    expect(invoke).toHaveBeenCalledTimes(1); // only the login: no refresh on a plain reconnect
+  });
+
+  it('refreshes once, shared between concurrent reconnects, when the token is about to expire, and does not restart the hub that asked', async () => {
+    invoke.mockReturnValueOnce(of(nearExpiry(2)));
+    auth.login('a@b.c', 'pw').subscribe();
+    const pending = new Subject<AuthResponse>();
+    invoke.mockReturnValueOnce(pending);
+    realtime.state.mockReturnValue('connecting');
+
+    const factory = tokenFactory();
+    const first = factory();
+    const second = factory();
+    pending.next(session(3));
+    pending.complete();
+
+    expect(await first).toBe('access-3');
+    expect(await second).toBe('access-3');
+    expect(invoke).toHaveBeenCalledTimes(3); // two logins + exactly one refresh
+    expect(realtime.restart).not.toHaveBeenCalled();
+  });
+
+  it('still hands over a token (and lets the connect fail) when the proactive refresh fails', async () => {
+    invoke.mockReturnValueOnce(of(nearExpiry(2)));
+    auth.login('a@b.c', 'pw').subscribe();
+    invoke.mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 503 })));
+
+    expect(await tokenFactory()()).toBe('access-2');
+    expect(auth.isAuthenticated()).toBe(true); // a 5xx on refresh never signs out
+  });
+
+  it('restarts a connected hub after a refresh so it uses the new token', () => {
+    invoke.mockReturnValueOnce(of(session(2)));
+    auth.refresh().subscribe();
+    expect(realtime.restart).toHaveBeenCalledOnce();
+  });
+
+  it('reports a valid session when the server answers', async () => {
+    invoke.mockReturnValueOnce(of(me));
+    expect(await sessionCheck()).toBe('valid');
+  });
+
+  it('reports a rejected session once the 401 ended it', async () => {
+    invoke.mockReturnValueOnce(
+      throwError(() => {
+        auth.clear(false); // what the interceptor does when the refresh behind a 401 is rejected
+        return new HttpErrorResponse({ status: 401 });
+      }),
+    );
+    expect(await sessionCheck()).toBe('rejected');
+    expect(auth.isAuthenticated()).toBe(false);
+  });
+
+  it.each([0, 403, 404, 429, 500, 503])('keeps the session and reports unknown for HTTP %i', async (status) => {
+    invoke.mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status })));
+    expect(await sessionCheck()).toBe('unknown');
+    expect(auth.isAuthenticated()).toBe(true);
+    expect(navigate).not.toHaveBeenCalled(); // no global logout, no redirect
+  });
+
+  it('signs out and redirects to sign-in exactly once when the refresh behind a 401 is rejected', () => {
+    invoke.mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 401 })));
+    auth.refresh().subscribe({ error: () => undefined });
+
+    expect(auth.isAuthenticated()).toBe(false);
+    expect(realtime.stop).toHaveBeenCalled();
+    expect(navigate).toHaveBeenCalledExactlyOnceWith('/login');
+  });
+
+  it('does not sign out when the refresh fails for a transient reason', () => {
+    invoke.mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 503 })));
+    auth.refresh().subscribe({ error: () => undefined });
+
+    expect(auth.isAuthenticated()).toBe(true);
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('reports a rejected session when nobody is signed in', async () => {
+    const check = sessionCheck;
+    auth.clear(false);
+    expect(await check()).toBe('rejected');
+  });
+});
+
 describe('AuthService.restore', () => {
-  const realtime = { start: vi.fn(), restart: vi.fn(), stop: vi.fn() };
+  const realtime = { start: vi.fn(), restart: vi.fn(), stop: vi.fn(), state: vi.fn(() => 'connected') };
   const tenant = { clear: vi.fn() };
   const router = { navigateByUrl: vi.fn() };
   const invoke = vi.fn();

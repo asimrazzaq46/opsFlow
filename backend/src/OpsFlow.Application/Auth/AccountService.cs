@@ -7,6 +7,7 @@ using OpsFlow.Application.Memberships;
 using OpsFlow.Domain.Common;
 using OpsFlow.Domain.Tenants;
 using OpsFlow.Domain.Users;
+using OpsFlow.Realtime;
 
 namespace OpsFlow.Application.Auth;
 
@@ -19,6 +20,7 @@ public sealed partial class AccountService(
     IEmailService email,
     IOptions<AppOptions> app,
     IOptions<AuthOptions> auth,
+    IRealtimeConnectionRevalidation connections,
     TimeProvider clock,
     ILogger<AccountService> logger
 )
@@ -160,6 +162,7 @@ public sealed partial class AccountService(
         user.SetPassword(hasher.Hash(newPassword), now);
         await sessions.MarkAllRevokedAsync(user.Id, "password-reset", now, ct); // same transaction as the new password
         await SaveSingleUseAsync(ct);
+        await connections.RequestAsync(CancellationToken.None); // committed: close the live realtime connections of the revoked sessions
         LogPasswordChanged(logger, user.Id, "reset");
     }
 
@@ -182,6 +185,7 @@ public sealed partial class AccountService(
         user.SetPassword(hasher.Hash(newPassword), now);
         await sessions.MarkAllRevokedAsync(user.Id, "password-changed", now, ct);
         await db.SaveChangesAsync(ct);
+        await connections.RequestAsync(CancellationToken.None);
         LogPasswordChanged(logger, user.Id, "change");
         return user;
     }
@@ -259,6 +263,7 @@ public sealed partial class AccountService(
             await sessions.MarkAllRevokedAsync(userId, "account-deactivated", now, ct);
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
+            await connections.RequestAsync(CancellationToken.None);
             LogDeactivated(logger, userId);
             return;
         }

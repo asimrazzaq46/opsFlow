@@ -22,5 +22,6 @@ await realtime.stop();                                          // logout / cont
 
 - `joinGroup(group)` / `leaveGroup(group)`: the server (host authorizer) decides; groups are re-joined (and re-authorized) after every reconnect/restart and cleared on `stop()`. For private data prefer server-side recipient lists over groups.
 - One hub handler per connection, one Subject per event name: repeated `on()` calls never duplicate handlers.
-- Automatic reconnect (0/2/10/30 s) plus a 10 s retry when it gives up. The server ends a connection when its access token expires, so the token factory is called again on every reconnect.
+- Automatic reconnect (0/2/10/30 s), then retries with capped exponential backoff (1 s doubling to 60 s, jittered) that never gives up. The server ends a connection when its access token expires or its session is revoked, so the token factory is called again on every reconnect.
+- Optional `checkSession` (third argument of `start`): asked once when the connection is lost and before every retry. `'rejected'` (a definitive 401) ends the loop, `'unknown'` (network, 429, 5xx) keeps retrying, `'valid'` reconnects. Offline: no timers, the retry runs when the browser fires `online`. `stop()` cancels the timer, the `online` listener and any pending answer.
 - Tests/custom transports: provide `REALTIME_HUB_FACTORY`.

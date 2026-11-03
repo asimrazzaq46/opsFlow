@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
@@ -7,7 +8,8 @@ namespace OpsFlow.Realtime;
 
 /// <summary>
 /// Authenticated hub. A connection lives no longer than its access token: it is aborted at expiry so the client reconnects with a fresh
-/// (and re-validated) token - a revoked session cannot reconnect. Group joins are decided by the host's <see cref="IRealtimeGroupAuthorizer"/>.
+/// (and re-validated) token - a revoked session cannot reconnect. While it lives, the host can keep revalidating it
+/// (<see cref="IRealtimeConnectionValidator"/>). Group joins are decided by the host's <see cref="IRealtimeGroupAuthorizer"/>.
 /// </summary>
 [Authorize]
 public sealed partial class RealtimeHub(
@@ -21,7 +23,15 @@ public sealed partial class RealtimeHub(
     public override Task OnConnectedAsync()
     {
         LogConnected(logger, Context.UserIdentifier);
-        registry.Add(Context.ConnectionId, Context.UserIdentifier);
+        // The bearer token was validated against the host just now, so the connection starts out verified.
+        registry.Add(
+            Context.ConnectionId,
+            Context.UserIdentifier,
+            Context.User ?? new ClaimsPrincipal(),
+            Context.Abort,
+            clock.GetUtcNow(),
+            Context.ConnectionAborted
+        );
         if (Context.User?.FindFirst("exp")?.Value is { } exp && long.TryParse(exp, out var seconds))
         {
             var remaining = DateTimeOffset.FromUnixTimeSeconds(seconds) - clock.GetUtcNow();

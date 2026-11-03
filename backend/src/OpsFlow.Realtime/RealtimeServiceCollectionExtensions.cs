@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 namespace OpsFlow.Realtime;
@@ -38,6 +39,22 @@ public static class RealtimeServiceCollectionExtensions
                 o => o.MaxGroupNameLength is > 0 and <= 1000,
                 "Realtime:MaxGroupNameLength must be between 1 and 1000."
             )
+            .Validate(
+                o => o.RevalidationInterval > TimeSpan.Zero,
+                "Realtime:RevalidationInterval must be positive."
+            )
+            .Validate(
+                o => o.MaxUnverifiedAge >= o.RevalidationInterval * 2,
+                "Realtime:MaxUnverifiedAge must be at least twice Realtime:RevalidationInterval."
+            )
+            .Validate(
+                o => o.ValidationTimeout > TimeSpan.Zero && o.ValidationTimeout < o.MaxUnverifiedAge,
+                "Realtime:ValidationTimeout must be positive and shorter than Realtime:MaxUnverifiedAge."
+            )
+            .Validate(
+                o => o.ValidationBatchSize is > 0 and <= 5000,
+                "Realtime:ValidationBatchSize must be between 1 and 5000."
+            )
             .ValidateOnStart();
 
         // Registered before AddSignalR, whose default IUserIdProvider would otherwise win; TryAdd keeps any
@@ -53,7 +70,13 @@ public static class RealtimeServiceCollectionExtensions
         if (!string.IsNullOrWhiteSpace(options.RedisConnectionString))
         {
             signalR.AddStackExchangeRedis(options.RedisConnectionString);
+            services.TryAddSingleton<IRevalidationBus, RedisRevalidationBus>();
         }
+
+        // Dormant unless the host registers an IRealtimeConnectionValidator (checked when the host starts).
+        services.TryAddSingleton<RealtimeConnectionMonitor>();
+        services.AddHostedService(sp => sp.GetRequiredService<RealtimeConnectionMonitor>());
+        services.TryAddSingleton<IRealtimeConnectionRevalidation, RealtimeRevalidation>();
 
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<RealtimeConnectionRegistry>();

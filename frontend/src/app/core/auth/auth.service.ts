@@ -5,7 +5,7 @@ import { Observable, catchError, finalize, firstValueFrom, of, shareReplay, tap,
 import { Api } from '../api/generated/api';
 import { changePassword, getCurrentUser, login, logout, refreshSession, signInWithGoogle } from '../api/generated/functions';
 import { AuthResponse, UserInfo } from '../api/generated/models';
-import { RealtimeService } from '../realtime/realtime.service';
+import { RealtimeService, SessionCheck } from '../realtime/realtime.service';
 import { GoogleCredential } from './google-identity.service';
 import { TenantService } from './tenant.service';
 
@@ -105,7 +105,7 @@ export class AuthService {
     }
     if (this.epoch !== epoch || !this.session) return;
     this.adopt(this.session);
-    void this.realtime.start(HUB_URL, () => this._accessToken() ?? '');
+    this.connectRealtime();
   }
 
   login(email: string, password: string): Observable<AuthResponse> {
@@ -141,7 +141,9 @@ export class AuthService {
       tap((r) => {
         if (this.epoch !== epoch) return; // signed out meanwhile: the rotated pair is dropped
         this.adopt(toStored(r));
-        void this.realtime.restart(); // reconnect with the new token
+        // A connected hub is moved to the new token. Otherwise the pending (re)connect asks for its token afterwards, and restarting here
+        // would tear down the very attempt that triggered this refresh.
+        if (this.realtime.state() === 'connected') void this.realtime.restart();
       }),
       catchError((err: unknown) => {
         if (err instanceof HttpErrorResponse && err.status === 401 && this.epoch === epoch) this.clear(!this.restoring);
@@ -198,7 +200,41 @@ export class AuthService {
 
   private begin(r: AuthResponse): void {
     this.adopt(toStored(r));
-    void this.realtime.start(HUB_URL, () => this._accessToken() ?? '');
+    this.connectRealtime();
+  }
+
+  private connectRealtime(): void {
+    void this.realtime.start(HUB_URL, () => this.freshAccessToken(), { checkSession: () => this.checkSession() });
+  }
+
+  /**
+   * Token for every (re)connect of the hub. It is rotated through the single-flight refresh ONLY when it is about to expire, so a
+   * plain disconnect of a healthy session never rotates the refresh token. A failed refresh is the retry policy's business.
+   */
+  private async freshAccessToken(): Promise<string> {
+    const expiresAt = this.session ? Date.parse(this.session.expiresAtUtc) : Number.POSITIVE_INFINITY;
+    if (expiresAt - Date.now() <= REFRESH_MARGIN_MS) {
+      try {
+        await firstValueFrom(this.refresh().pipe(timeout(RESTORE_TIMEOUT_MS)));
+      } catch {
+        /* the connect attempt fails and is retried (or the session ended, which stops it) */
+      }
+    }
+    return this._accessToken() ?? '';
+  }
+
+  /**
+   * Asks the server whether this session is still valid via `/auth/me` (the interceptor refreshes once on 401, and a 401 on that refresh
+   * signs out). Only a signed-out result is `rejected`; 403, 404, 429, 5xx, timeouts and network errors prove nothing about revocation.
+   */
+  async checkSession(): Promise<SessionCheck> {
+    if (!this.session) return 'rejected';
+    try {
+      await firstValueFrom(this.api.invoke(getCurrentUser, {}).pipe(timeout(RESTORE_TIMEOUT_MS)));
+      return 'valid';
+    } catch {
+      return this.session ? 'unknown' : 'rejected';
+    }
   }
 
   private apply(s: StoredSession): void {

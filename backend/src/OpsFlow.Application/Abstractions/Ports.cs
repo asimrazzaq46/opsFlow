@@ -34,5 +34,5 @@ public sealed class AppOptions
     public const string SectionName = "App";
 
     /// <summary>Public frontend origin used to build links in emails.</summary>
-    public string BaseUrl { get; set; } = "http://localhost:4300";
+    public string BaseUrl { get; set; } = "http://localhost:4200";
 }

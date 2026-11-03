@@ -12,6 +12,7 @@ using OpsFlow.Infrastructure.Email;
 using OpsFlow.Infrastructure.Persistence;
 using OpsFlow.Infrastructure.Security;
 using OpsFlow.Infrastructure.Storage;
+using OpsFlow.Realtime;
 
 namespace OpsFlow.Infrastructure;
 
@@ -33,6 +34,7 @@ public static partial class DependencyInjection
         services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
         services.AddSingleton<ITokenService, TokenService>(); // issues and validates both access and refresh JWTs
         services.AddScoped<ISessionValidator, SessionValidator>();
+        services.AddScoped<IRealtimeConnectionValidator, RealtimeSessionValidator>(); // same rule, applied to live SignalR connections
 
         // Google sign-in is optional: without GoogleAuth:ClientId the endpoints answer AUTH_GOOGLE_DISABLED and password auth is unaffected.
         var googleClientId = configuration[$"{GoogleAuthOptions.SectionName}:{nameof(GoogleAuthOptions.ClientId)}"];

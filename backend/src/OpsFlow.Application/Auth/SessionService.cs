@@ -5,6 +5,7 @@ using OpsFlow.Application.Abstractions;
 using OpsFlow.Application.Common;
 using OpsFlow.Domain.Common;
 using OpsFlow.Domain.Users;
+using OpsFlow.Realtime;
 
 namespace OpsFlow.Application.Auth;
 
@@ -30,6 +31,7 @@ public sealed partial class SessionService(
     IPasswordHasher hasher,
     ITokenService tokenService,
     IOptions<AuthOptions> options,
+    IRealtimeConnectionRevalidation connections,
     TimeProvider clock,
     ILogger<SessionService> logger
 )
@@ -208,6 +210,7 @@ public sealed partial class SessionService(
         {
             session.Revoke("logout", Now);
             await db.SaveChangesAsync(ct);
+            await connections.RequestAsync(CancellationToken.None); // committed: close its live realtime connections now
         }
     }
 
@@ -215,6 +218,7 @@ public sealed partial class SessionService(
     {
         await MarkAllRevokedAsync(userId, "logout-all", Now, ct);
         await db.SaveChangesAsync(ct);
+        await connections.RequestAsync(CancellationToken.None);
     }
 
     /// <summary>Marks every active session of the user revoked WITHOUT saving, so callers can commit it atomically with their own change.</summary>
@@ -261,6 +265,7 @@ public sealed partial class SessionService(
             ) ?? throw AppException.NotFound("Session not found.");
         session.Revoke("revoked-by-user", Now);
         await db.SaveChangesAsync(ct);
+        await connections.RequestAsync(CancellationToken.None);
     }
 
     private SessionTokens Start(User user, string? userAgent, DateTime now)
@@ -329,6 +334,7 @@ public sealed partial class SessionService(
 
         session.Revoke("refresh-token-reuse", now);
         await db.SaveChangesAsync(ct);
+        await connections.RequestAsync(CancellationToken.None);
         LogReuse(logger, session.UserId, session.Id);
         return InvalidRefresh();
     }

@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Options;
@@ -79,14 +78,7 @@ internal sealed class ConfigureJwtBearerOptions(
         }
 
         if (
-            !Guid.TryParse(principal.FindFirstValue(AuthClaims.Subject), out var userId)
-            || !Guid.TryParse(principal.FindFirstValue(AuthClaims.SessionId), out var sessionId)
-            || !int.TryParse(
-                principal.FindFirstValue(AuthClaims.AuthVersion),
-                NumberStyles.Integer,
-                CultureInfo.InvariantCulture,
-                out var authVersion
-            )
+            !AuthClaims.TryReadSession(principal, out var userId, out var sessionId, out var authVersion)
         )
         {
             context.Fail("The access token is missing required claims.");

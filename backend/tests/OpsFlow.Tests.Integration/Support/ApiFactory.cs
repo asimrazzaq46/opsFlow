@@ -62,10 +62,22 @@ public sealed class FakeEmailService : IEmailService
 /// <summary>
 /// Selects the test database: OPSFLOW_TEST_DB=postgres runs against a real PostgreSQL Testcontainer
 /// (one container per test run, one fresh database per factory); anything else uses a throw-away SQLite file.
+/// OPSFLOW_TEST_PG_ADMIN=<admin connection string> replaces the Testcontainer with a DISPOSABLE PostgreSQL server you started yourself
+/// (for hosts where Docker cannot publish container ports on all interfaces). It needs BOTH variables (it is ignored without
+/// OPSFLOW_TEST_DB=postgres), the server must be on this machine (loopback), it must not hold a database named "opsflow" (the development
+/// database), and only databases named opsflow_(test|hf|startup)_<32 hex> are ever created or dropped.
 /// Schema comes from EnsureCreated() (current EF model) - this is NOT migration verification.
 /// </summary>
-public static class TestDatabase
+public static partial class TestDatabase
 {
+    private static void EnsureTestDatabaseName(string name)
+    {
+        if (!IsTestDatabaseName(name))
+        {
+            throw new InvalidOperationException($"Refusing to create or drop '{name}': not a generated test database name.");
+        }
+    }
+
     public static readonly bool UsePostgres = string.Equals(Environment.GetEnvironmentVariable("OPSFLOW_TEST_DB"), "postgres", StringComparison.OrdinalIgnoreCase);
 
     public static string Provider => UsePostgres ? "PostgreSQL" : "SQLite";
@@ -78,19 +90,51 @@ public static class TestDatabase
         return container;
     });
 
+    private static readonly Lazy<string> AdminConnectionString = new(() =>
+    {
+        var external = Environment.GetEnvironmentVariable("OPSFLOW_TEST_PG_ADMIN");
+        if (string.IsNullOrWhiteSpace(external))
+        {
+            return Container.Value.GetConnectionString();
+        }
+
+        if (!IsLoopbackHost(new NpgsqlConnectionStringBuilder(external).Host))
+        {
+            throw new InvalidOperationException("OPSFLOW_TEST_PG_ADMIN must point at a PostgreSQL server on this machine (localhost, 127.0.0.1 or ::1).");
+        }
+
+        using var admin = new NpgsqlConnection(external);
+        admin.Open();
+        using var probe = new NpgsqlCommand("SELECT count(*) FROM pg_database WHERE datname = 'opsflow'", admin);
+        return Convert.ToInt32(probe.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture) > 0
+            ? throw new InvalidOperationException("OPSFLOW_TEST_PG_ADMIN points at a server that holds the development database 'opsflow'; use a disposable server.")
+            : external;
+    });
+
+    internal static bool IsLoopbackHost(string? host) =>
+        host is not null && (host.Equals("localhost", StringComparison.OrdinalIgnoreCase) || (System.Net.IPAddress.TryParse(host, out var ip) && System.Net.IPAddress.IsLoopback(ip)));
+
+    /// <summary>Only names this suite generates may be created or dropped, so no other database on the server can ever be touched.</summary>
+    internal static bool IsTestDatabaseName(string name) => TestDatabaseName().IsMatch(name);
+
+    [System.Text.RegularExpressions.GeneratedRegex("^opsflow_(test|hf|startup)_[0-9a-f]{32}$")]
+    private static partial System.Text.RegularExpressions.Regex TestDatabaseName();
+
     public static string CreatePostgresDatabase(string name)
     {
-        using var admin = new NpgsqlConnection(Container.Value.GetConnectionString());
+        EnsureTestDatabaseName(name);
+        using var admin = new NpgsqlConnection(AdminConnectionString.Value);
         admin.Open();
         using var create = new NpgsqlCommand($"CREATE DATABASE \"{name}\"", admin);
         create.ExecuteNonQuery();
-        return new NpgsqlConnectionStringBuilder(Container.Value.GetConnectionString()) { Database = name }.ConnectionString;
+        return new NpgsqlConnectionStringBuilder(AdminConnectionString.Value) { Database = name }.ConnectionString;
     }
 
     public static void DropPostgresDatabase(string name)
     {
+        EnsureTestDatabaseName(name);
         NpgsqlConnection.ClearAllPools();
-        using var admin = new NpgsqlConnection(Container.Value.GetConnectionString());
+        using var admin = new NpgsqlConnection(AdminConnectionString.Value);
         admin.Open();
         using var drop = new NpgsqlCommand($"DROP DATABASE IF EXISTS \"{name}\" WITH (FORCE)", admin);
         drop.ExecuteNonQuery();
@@ -274,6 +318,13 @@ public class ApiFactory : WebApplicationFactory<Program>
 
     protected virtual string GoogleClientId => GoogleTestClientId;
 
+    // Realtime revalidation timing (TimeSpan strings). The defaults are the production values.
+    protected virtual string RevalidationInterval => "00:00:30";
+
+    protected virtual string MaxUnverifiedAge => "00:01:30";
+
+    protected virtual string ValidationTimeout => "00:00:10";
+
     public FakeGoogleValidator Google { get; } = new();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -287,6 +338,9 @@ public class ApiFactory : WebApplicationFactory<Program>
             ["Auth:Password:Iterations"] = "1000", // fast hashing for tests only; production enforces >= 210000
             ["Database:AutoApplyMigrationsOnStartup"] = "false", // test hosts create and own the schema themselves
             ["GoogleAuth:ClientId"] = GoogleClientId,
+            ["Realtime:RevalidationInterval"] = RevalidationInterval,
+            ["Realtime:MaxUnverifiedAge"] = MaxUnverifiedAge,
+            ["Realtime:ValidationTimeout"] = ValidationTimeout,
         }));
         builder.ConfigureServices(services =>
         {

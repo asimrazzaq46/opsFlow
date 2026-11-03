@@ -1,24 +1,66 @@
 using System.Collections.Concurrent;
+using System.Security.Claims;
 using Microsoft.AspNetCore.SignalR;
 
 namespace OpsFlow.Realtime;
 
-/// <summary>Infrastructure (public only because the hub constructor needs it). Per-instance bookkeeping of which authenticated user's connection joined which groups (needed to evict on revocation).</summary>
+/// <summary>
+/// Infrastructure (public only because the hub constructor needs it). Per-instance bookkeeping of every live connection: its authenticated
+/// principal (for revalidation), when it was last verified against the host, and which groups it joined (needed to evict on revocation).
+/// </summary>
 public sealed class RealtimeConnectionRegistry
 {
-    private sealed record Entry(string UserId, HashSet<string> Groups);
+    private sealed class Entry(
+        string? userId,
+        ClaimsPrincipal user,
+        Action abort,
+        long verifiedTicks,
+        CancellationToken ended
+    )
+    {
+        private long _verifiedTicks = verifiedTicks;
+
+        public string? UserId { get; } = userId;
+
+        public ClaimsPrincipal User { get; } = user;
+
+        public Action Abort { get; } = abort;
+
+        public CancellationToken Ended { get; } = ended;
+
+        public HashSet<string> Groups { get; } = [];
+
+        public DateTimeOffset VerifiedAt =>
+            new(new DateTime(Interlocked.Read(ref _verifiedTicks), DateTimeKind.Utc));
+
+        public void MarkVerified(DateTimeOffset at) =>
+            Interlocked.Exchange(ref _verifiedTicks, at.UtcTicks);
+    }
 
     private readonly ConcurrentDictionary<string, Entry> _connections = new();
 
-    internal void Add(string connectionId, string? userId)
-    {
-        if (userId is not null)
-        {
-            _connections[connectionId] = new Entry(userId, []);
-        }
-    }
+    /// <summary>A connection as seen by the revalidation monitor; <see cref="Abort"/> is safe to call from any thread and any number of times.</summary>
+    internal sealed record Tracked(
+        string ConnectionId,
+        ClaimsPrincipal User,
+        DateTimeOffset VerifiedAt,
+        Action Abort
+    );
+
+    /// <summary>Every connection is tracked, even without a user identifier: revalidation must see (and reject) it too.</summary>
+    internal void Add(
+        string connectionId,
+        string? userId,
+        ClaimsPrincipal user,
+        Action abort,
+        DateTimeOffset verifiedAt,
+        CancellationToken ended
+    ) =>
+        _connections[connectionId] = new Entry(userId, user, abort, verifiedAt.UtcTicks, ended);
 
     internal void Remove(string connectionId) => _connections.TryRemove(connectionId, out _);
+
+    internal int Count => _connections.Count;
 
     internal void Joined(string connectionId, string group)
     {
@@ -66,6 +108,32 @@ public sealed class RealtimeConnectionRegistry
         }
 
         return result;
+    }
+
+    /// <summary>Connections that are still open. Entries whose connection already ended are dropped here as a safety net against a missed disconnect callback.</summary>
+    internal IReadOnlyList<Tracked> Snapshot()
+    {
+        List<Tracked> result = [];
+        foreach (var (connectionId, entry) in _connections)
+        {
+            if (entry.Ended.IsCancellationRequested)
+            {
+                _connections.TryRemove(connectionId, out _);
+                continue;
+            }
+
+            result.Add(new Tracked(connectionId, entry.User, entry.VerifiedAt, entry.Abort));
+        }
+
+        return result;
+    }
+
+    internal void MarkVerified(string connectionId, DateTimeOffset at)
+    {
+        if (_connections.TryGetValue(connectionId, out var entry))
+        {
+            entry.MarkVerified(at);
+        }
     }
 }
 

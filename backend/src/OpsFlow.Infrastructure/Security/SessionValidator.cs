@@ -13,23 +13,35 @@ internal sealed class SessionValidator(OpsFlowDbContext db, TimeProvider clock) 
         Guid sessionId,
         int authVersion,
         CancellationToken cancellationToken
-    )
-    {
-        var now = clock.GetUtcNow().UtcDateTime;
-        return db
-            .UserSessions.AsNoTracking()
+    ) =>
+        ValidSessions(db, clock.GetUtcNow().UtcDateTime)
             .AnyAsync(
-                s =>
-                    s.Id == sessionId
-                    && s.UserId == userId
-                    && s.RevokedAtUtc == null
-                    && s.ExpiresAtUtc > now
-                    && db.Users.Any(u =>
-                        u.Id == userId
-                        && u.Status == UserStatus.Active
-                        && u.AuthVersion == authVersion
-                    ),
+                v => v.SessionId == sessionId && v.UserId == userId && v.AuthVersion == authVersion,
                 cancellationToken
             );
-    }
+
+    /// <summary>
+    /// The single definition of "this session may authenticate": not revoked, not expired and owned by an active user. A token
+    /// additionally has to carry the user's CURRENT auth version. Per-request validation and live-connection revalidation both use it.
+    /// </summary>
+    internal static IQueryable<ValidSession> ValidSessions(OpsFlowDbContext db, DateTime nowUtc) =>
+        from s in db.UserSessions.AsNoTracking()
+        where s.RevokedAtUtc == null && s.ExpiresAtUtc > nowUtc
+        join u in db.Users on s.UserId equals u.Id
+        where u.Status == UserStatus.Active
+        select new ValidSession
+        {
+            SessionId = s.Id,
+            UserId = s.UserId,
+            AuthVersion = u.AuthVersion,
+        };
+}
+
+internal sealed class ValidSession
+{
+    public Guid SessionId { get; init; }
+
+    public Guid UserId { get; init; }
+
+    public int AuthVersion { get; init; }
 }

@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Security.Claims;
+
 namespace OpsFlow.Application.Auth;
 
 public static class AuthClaims
@@ -10,6 +13,26 @@ public static class AuthClaims
     public const string TokenType = "token_type";
     public const string AccessTokenType = "access";
     public const string RefreshTokenType = "refresh";
+
+    /// <summary>Reads the session identifiers of an authenticated access-token principal; false when any is missing or malformed.</summary>
+    public static bool TryReadSession(
+        ClaimsPrincipal? principal,
+        out Guid userId,
+        out Guid sessionId,
+        out int authVersion
+    )
+    {
+        (userId, sessionId, authVersion) = (default, default, 0);
+        return principal is not null
+            && Guid.TryParse(principal.FindFirst(Subject)?.Value, out userId)
+            && Guid.TryParse(principal.FindFirst(SessionId)?.Value, out sessionId)
+            && int.TryParse(
+                principal.FindFirst(AuthVersion)?.Value,
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out authVersion
+            );
+    }
 }
 
 public interface IPasswordHasher

@@ -96,6 +96,34 @@ public interface IRealtimeGroupManager
     Task RevokeUserAsync(string userId, CancellationToken cancellationToken = default);
 }
 
+/// <summary>A live connection and the authenticated principal it connected with (never client-supplied values).</summary>
+public sealed record RealtimeConnectionInfo(string ConnectionId, ClaimsPrincipal User);
+
+/// <summary>
+/// Host-provided check that live connections are still entitled to be connected (session not revoked, account still active, ...). The
+/// library calls it periodically and on request in batches and closes every connection that is NOT reported as valid, so a validator that
+/// returns too little fails closed instead of leaving revoked connections open. Registered as scoped: it may use a DbContext.
+/// Throw when the source of truth cannot be reached; never return "everything valid" as a fallback.
+/// </summary>
+public interface IRealtimeConnectionValidator
+{
+    /// <summary>Returns the ids (from <paramref name="connections"/>) that are valid right now. Ids that are not returned are closed.</summary>
+    Task<IReadOnlySet<string>> FindValidAsync(
+        IReadOnlyList<RealtimeConnectionInfo> connections,
+        CancellationToken cancellationToken
+    );
+}
+
+/// <summary>
+/// Call AFTER a revocation committed (session revoked, password changed, account deactivated) to revalidate live connections right away
+/// instead of waiting for the next periodic check. Best effort and never throws: the periodic check stays the guarantee. With a Redis
+/// backplane configured every instance is asked; otherwise only this instance.
+/// </summary>
+public interface IRealtimeConnectionRevalidation
+{
+    ValueTask RequestAsync(CancellationToken cancellationToken = default);
+}
+
 /// <summary>Default: no group can be joined until the host registers its own authorizer.</summary>
 internal sealed class DenyAllGroupAuthorizer : IRealtimeGroupAuthorizer
 {
@@ -119,4 +147,16 @@ public sealed class RealtimeOptions
     public string? RedisConnectionString { get; set; }
 
     public int MaxGroupNameLength { get; set; } = 200;
+
+    /// <summary>How often live connections are revalidated when the host registered an <see cref="IRealtimeConnectionValidator"/>.</summary>
+    public TimeSpan RevalidationInterval { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>A connection that could not be verified for this long is closed (fail closed), whatever the reason the checks failed.</summary>
+    public TimeSpan MaxUnverifiedAge { get; set; } = TimeSpan.FromSeconds(90);
+
+    /// <summary>Upper bound for one validator call, so a hanging dependency cannot stall the monitor.</summary>
+    public TimeSpan ValidationTimeout { get; set; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>Connections per validator call.</summary>
+    public int ValidationBatchSize { get; set; } = 500;
 }

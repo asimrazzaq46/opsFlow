@@ -6,6 +6,17 @@ export type RealtimeState = 'disconnected' | 'connecting' | 'connected' | 'recon
 export type AccessTokenFactory = () => string | Promise<string>;
 export type HubConnectionFactory = (url: string, accessTokenFactory: AccessTokenFactory) => HubConnection;
 
+/**
+ * Whether the host still considers the signed-in session valid. `rejected` is definitive (the server said so): reconnecting is pointless.
+ * `unknown` means the question could not be answered (network, 429, 5xx, ...): that proves nothing, so reconnecting continues.
+ */
+export type SessionCheck = 'valid' | 'rejected' | 'unknown';
+
+export interface RealtimeStartOptions {
+  /** Asked before a reconnect after the connection was lost, so a revoked session stops retrying instead of hammering the server. */
+  checkSession?: () => Promise<SessionCheck>;
+}
+
 /** Overridable (tests, custom transports); the default builds an auto-reconnecting SignalR connection. */
 export const REALTIME_HUB_FACTORY = new InjectionToken<HubConnectionFactory>('REALTIME_HUB_FACTORY', {
   providedIn: 'root',
@@ -14,7 +25,14 @@ export const REALTIME_HUB_FACTORY = new InjectionToken<HubConnectionFactory>('RE
     new HubConnectionBuilder().withUrl(url, { accessTokenFactory, withCredentials: false }).withAutomaticReconnect().configureLogging(LogLevel.Warning).build(),
 });
 
-const RETRY_AFTER_CLOSE_MS = 10_000;
+const BASE_RETRY_MS = 1_000;
+const MAX_RETRY_MS = 60_000;
+
+/** Capped exponential backoff with jitter (half fixed, half random) so many tabs do not reconnect in lockstep. Retrying never stops. */
+export function reconnectDelayMs(failures: number, random: () => number = Math.random): number {
+  const ceiling = Math.min(MAX_RETRY_MS, BASE_RETRY_MS * 2 ** Math.min(failures, 16));
+  return ceiling / 2 + random() * (ceiling / 2);
+}
 
 /**
  * Reusable SignalR wrapper (no app imports). The server pushes everything through ONE callback `Receive(name, payload)`;
@@ -33,13 +51,22 @@ export class RealtimeService {
 
   private readonly subjects = new Map<string, Subject<unknown>>();
   private connection: HubConnection | null = null;
-  private args: { url: string; accessTokenFactory: AccessTokenFactory } | null = null;
-  private retryTimer: ReturnType<typeof setTimeout> | undefined;
+  private args: { url: string; accessTokenFactory: AccessTokenFactory; options?: RealtimeStartOptions } | null = null;
   // Wanted groups; the server forgets them on every new connection, so they are re-joined (and re-authorized) after start/reconnect
   private readonly groups = new Set<string>();
 
+  private retryTimer: ReturnType<typeof setTimeout> | undefined;
+  private onlineHandler: (() => void) | undefined;
+  private failures = 0;
+  /** Bumped by every start/stop: a late async step (teardown, session check) that sees a newer value must do nothing. */
+  private generation = 0;
+  private checkingSession = false;
+
   constructor() {
-    inject(DestroyRef).onDestroy(() => void this.teardown());
+    inject(DestroyRef).onDestroy(() => {
+      this.generation++;
+      void this.teardown();
+    });
   }
 
   on<T>(eventName: string): Observable<T> {
@@ -51,23 +78,30 @@ export class RealtimeService {
     return subject.asObservable() as Observable<T>;
   }
 
-  async start(url: string, accessTokenFactory: AccessTokenFactory): Promise<void> {
+  async start(url: string, accessTokenFactory: AccessTokenFactory, options?: RealtimeStartOptions): Promise<void> {
+    const generation = ++this.generation;
     await this.teardown();
-    this.args = { url, accessTokenFactory };
+    if (generation !== this.generation) return; // a newer start/stop replaced this one while the old connection was closing
+    this.args = { url, accessTokenFactory, options };
     const connection = this.factory(url, accessTokenFactory);
     this.connection = connection;
     connection.on('Receive', (name: string, payload: unknown) => this.subjects.get(name)?.next(payload));
-    connection.onreconnecting(() => this._state.set('reconnecting'));
+    connection.onreconnecting(() => {
+      if (this.connection !== connection) return;
+      this._state.set('reconnecting');
+      void this.verifySession();
+    });
     connection.onreconnected(async () => {
       this._state.set('connected');
+      this.failures = 0;
       await this.rejoinGroups();
       this._reconnected.next();
     });
     connection.onclose(() => {
       if (this.connection !== connection) return;
       this._state.set('disconnected');
-      // automatic reconnect gave up (or the token expired): try again later while the session is still wanted
-      this.retryTimer = setTimeout(() => void this.restart(), RETRY_AFTER_CLOSE_MS);
+      // automatic reconnect gave up, or the server ended the connection (token expiry, revoked session): decide again, never give up silently
+      this.scheduleRetry();
     });
 
     this._state.set('connecting');
@@ -75,13 +109,14 @@ export class RealtimeService {
       await connection.start();
       if (this.connection === connection) {
         this._state.set('connected');
+        this.failures = 0;
         await this.rejoinGroups();
       }
     } catch (error) {
       console.warn('Realtime connection failed', error);
       if (this.connection === connection) {
         this._state.set('disconnected');
-        this.retryTimer = setTimeout(() => void this.restart(), RETRY_AFTER_CLOSE_MS);
+        this.scheduleRetry();
       }
     }
   }
@@ -109,14 +144,67 @@ export class RealtimeService {
   /** Reconnects with whatever the token factory returns now (call after a token refresh). */
   async restart(): Promise<void> {
     if (!this.args) return;
-    await this.start(this.args.url, this.args.accessTokenFactory);
+    await this.start(this.args.url, this.args.accessTokenFactory, this.args.options);
     if (this._state() === 'connected') this._reconnected.next();
   }
 
   async stop(): Promise<void> {
+    this.generation++;
     this.args = null;
     this.groups.clear(); // logout / context change: nothing may be re-joined for the next user
     await this.teardown();
+  }
+
+  /** One retry at a time. Offline: wait for the browser's `online` event instead of burning timers. */
+  private scheduleRetry(): void {
+    if (!this.args || this.retryTimer !== undefined || this.onlineHandler) return;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false && typeof window !== 'undefined') {
+      this.onlineHandler = () => {
+        this.clearPending();
+        this.failures = 0; // connectivity is back: start over quickly
+        void this.retry();
+      };
+      window.addEventListener('online', this.onlineHandler);
+      return;
+    }
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = undefined;
+      void this.retry();
+    }, reconnectDelayMs(this.failures++));
+  }
+
+  private async retry(): Promise<void> {
+    const generation = this.generation;
+    const checkSession = this.args?.options?.checkSession;
+    if (checkSession) {
+      const result = await this.askSession(checkSession);
+      if (generation !== this.generation || !this.args) return; // stopped or restarted while asking
+      if (result === 'rejected') return void this.stop();
+      if (result === 'unknown') return this.scheduleRetry();
+    }
+    await this.restart();
+  }
+
+  /** Once per lost connection (not per attempt): a revoked session ends the reconnect loop right away. */
+  private async verifySession(): Promise<void> {
+    const generation = this.generation;
+    const checkSession = this.args?.options?.checkSession;
+    if (!checkSession || this.checkingSession) return;
+    this.checkingSession = true;
+    try {
+      const result = await this.askSession(checkSession);
+      if (generation === this.generation && result === 'rejected') await this.stop();
+    } finally {
+      this.checkingSession = false;
+    }
+  }
+
+  private async askSession(checkSession: () => Promise<SessionCheck>): Promise<SessionCheck> {
+    try {
+      return await checkSession();
+    } catch {
+      return 'unknown'; // a failing check is never a verdict
+    }
   }
 
   private async joinNow(group: string): Promise<boolean> {
@@ -135,8 +223,15 @@ export class RealtimeService {
     for (const group of [...this.groups]) await this.joinNow(group);
   }
 
-  private async teardown(): Promise<void> {
+  private clearPending(): void {
     clearTimeout(this.retryTimer);
+    this.retryTimer = undefined;
+    if (this.onlineHandler) window.removeEventListener('online', this.onlineHandler);
+    this.onlineHandler = undefined;
+  }
+
+  private async teardown(): Promise<void> {
+    this.clearPending();
     const connection = this.connection;
     this.connection = null;
     this._state.set('disconnected');

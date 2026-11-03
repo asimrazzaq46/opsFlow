@@ -13,6 +13,8 @@ Reusable, host-agnostic SignalR infrastructure for ASP.NET Core. No dependency o
 | `IRealtimeGroupManager` | `RevokeAsync(user, group)` / `RevokeUserAsync(user)`: evict live connections of this instance when access is removed. |
 | Chat pipeline | `ChatService<TMessage>`: validate -> authorize -> host persists -> publish the host's per-audience deliveries. `ChatUser` is the trusted identity. |
 | Redis backplane | Optional (`Realtime:RedisConnectionString`), scale-out only. Never a message store. |
+| `IRealtimeConnectionValidator` | HOST confirms, in batches, which live connections are still entitled to be connected (session revoked? account disabled?). Optional; see "Live connection revalidation". |
+| `IRealtimeConnectionRevalidation` | `RequestAsync()` after a revocation commits: revalidate now, on this instance and (with Redis) on every instance. Best effort, never throws. |
 
 Publisher semantics: invalid input (missing `[RealtimeEvent]`, empty ids, null payload, no membership provider) throws; a transport failure is logged and swallowed (post-commit best effort); a cancelled token throws `OperationCanceledException`.
 
@@ -71,6 +73,41 @@ await foreach (var chunk in model.StreamAsync(prompt, ct))
     await publisher.NotifyUserAsync(userId, new BotToken(conversationId, chunk), ct);   // ephemeral; the final message is stored and recoverable via history
 ```
 
+## Live connection revalidation
+
+Authentication happens once, when a connection is opened, so a revoked session would otherwise keep receiving events until its token expires.
+Register a validator and the library keeps checking the connections it holds:
+
+```csharp
+services.AddScoped<IRealtimeConnectionValidator, MyValidator>();   // may use a DbContext; one call per batch, never per connection
+
+// after your revocation COMMITTED:
+await revalidation.RequestAsync();                                  // optional fast path
+```
+
+```csharp
+public Task<IReadOnlySet<string>> FindValidAsync(IReadOnlyList<RealtimeConnectionInfo> connections, CancellationToken ct)
+// connections carry the principal the connection authenticated with - never client-supplied values.
+// Return the ids that are valid. Every id you do not return is closed (fail closed). THROW if your source of truth is unreachable;
+// never return "everything valid" as a fallback.
+```
+
+| Option | Default | Meaning |
+|---|---|---|
+| `RevalidationInterval` | 30 s | Periodic check of every connection of this instance. |
+| `MaxUnverifiedAge` | 90 s | A connection that could not be verified for this long is closed, whatever the reason (validator down, timing out, throwing). At least 2x the interval. |
+| `ValidationTimeout` | 10 s | Upper bound for one validator call; a hung dependency counts as a failed check. |
+| `ValidationBatchSize` | 500 | Connections per validator call. |
+
+How it behaves:
+
+- Each instance checks only its own connections against the host's source of truth, so instances need no coordination. Without a validator the monitor stays dormant and connections end at token expiry only.
+- One failed or slow check never closes a valid connection; repeated failures close it once `MaxUnverifiedAge` passes. The validation time is taken before the call, so a revocation that lands during a check is never covered by it.
+- `RequestAsync()` wakes the monitor at once; bursts coalesce, and a request that arrives during a pass triggers the next pass immediately. With `Realtime:RedisConnectionString` it also publishes an identity-free "revalidate" signal on its own Redis channel (the backplane's configuration and channel prefix, a distinct channel name, one extra Redis connection per instance). A lost signal or a Redis outage only delays the close until the next periodic check.
+- Closing uses `HubCallerContext.Abort()`, which is safe from the monitor's thread and idempotent. The client sees a normal close, the hub's disconnect callback removes the registry entry, and entries whose connection already ended are pruned on every pass.
+
+Timing (healthy system, no strict deadline): fast path = one validator batch (milliseconds); periodic fallback <= `RevalidationInterval` + one batch; validator outage <= `MaxUnverifiedAge` + `RevalidationInterval`. A host database outage or a stalled monitor delays enforcement; watch the "Realtime revalidation failed" warnings (a sustained stream of them means connections are about to be closed as unverified).
+
 ## Host responsibilities
 
 - Authentication (JWT validation, session/revocation checks) and the token lifetime policy.
@@ -85,8 +122,9 @@ Message storage/outbox, delivery or read receipts, typing/presence, push/email f
 
 ## Known limits
 
-- A session revoked at the host keeps an already open socket until its access token expires (the connection is aborted then and cannot reconnect). Private events are still only sent to recipients authorized at publish time.
-- The Redis backplane is optional and not exercised by the automated tests; local development runs fully in-process.
+- Without an `IRealtimeConnectionValidator`, a session revoked at the host keeps an already open socket until its access token expires (the connection is aborted then and cannot reconnect). Private events are still only sent to recipients authorized at publish time.
+- Revalidation closes connections; it does not re-check group membership of the ones it keeps. Private data must go through recipient lists or `PublishToGroupMembersAsync`, which read current access at publish time.
+- The Redis backplane and the cross-instance revalidation signal are exercised by integration tests only when `OPSFLOW_TEST_REDIS` points at a Redis; local development runs fully in-process.
 
 ## Angular
 
