@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { authGuard, guestGuard } from './core/auth/auth.guard';
+import { authGuard, guestGuard, workspaceGuard } from './core/auth/auth.guard';
 
 export const routes: Routes = [
   {
@@ -15,14 +15,14 @@ export const routes: Routes = [
   { path: 'invitations/accept', loadComponent: () => import('./features/workspaces/accept-invitation/accept-invitation').then((m) => m.AcceptInvitation) },
   { path: 'workspaces', canActivate: [authGuard], loadComponent: () => import('./features/workspaces/workspace-select/workspace-select').then((m) => m.WorkspaceSelect) },
   { path: 'workspaces/new', canActivate: [authGuard], loadComponent: () => import('./features/workspaces/workspace-setup/workspace-setup').then((m) => m.WorkspaceSetup) },
-  { path: 'tickets', canActivate: [authGuard], loadComponent: () => import('./features/tickets/ticket-list').then((m) => m.TicketList) },
-  { path: 'tickets/new', canActivate: [authGuard], loadComponent: () => import('./features/tickets/ticket-create').then((m) => m.TicketCreate) },
-  { path: 'tickets/:id', canActivate: [authGuard], loadComponent: () => import('./features/tickets/ticket-detail').then((m) => m.TicketDetail) },
-  { path: 'dashboard', canActivate: [authGuard], loadComponent: () => import('./features/dashboard/dashboard').then((m) => m.Dashboard) },
-  { path: 'kanban', canActivate: [authGuard], loadComponent: () => import('./features/kanban/kanban').then((m) => m.Kanban) },
-  { path: 'reports', canActivate: [authGuard], loadComponent: () => import('./features/reports/reports').then((m) => m.Reports) },
-  { path: 'customers', canActivate: [authGuard], loadComponent: () => import('./features/customers/customers').then((m) => m.Customers) },
+  { path: 'tickets', canActivate: [authGuard, workspaceGuard], loadComponent: () => import('./features/tickets/ticket-list').then((m) => m.TicketList) },
+  { path: 'tickets/new', canActivate: [authGuard, workspaceGuard], loadComponent: () => import('./features/tickets/ticket-create').then((m) => m.TicketCreate) },
+  { path: 'tickets/:id', canActivate: [authGuard, workspaceGuard], loadComponent: () => import('./features/tickets/ticket-detail').then((m) => m.TicketDetail) },
+  { path: 'dashboard', canActivate: [authGuard, workspaceGuard], loadComponent: () => import('./features/dashboard/dashboard').then((m) => m.Dashboard) },
+  { path: 'kanban', canActivate: [authGuard, workspaceGuard], loadComponent: () => import('./features/kanban/kanban').then((m) => m.Kanban) },
+  { path: 'reports', canActivate: [authGuard, workspaceGuard], loadComponent: () => import('./features/reports/reports').then((m) => m.Reports) },
+  { path: 'customers', canActivate: [authGuard, workspaceGuard], loadComponent: () => import('./features/customers/customers').then((m) => m.Customers) },
   { path: 'account', canActivate: [authGuard], loadComponent: () => import('./features/account/account-security').then((m) => m.AccountSecurity) },
-  { path: 'team', canActivate: [authGuard], loadComponent: () => import('./features/team/team').then((m) => m.Team) },
+  { path: 'team', canActivate: [authGuard, workspaceGuard], loadComponent: () => import('./features/team/team').then((m) => m.Team) },
   { path: '**', redirectTo: '' },
 ];

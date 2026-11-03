@@ -1,0 +1,124 @@
+<div class="flex flex-col gap-4">
+  <nav [attr.aria-label]="'tickets.breadcrumb' | translate">
+    <ol class="flex items-center gap-1 text-body-sm text-on-surface-variant">
+      <li><a routerLink="/tickets" class="ops-link inline-flex items-center gap-1"><span class="ms text-[16px]" aria-hidden="true">confirmation_number</span>{{ 'tickets.title' | translate }}</a></li>
+      @if (ticket(); as t) {
+        <li aria-hidden="true"><span class="ms text-[14px]">chevron_right</span></li>
+        <li aria-current="page" class="font-mono text-mono-data font-semibold text-on-surface">{{ t.summary.displayNumber }}</li>
+      }
+    </ol>
+  </nav>
+
+  @if (loading()) {
+    <p role="status" class="ops-card flex items-center justify-center gap-2 px-4 py-16 text-body-md text-on-surface-variant">
+      <span class="ms text-[20px] motion-safe:animate-spin" aria-hidden="true">progress_activity</span>{{ 'common.loading' | translate }}</p>
+  } @else if (error(); as err) {
+    <div role="alert" class="ops-card flex flex-col items-center gap-3 px-4 py-16 text-center">
+      <span class="ms text-[32px] text-error" aria-hidden="true">error</span>
+      <p class="text-body-md text-on-surface">{{ err | translate }}</p>
+      <div class="flex gap-2">
+        <button type="button" class="ops-btn-secondary" (click)="load()"><span class="ms text-[18px]" aria-hidden="true">refresh</span>{{ 'common.retry' | translate }}</button>
+        <a routerLink="/tickets" class="ops-btn-secondary">{{ 'tickets.back' | translate }}</a>
+      </div>
+    </div>
+  } @else if (ticket(); as t) {
+    <!-- Header: title, metadata and primary action -->
+    <header class="flex flex-col gap-3">
+      <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+        <h1 class="min-w-0 break-words text-headline-lg tracking-tight text-on-surface sm:text-headline-xl">{{ t.summary.title }}</h1>
+        @if (canEdit()) {
+          <button type="button" class="ops-btn-secondary shrink-0 self-start" (click)="editing.set(true)" aria-haspopup="dialog">
+            <span class="ms text-[18px]" aria-hidden="true">edit</span>{{ 'tickets.edit.open' | translate }}</button>
+        }
+      </div>
+      <ul class="flex flex-wrap items-center gap-2 text-body-sm" [attr.aria-label]="'tickets.detail.meta' | translate">
+        <li class="meta-chip"><span class="text-on-surface-variant">{{ 'common.status' | translate }}:</span>
+          <span class="ops-badge" [class]="statusBadge[t.summary.status]">{{ 'tickets.status.' + t.summary.status | translate }}</span></li>
+        <li class="meta-chip"><span class="text-on-surface-variant">{{ 'tickets.form.priority' | translate }}:</span>
+          <span class="ops-badge rounded-full uppercase" [class]="priorityBadge[t.summary.priority].badge">
+            <span class="size-1.5 rounded-full" [class]="priorityBadge[t.summary.priority].dot" aria-hidden="true"></span>{{ 'tickets.priority.' + t.summary.priority | translate }}</span></li>
+        @if (tenant.isStaff()) {
+          <li class="meta-chip"><span class="ms text-[16px] text-on-surface-variant" aria-hidden="true">domain</span>
+            <span class="text-on-surface-variant">{{ 'tickets.form.customer' | translate }}:</span>
+            <span class="font-medium text-on-surface">{{ t.summary.customerName ?? ('tickets.list.internal' | translate) }}</span></li>
+        }
+        <li class="meta-chip"><span class="ms text-[16px] text-on-surface-variant" aria-hidden="true">category</span>
+          <span class="text-on-surface-variant">{{ 'tickets.form.category' | translate }}:</span>
+          <span class="font-medium text-on-surface">{{ t.summary.categoryName }}</span></li>
+        @if (tenant.isStaff() && t.summary.isOverdue) {
+          <li class="ops-badge bg-error-container text-on-error-container"><span class="ms text-[14px]" aria-hidden="true">timer_off</span>{{ 'tickets.list.overdue' | translate }}</li>
+        }
+      </ul>
+    </header>
+
+    <div class="grid grid-cols-1 items-start gap-4 lg:grid-cols-12">
+      <div class="flex min-w-0 flex-col gap-4 lg:col-span-8">
+        <!-- Original request -->
+        <section class="ops-card p-4 sm:p-5" aria-labelledby="desc-title">
+          <h2 id="desc-title" class="ops-label mb-2">{{ 'tickets.form.description' | translate }}</h2>
+          <p class="whitespace-pre-wrap break-words text-body-md text-on-surface">{{ t.description }}</p>
+        </section>
+
+        <!-- Collaboration tabs -->
+        <section class="ops-card min-w-0">
+          <div role="tablist" class="flex gap-1 overflow-x-auto border-b border-outline-variant/50 px-2" [attr.aria-label]="'tickets.detail.sections' | translate">
+            @for (tb of tabs(); track tb.key; let i = $index) {
+              <button type="button" role="tab" [id]="'tab-' + tb.key" class="detail-tab" [attr.aria-selected]="tab() === tb.key"
+                [attr.aria-controls]="'panel-' + tb.key" [tabindex]="tab() === tb.key ? 0 : -1" (click)="select(tb.key)" (keydown)="onTabKey($event, i)">
+                <span class="ms text-[18px]" aria-hidden="true">{{ tb.icon }}</span>{{ tb.label | translate }}
+              </button>
+            }
+          </div>
+          @for (tb of tabs(); track tb.key) {
+            <div role="tabpanel" [id]="'panel-' + tb.key" [attr.aria-labelledby]="'tab-' + tb.key" class="p-3 sm:p-4" [hidden]="tab() !== tb.key">
+              @if (visited().has(tb.key)) {
+                @switch (tb.key) {
+                  @case ('conversation') { <app-ticket-chat [ticketId]="id()" /> }
+                  @case ('notes') { <app-ticket-notes [ticketId]="id()" /> }
+                  @case ('attachments') { <app-ticket-attachments [ticketId]="id()" [staff]="tenant.isStaff()" /> }
+                  @case ('tasks') { <app-ticket-tasks [ticket]="t" /> }
+                  @case ('activity') { <app-ticket-activity [ticketId]="id()" [version]="t.summary.version" /> }
+                }
+              }
+            </div>
+          }
+        </section>
+      </div>
+
+      <aside class="flex min-w-0 flex-col gap-4 lg:col-span-4" [attr.aria-label]="'tickets.detail.properties' | translate">
+        <section class="ops-card p-4 sm:p-5" aria-labelledby="props-title">
+          <h2 id="props-title" class="mb-3 text-headline-sm text-on-surface">{{ 'tickets.detail.properties' | translate }}</h2>
+          <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-body-sm">
+            <dt class="text-on-surface-variant">{{ 'tickets.list.col.id' | translate }}</dt>
+            <dd class="font-mono text-mono-data text-on-surface">{{ t.summary.displayNumber }}</dd>
+            <dt class="text-on-surface-variant">{{ 'tickets.detail.created' | translate }}</dt>
+            <dd class="text-on-surface"><time [attr.datetime]="t.summary.createdAtUtc">{{ t.summary.createdAtUtc | date: 'medium' }}</time></dd>
+            <dt class="text-on-surface-variant">{{ 'tickets.list.col.updated' | translate }}</dt>
+            <dd class="text-on-surface"><time [attr.datetime]="t.summary.updatedAtUtc">{{ t.summary.updatedAtUtc | date: 'medium' }}</time></dd>
+            @if (t.summary.resolvedAtUtc) {
+              <dt class="text-on-surface-variant">{{ 'tickets.sla.resolvedAt' | translate }}</dt>
+              <dd class="text-on-surface"><time [attr.datetime]="t.summary.resolvedAtUtc">{{ t.summary.resolvedAtUtc | date: 'medium' }}</time></dd>
+            }
+            @if (t.currentSla; as sla) {
+              <dt class="text-on-surface-variant">{{ 'tickets.sla.resolutionDue' | translate }}</dt>
+              <dd class="text-on-surface"><time [attr.datetime]="sla.resolutionDueAtUtc">{{ sla.resolutionDueAtUtc | date: 'medium' }}</time></dd>
+              <dt class="text-on-surface-variant">{{ 'tickets.detail.slaState' | translate }}</dt>
+              <dd>
+                <span class="ops-badge" [class]="sla.resolutionState === 'Missed' || sla.resolutionState === 'Overdue' ? 'bg-error-container text-on-error-container' : sla.resolutionState === 'Met' ? 'bg-secondary-container text-on-secondary-container' : 'bg-surface-container-high text-on-surface'">
+                  {{ 'tickets.sla.state.' + sla.resolutionState | translate }}</span>
+                @if (sla.resolutionState === 'Running' && remaining(sla.remainingResolutionMinutes); as left) {
+                  <span class="ml-1 font-mono text-mono-timer text-on-surface-variant">{{ 'tickets.detail.remaining' | translate: { time: left } }}</span>
+                }
+              </dd>
+            }
+          </dl>
+        </section>
+        <app-ticket-actions [ticket]="t" (changed)="refresh()" />
+      </aside>
+    </div>
+
+    @if (editing()) {
+      <app-ticket-edit [ticket]="t" (saved)="saved($event)" (closed)="editing.set(false)" (reloaded)="ticket.set($event)" />
+    }
+  }
+</div>

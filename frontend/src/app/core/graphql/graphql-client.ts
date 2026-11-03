@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { print } from 'graphql';
-import { Observable, map, throwError } from 'rxjs';
+import { Observable, map, throwError, timeout } from 'rxjs';
 import { TenantService } from '../auth/tenant.service';
 
 export interface GraphqlErrorItem {
@@ -22,6 +22,8 @@ export class GraphqlError extends Error {
 }
 
 const printed = new WeakMap<object, string>();
+/** GraphQL serves reads only, so an unanswered query becomes an error (with Retry) instead of an endless loading state. */
+export const QUERY_TIMEOUT_MS = 20_000;
 
 /**
  * The only GraphQL entry point. It goes through HttpClient, so the central Bearer + single-flight refresh interceptor applies; the
@@ -43,6 +45,7 @@ export class GraphqlClient {
     return this.http
       .post<{ data: TData | null; errors?: GraphqlErrorItem[] }>(`/api/v1/tenants/${tenantId}/graphql`, { query: text, variables })
       .pipe(
+        timeout(QUERY_TIMEOUT_MS),
         map((r) => {
           if (r.errors?.length || !r.data) throw new GraphqlError(r.errors ?? []);
           return r.data;

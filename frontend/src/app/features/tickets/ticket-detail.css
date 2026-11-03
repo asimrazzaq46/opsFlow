@@ -1,0 +1,46 @@
+:host {
+  display: block;
+}
+
+.meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: 2rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: 0.5rem;
+  background: var(--ops-surface-container-lowest);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+}
+
+.detail-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: 2.75rem;
+  padding: 0 0.75rem;
+  margin-bottom: -1px;
+  white-space: nowrap;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--ops-on-surface-variant);
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.detail-tab:hover {
+  color: var(--ops-on-surface);
+}
+
+/* The selected tab is marked by weight and an underline in addition to color. */
+.detail-tab[aria-selected="true"] {
+  color: var(--ops-on-surface);
+  font-weight: 600;
+  border-bottom-color: var(--ops-primary-container);
+}
+
+.detail-tab:focus-visible {
+  outline: 2px solid var(--ops-primary-container);
+  outline-offset: -2px;
+  border-radius: 0.25rem;
+}

@@ -1,0 +1,4 @@
+/* No display rule here: the host element is shown or hidden by utility classes where it is used. */
+:host {
+  vertical-align: middle;
+}

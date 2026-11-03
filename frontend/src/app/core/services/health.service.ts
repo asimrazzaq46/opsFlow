@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { of, timer } from 'rxjs';
-import { catchError, map, switchMap } from 'rxjs/operators';
+import { catchError, map, switchMap, timeout } from 'rxjs/operators';
 
 export type HealthState = 'checking' | 'online' | 'offline';
 
@@ -11,6 +11,8 @@ interface HealthResponse {
 }
 
 const POLL_INTERVAL_MS = 30_000;
+// A hung API must surface as unavailable instead of keeping the previous answer until the next poll completes.
+const CHECK_TIMEOUT_MS = 8_000;
 
 @Injectable({ providedIn: 'root' })
 export class HealthService {
@@ -23,6 +25,7 @@ export class HealthService {
       .pipe(
         switchMap(() =>
           this.http.get<HealthResponse>('/api/v1/health').pipe(
+            timeout(CHECK_TIMEOUT_MS),
             map((r): HealthState => (r.status === 'Healthy' ? 'online' : 'offline')),
             catchError(() => of<HealthState>('offline')),
           ),

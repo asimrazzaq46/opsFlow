@@ -1,12 +1,13 @@
 {
   "shell": {
     "language": "Language",
-    "toggleTheme": "Toggle dark/light theme"
+    "toggleTheme": "Toggle dark/light theme",
+    "skipToContent": "Skip to main content"
   },
   "health": {
     "checking": "Checking API…",
-    "online": "API online",
-    "offline": "API offline"
+    "online": "API reachable",
+    "offline": "API unavailable"
   },
   "home": {
     "eyebrow": "Multi-tenant service operations",
@@ -38,7 +39,12 @@
     "reports": "Reports",
     "menu": "Main navigation",
     "account": "Account",
-    "workspaces": "Workspaces"
+    "workspaces": "Workspaces",
+    "sidebar": "Application sidebar",
+    "operations": "Operations",
+    "preferences": "Preferences",
+    "openMenu": "Open navigation",
+    "closeMenu": "Close navigation"
   },
   "auth": {
     "signIn": "Sign in",
@@ -84,13 +90,20 @@
       "customer": "Customer",
       "assignees": "Assign agents",
       "submit": "Create ticket",
-      "error": "The ticket could not be created."
+      "error": "The ticket could not be created.",
+      "titleLength": "Use between 3 and 200 characters.",
+      "invalid": "Some fields are not valid. Check them and try again.",
+      "forbidden": "You are not allowed to create this ticket. Your account may not be linked to a customer contact."
     },
     "actions": {
       "status": "Change status",
       "reopen": "Reopen ticket",
       "assign": "Add an agent",
-      "unassign": "Remove"
+      "unassign": "Remove",
+      "chooseAgent": "Choose an agent",
+      "noAgents": "No other active agents",
+      "inactiveAgent": "Inactive",
+      "reopenHint": "Reopening starts a new SLA cycle."
     },
     "errors": {
       "conflict": "The ticket was changed by someone else. It was reloaded.",
@@ -115,6 +128,127 @@
         "Met": "Met",
         "Missed": "Missed",
         "NotApplicable": "N/A"
+      }
+    },
+    "breadcrumb": "Breadcrumb",
+    "unassignedShort": "Unassigned",
+    "list": {
+      "viewsLabel": "Ticket views",
+      "views": {
+        "all": "All tickets",
+        "open": "Open",
+        "overdue": "SLA overdue",
+        "unstaffed": "Needs staffing",
+        "finished": "Resolved & closed"
+      },
+      "search": "Search tickets",
+      "searchPlaceholder": "Search by ticket number or title…",
+      "reset": "Reset filters",
+      "range": "Showing {{from}}–{{to}} of {{total}}",
+      "results": "Ticket results",
+      "caption": "Tickets matching the current filters",
+      "col": {
+        "id": "Ticket",
+        "slaDue": "SLA resolution due",
+        "updated": "Updated"
+      },
+      "internal": "Internal",
+      "ineligible": "Some assigned agents are no longer active",
+      "overdue": "Overdue",
+      "noMatches": "No tickets match these filters.",
+      "invalidFilter": "These filters are not supported. Reset them and try again.",
+      "pageSize": "Rows per page",
+      "pageN": "Page {{n}}"
+    },
+    "create": {
+      "title": "Create ticket",
+      "titlePlaceholder": "Short summary of the problem",
+      "descriptionPlaceholder": "Describe what happened, what you expected and any steps to reproduce it.",
+      "chooseCategory": "Choose a category",
+      "categoriesError": "Categories could not be loaded.",
+      "noCustomer": "No customer (internal ticket)",
+      "customerHint": "The customer contact becomes the requester and can follow the ticket.",
+      "routing": "Assignment",
+      "noAgents": "No active agents available.",
+      "agentSelfAssigned": "Tickets you create are assigned to you automatically.",
+      "customerRouting": "Our team sets the priority and assigns the right agent.",
+      "afterTitle": "What happens next",
+      "afterText": "The ticket gets a number and an SLA based on its priority. Replies and status changes appear on the ticket page as they happen.",
+      "priorityHint": {
+        "Low": "Minor issue or question",
+        "Medium": "Normal business impact",
+        "High": "Work is significantly impaired",
+        "Urgent": "Critical outage or blocker"
+      }
+    },
+    "detail": {
+      "notFound": "This ticket does not exist or you do not have access to it.",
+      "meta": "Ticket details",
+      "sections": "Ticket sections",
+      "properties": "Properties",
+      "created": "Created",
+      "slaState": "SLA status",
+      "remaining": "{{time}} left"
+    },
+    "activity": {
+      "title": "Activity",
+      "empty": "No activity recorded yet.",
+      "error": "Could not load the activity.",
+      "truncated": "Only the first 100 entries are shown.",
+      "type": {
+        "Created": "Ticket created",
+        "DetailsUpdated": "Details updated",
+        "PriorityChanged": "Priority changed",
+        "CategoryChanged": "Category changed",
+        "AgentAssigned": "Agent assigned",
+        "AgentUnassigned": "Agent unassigned",
+        "StatusChanged": "Status changed",
+        "Resolved": "Ticket resolved",
+        "Reopened": "Ticket reopened",
+        "SlaCycleStarted": "SLA cycle started",
+        "SlaCycleCompleted": "SLA cycle completed",
+        "AttachmentAdded": "Attachment added",
+        "TaskCreated": "Child task created",
+        "TaskDetailsUpdated": "Child task updated",
+        "TaskStatusChanged": "Child task status changed",
+        "TaskAssigned": "Child task reassigned",
+        "TasksReordered": "Child tasks reordered"
+      }
+    },
+    "edit": {
+      "open": "Edit",
+      "title": "Edit ticket {{number}}",
+      "close": "Close editor",
+      "basedOn": "Editing version {{version}}",
+      "unsaved": "Unsaved changes",
+      "save": "Save changes",
+      "priorityHint": "Changing the priority recalculates the active SLA targets.",
+      "customerHint": "You can change the title and description while the ticket is open.",
+      "staleWarning": "Someone updated this ticket while you were editing. Saving may report a conflict.",
+      "conflictTitle": "Version conflict: version {{from}} was replaced by {{to}}",
+      "conflictText": "Another user saved changes while you were editing. Nothing was overwritten. Compare the values and choose how to continue.",
+      "diffCaption": "Your values compared with the current server values",
+      "field": "Field",
+      "yours": "Your edit",
+      "server": "Current on server",
+      "changedByYou": "Changed by you",
+      "changedOnServer": "Changed on server",
+      "noFieldDiff": "The editable fields are unchanged; another part of the ticket was updated.",
+      "useServer": "Discard mine, load server version",
+      "keepMine": "Keep my edits on the new version",
+      "loadedServer": "The current server version was loaded. Your edits were discarded.",
+      "keptMine": "Your edits now apply to the latest version. Review them and save again.",
+      "closed": "The ticket was closed and can no longer be edited. Reopen it first.",
+      "notEditable": "The ticket can no longer be edited in its current state.",
+      "conflictUnknown": "The ticket changed, but the latest version could not be loaded. Close the editor and reload the page.",
+      "forbidden": "You are not allowed to make these changes.",
+      "invalid": "Some fields are not valid. Check them and try again.",
+      "error": "The changes could not be saved. Your edits are kept; try again.",
+      "fields": {
+        "title": "Title",
+        "description": "Description",
+        "priority": "Priority",
+        "categoryId": "Category"
       }
     }
   },

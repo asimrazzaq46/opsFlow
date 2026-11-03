@@ -7,6 +7,7 @@ import { TenantService } from '../../core/auth/tenant.service';
 import { GraphqlClient } from '../../core/graphql/graphql-client';
 import { TicketSlaHistoryDocument, TicketSlaHistoryQuery } from '../../core/graphql/generated';
 import { pascal } from '../../shared/format';
+import { initials } from '../workspaces/workspace-api';
 import { TicketsApi } from './tickets-api';
 
 // Mirrors the backend workflow only to decide which buttons to show; the server validates every command.
@@ -23,65 +24,8 @@ const NEXT: Record<TicketStatus, TicketStatus[]> = {
   selector: 'app-ticket-actions',
   imports: [TranslatePipe, DatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    @if (message(); as m) { <p role="alert" class="mb-3 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">{{ m | translate }}</p> }
-
-    @if (tenant.isStaff() && next().length) {
-      <div class="mb-4 flex flex-wrap items-center gap-2" role="group" [attr.aria-label]="'tickets.actions.status' | translate">
-        @for (s of next(); track s) {
-          <button type="button" [disabled]="busy()" (click)="move(s)" class="rounded-lg border border-border px-3 py-1.5 text-sm hover:border-brand focus-visible:outline-2 focus-visible:outline-brand disabled:opacity-50">
-            {{ 'tickets.status.' + s | translate }}</button>
-        }
-      </div>
-    }
-    @if (canReopen()) {
-      <button type="button" [disabled]="busy()" (click)="reopen()" class="mb-4 rounded-lg border border-border px-3 py-1.5 text-sm hover:border-brand focus-visible:outline-2 focus-visible:outline-brand disabled:opacity-50">
-        {{ 'tickets.actions.reopen' | translate }}</button>
-    }
-
-    @if (ticket().assignees; as assignees) {
-      <section class="mb-4 rounded-xl border border-border bg-card p-4">
-        <h2 class="mb-2 font-semibold">{{ 'tickets.assignees' | translate }}</h2>
-        <ul class="flex flex-wrap gap-2">
-          @for (a of assignees; track a.membershipId) {
-            <li class="flex items-center gap-1 rounded-full bg-surface px-3 py-1 text-sm">{{ a.displayName }}
-              @if (isManager()) {
-                <button type="button" class="ml-1 text-muted hover:text-danger focus-visible:outline-2 focus-visible:outline-brand" [disabled]="busy()" [attr.aria-label]="('tickets.actions.unassign' | translate) + ' ' + a.displayName" (click)="unassign(a.membershipId)">✕</button>
-              }
-            </li>
-          } @empty { <li class="text-sm text-muted">{{ 'tickets.unassigned' | translate }}</li> }
-        </ul>
-        @if (isManager()) {
-          <label class="mt-3 grid gap-1 text-sm"><span class="text-muted">{{ 'tickets.actions.assign' | translate }}</span>
-            <select class="max-w-xs rounded-lg border border-border bg-card px-2 py-1" [disabled]="busy()" (change)="assign($event)">
-              <option value="">—</option>
-              @for (m of assignable(); track m.id) { <option [value]="m.id">{{ m.displayName }}</option> }
-            </select></label>
-        }
-      </section>
-    }
-
-    @if (tenant.isStaff()) {
-      <section class="mb-4 rounded-xl border border-border bg-card p-4">
-        <h2 class="mb-2 font-semibold">{{ 'tickets.sla.title' | translate }}</h2>
-        @if (cycles(); as list) {
-          <ol class="space-y-2 text-sm">
-            @for (c of list; track c.id) {
-              <li class="rounded-lg bg-surface p-2">
-                <p class="font-medium">{{ 'tickets.sla.cycle' | translate: { n: c.cycleNumber } }} · {{ 'tickets.sla.reason.' + pascal(c.reason) | translate }}</p>
-                <p class="text-muted">{{ 'tickets.sla.started' | translate }}: {{ c.startedAtUtc | date: 'short' }}</p>
-                <p class="text-muted">{{ 'tickets.sla.responseDue' | translate }}: {{ c.responseDueAtUtc ? (c.responseDueAtUtc | date: 'short') : ('common.na' | translate) }}
-                  · {{ 'tickets.sla.firstResponse' | translate }}: {{ c.firstResponseAtUtc ? (c.firstResponseAtUtc | date: 'short') : ('common.na' | translate) }}</p>
-                <p class="text-muted">{{ 'tickets.sla.resolutionDue' | translate }}: {{ c.resolutionDueAtUtc | date: 'short' }}
-                  · {{ 'tickets.sla.resolvedAt' | translate }}: {{ c.resolvedAtUtc ? (c.resolvedAtUtc | date: 'short') : ('common.na' | translate) }}</p>
-                <p class="font-medium" [class]="c.resolutionState === 'MISSED' || c.resolutionState === 'OVERDUE' ? 'text-danger' : 'text-success'">{{ 'tickets.sla.state.' + pascal(c.resolutionState) | translate }}</p>
-              </li>
-            }
-          </ol>
-        } @else { <p class="text-sm text-muted">{{ 'common.loading' | translate }}</p> }
-      </section>
-    }
-  `,
+  templateUrl: './ticket-actions.html',
+  styleUrl: './ticket-actions.css',
 })
 export class TicketActions {
   readonly ticket = input.required<TicketDetailDto>();
@@ -92,6 +36,7 @@ export class TicketActions {
   private readonly gql = inject(GraphqlClient);
 
   protected readonly pascal = pascal;
+  protected readonly initials = initials;
   protected readonly busy = signal(false);
   protected readonly message = signal<string | null>(null);
   protected readonly members = signal<MemberDto[]>([]);

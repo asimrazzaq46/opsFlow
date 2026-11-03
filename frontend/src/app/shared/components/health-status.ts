@@ -2,28 +2,22 @@ import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/c
 import { TranslatePipe } from '@ngx-translate/core';
 import { HealthService } from '../../core/services/health.service';
 
+/** Shows the polled `/api/v1/health` answer: a liveness check proving the API answers, not that every dependency works. */
 @Component({
   selector: 'app-health-status',
   imports: [TranslatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <span
-      role="status"
-      class="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium"
-    >
-      <span class="size-2 rounded-full" [class]="dot()" aria-hidden="true"></span>
-      {{ 'health.' + state() | translate }}
-    </span>
-  `,
+  templateUrl: './health-status.html',
+  styleUrl: './health-status.css',
 })
 export class HealthStatus {
   protected readonly state = inject(HealthService).state;
   protected readonly dot = computed(
     () =>
       ({
-        online: 'bg-success',
-        offline: 'bg-danger',
-        checking: 'bg-warning animate-pulse',
+        online: 'bg-secondary',
+        offline: 'bg-error',
+        checking: 'bg-tertiary motion-safe:animate-pulse',
       })[this.state()],
   );
 }

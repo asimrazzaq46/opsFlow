@@ -1,0 +1,206 @@
+<div class="flex flex-col gap-4">
+  <!-- Heading and primary action -->
+  <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+    <div>
+      @if (tenant.current(); as org) {
+        <span class="ops-label text-primary">{{ org.name }}</span>
+      }
+      <h1 class="mt-1 text-headline-lg tracking-tight text-on-surface sm:text-headline-xl">{{ 'tickets.title' | translate }}</h1>
+    </div>
+    <a routerLink="/tickets/new" class="ops-btn-primary h-10 self-start px-4 sm:self-auto">
+      <span class="ms text-[18px]" aria-hidden="true">add</span>{{ 'tickets.new' | translate }}
+    </a>
+  </div>
+
+  <!-- Saved views map to the server-side `state` filter -->
+  <div class="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1" role="group" [attr.aria-label]="'tickets.list.viewsLabel' | translate">
+    @for (v of views(); track v.label) {
+      <button type="button" class="min-h-9 whitespace-nowrap rounded-lg px-3.5 text-headline-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-container"
+        [class]="(query().state ?? null) === v.key ? 'bg-surface-container-highest text-on-surface shadow-sm' : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface'"
+        [attr.aria-pressed]="(query().state ?? null) === v.key" (click)="setFilter('state', v.key)">{{ v.label | translate }}</button>
+    }
+  </div>
+
+  <!-- Search and filters -->
+  <div class="ops-card p-3 sm:p-4">
+    <div class="flex flex-col gap-2 lg:flex-row lg:items-center">
+      <div class="relative flex-1">
+        <label for="ticket-search" class="sr-only">{{ 'tickets.list.search' | translate }}</label>
+        <span class="ms pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-on-surface-variant" aria-hidden="true">search</span>
+        <input id="ticket-search" type="search" maxlength="200" [formControl]="search" (focus)="searchFocused = true" (blur)="searchFocused = false" [placeholder]="'tickets.list.searchPlaceholder' | translate"
+          class="h-10 w-full rounded-lg bg-surface-container-low pl-9 pr-3 text-body-md text-on-surface placeholder:text-on-surface-variant focus:bg-surface-container focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary-container" />
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <label class="sr-only" for="f-status">{{ 'common.status' | translate }}</label>
+        <select id="f-status" class="ops-select" (change)="setFilter('status', $event)">
+          <option value="" [selected]="!query().status">{{ 'common.status' | translate }}: {{ 'filters.any' | translate }}</option>
+          @for (s of statuses; track s) { <option [value]="s" [selected]="query().status === s">{{ statusLabel(s) | translate }}</option> }
+        </select>
+        <label class="sr-only" for="f-priority">{{ 'filters.priority' | translate }}</label>
+        <select id="f-priority" class="ops-select" (change)="setFilter('priority', $event)">
+          <option value="" [selected]="!query().priority">{{ 'filters.priority' | translate }}: {{ 'filters.any' | translate }}</option>
+          @for (p of priorities; track p) { <option [value]="p" [selected]="query().priority === p">{{ priorityLabel(p) | translate }}</option> }
+        </select>
+        <label class="sr-only" for="f-category">{{ 'tickets.form.category' | translate }}</label>
+        <select id="f-category" class="ops-select max-w-56" (change)="setFilter('category', $event)">
+          <option value="" [selected]="!query().categoryId">{{ 'tickets.form.category' | translate }}: {{ 'filters.any' | translate }}</option>
+          @for (c of categories.value() ?? []; track c.id) { <option [value]="c.id" [selected]="query().categoryId === c.id">{{ c.name }}</option> }
+        </select>
+      </div>
+    </div>
+    <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-body-sm">
+      @if (filtered()) {
+        <button type="button" class="ops-link font-medium" (click)="reset()">{{ 'tickets.list.reset' | translate }}</button>
+      }
+      <p class="ml-auto font-mono text-mono-timer text-on-surface-variant" aria-live="polite">
+        @if (total()) { {{ 'tickets.list.range' | translate: range() }} }
+      </p>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <section class="ops-card overflow-hidden" [attr.aria-busy]="tickets.isLoading()" aria-labelledby="tickets-results">
+    <h2 id="tickets-results" class="sr-only">{{ 'tickets.list.results' | translate }}</h2>
+    @if (loadError(); as err) {
+      <div role="alert" class="flex flex-col items-center gap-3 px-4 py-12 text-center">
+        <span class="ms text-[32px] text-error" aria-hidden="true">error</span>
+        <p class="text-body-md text-on-surface">{{ err | translate }}</p>
+        <button type="button" class="ops-btn-secondary" (click)="tickets.reload()">
+          <span class="ms text-[18px]" aria-hidden="true">refresh</span>{{ 'common.retry' | translate }}</button>
+      </div>
+    } @else if (!page()) {
+      <p role="status" class="flex items-center justify-center gap-2 px-4 py-12 text-body-md text-on-surface-variant">
+        <span class="ms text-[20px] motion-safe:animate-spin" aria-hidden="true">progress_activity</span>{{ 'common.loading' | translate }}</p>
+    } @else if (!page()!.items.length) {
+      <div class="flex flex-col items-center gap-2 px-4 py-12 text-center">
+        <span class="ms text-[32px] text-on-surface-variant" aria-hidden="true">confirmation_number</span>
+        <p class="text-headline-sm text-on-surface">{{ (filtered() ? 'tickets.list.noMatches' : 'tickets.empty') | translate }}</p>
+        @if (filtered()) {
+          <button type="button" class="ops-link text-body-sm font-medium" (click)="reset()">{{ 'tickets.list.reset' | translate }}</button>
+        }
+      </div>
+    } @else {
+      <!-- Desktop: data table -->
+      <div class="hidden overflow-x-auto md:block" [class.opacity-60]="tickets.isLoading()">
+        <table class="w-full border-collapse text-left">
+          <caption class="sr-only">{{ 'tickets.list.caption' | translate }}</caption>
+          <thead class="bg-surface-container-low">
+            <tr>
+              <th scope="col" class="ops-th" [attr.aria-sort]="ariaSort('number')">
+                <button type="button" class="sort-btn" (click)="sort('number')">{{ 'tickets.list.col.id' | translate }}<span class="ms text-[14px]" aria-hidden="true">{{ ariaSort('number') === 'ascending' ? 'arrow_upward' : 'arrow_downward' }}</span></button>
+              </th>
+              <th scope="col" class="ops-th" [attr.aria-sort]="ariaSort('priority')">
+                <button type="button" class="sort-btn" (click)="sort('priority')">{{ 'tickets.form.priority' | translate }}<span class="ms text-[14px]" aria-hidden="true">{{ ariaSort('priority') === 'ascending' ? 'arrow_upward' : 'arrow_downward' }}</span></button>
+              </th>
+              <th scope="col" class="ops-th min-w-64" [attr.aria-sort]="ariaSort('title')">
+                <button type="button" class="sort-btn" (click)="sort('title')">{{ 'tickets.form.title' | translate }}<span class="ms text-[14px]" aria-hidden="true">{{ ariaSort('title') === 'ascending' ? 'arrow_upward' : 'arrow_downward' }}</span></button>
+              </th>
+              @if (tenant.isStaff()) { <th scope="col" class="ops-th">{{ 'tickets.form.customer' | translate }}</th> }
+              <th scope="col" class="ops-th">{{ 'tickets.form.category' | translate }}</th>
+              @if (tenant.isStaff()) { <th scope="col" class="ops-th">{{ 'tickets.assignees' | translate }}</th> }
+              <th scope="col" class="ops-th" [attr.aria-sort]="ariaSort('status')">
+                <button type="button" class="sort-btn" (click)="sort('status')">{{ 'common.status' | translate }}<span class="ms text-[14px]" aria-hidden="true">{{ ariaSort('status') === 'ascending' ? 'arrow_upward' : 'arrow_downward' }}</span></button>
+              </th>
+              @if (tenant.isStaff()) { <th scope="col" class="ops-th">{{ 'tickets.list.col.slaDue' | translate }}</th> }
+              <th scope="col" class="ops-th" [attr.aria-sort]="ariaSort('updatedAt')">
+                <button type="button" class="sort-btn" (click)="sort('updatedAt')">{{ 'tickets.list.col.updated' | translate }}<span class="ms text-[14px]" aria-hidden="true">{{ ariaSort('updatedAt') === 'ascending' ? 'arrow_upward' : 'arrow_downward' }}</span></button>
+              </th>
+            </tr>
+          </thead>
+          <tbody class="text-body-sm text-on-surface">
+            @for (t of page()!.items; track t.id) {
+              <tr class="group border-t border-outline-variant/40 transition-colors hover:bg-surface-container-low/70">
+                <td class="px-3 py-3 whitespace-nowrap"><a [routerLink]="['/tickets', t.id]" class="ops-link font-mono text-mono-data font-semibold" tabindex="-1" aria-hidden="true">{{ t.displayNumber }}</a></td>
+                <td class="px-3 py-3 whitespace-nowrap">
+                  <span class="ops-badge rounded-full uppercase" [class]="priorityBadge[t.priority].badge">
+                    <span class="size-1.5 rounded-full" [class]="priorityBadge[t.priority].dot" aria-hidden="true"></span>{{ priorityLabel(t.priority) | translate }}</span>
+                </td>
+                <td class="px-3 py-3">
+                  <a [routerLink]="['/tickets', t.id]" class="line-clamp-2 rounded-xs text-headline-sm text-on-surface hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-container">
+                    <span class="sr-only">{{ t.displayNumber }} · </span>{{ t.title }}</a>
+                </td>
+                @if (tenant.isStaff()) {
+                  <td class="px-3 py-3 whitespace-nowrap">{{ t.customerName ?? ('tickets.list.internal' | translate) }}</td>
+                }
+                <td class="px-3 py-3 whitespace-nowrap"><span class="ops-badge bg-surface-container font-medium text-on-surface-variant">{{ t.categoryName }}</span></td>
+                @if (tenant.isStaff()) {
+                  <td class="px-3 py-3 whitespace-nowrap">
+                    @if (count(t.assigneeCount) === 0) {
+                      <span class="ops-badge rounded-full bg-surface-container-high font-normal text-on-surface-variant">
+                        <span class="ms text-[14px]" aria-hidden="true">person_off</span>{{ 'tickets.unassignedShort' | translate }}</span>
+                    } @else {
+                      <span class="font-mono text-mono-data">{{ t.assigneeCount }}</span>
+                      @if (count(t.eligibleAssigneeCount) < count(t.assigneeCount)) {
+                        <span class="ms ml-1 align-middle text-[16px] text-tertiary" aria-hidden="true">warning</span>
+                        <span class="sr-only">{{ 'tickets.list.ineligible' | translate }}</span>
+                      }
+                    }
+                  </td>
+                }
+                <td class="px-3 py-3 whitespace-nowrap"><span class="ops-badge" [class]="statusBadge[t.status]">{{ statusLabel(t.status) | translate }}</span></td>
+                @if (tenant.isStaff()) {
+                  <td class="px-3 py-3 whitespace-nowrap">
+                    @if (t.isOverdue) {
+                      <span class="ops-badge bg-error-container font-mono text-on-error-container">
+                        <span class="ms text-[14px]" aria-hidden="true">timer_off</span>{{ 'tickets.list.overdue' | translate }}</span>
+                    } @else if (t.resolutionDueAtUtc && !t.resolvedAtUtc) {
+                      <time class="font-mono text-mono-data text-on-surface-variant" [attr.datetime]="t.resolutionDueAtUtc">{{ t.resolutionDueAtUtc | date: 'short' }}</time>
+                    } @else {
+                      <span class="text-on-surface-variant">—</span>
+                    }
+                  </td>
+                }
+                <td class="px-3 py-3 whitespace-nowrap"><time class="font-mono text-mono-data text-on-surface-variant" [attr.datetime]="t.updatedAtUtc">{{ t.updatedAtUtc | date: 'short' }}</time></td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Mobile: stacked cards -->
+      <ul class="divide-y divide-outline-variant/40 md:hidden" [class.opacity-60]="tickets.isLoading()">
+        @for (t of page()!.items; track t.id) {
+          <li>
+            <a [routerLink]="['/tickets', t.id]" class="flex flex-col gap-1.5 px-4 py-3 hover:bg-surface-container-low focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary-container">
+              <span class="flex items-center justify-between gap-2">
+                <span class="font-mono text-mono-data font-semibold text-primary">{{ t.displayNumber }}</span>
+                <span class="ops-badge" [class]="statusBadge[t.status]">{{ statusLabel(t.status) | translate }}</span>
+              </span>
+              <span class="text-headline-sm text-on-surface">{{ t.title }}</span>
+              <span class="flex flex-wrap items-center gap-1.5 text-body-sm text-on-surface-variant">
+                <span class="ops-badge rounded-full uppercase" [class]="priorityBadge[t.priority].badge">{{ priorityLabel(t.priority) | translate }}</span>
+                <span>{{ t.categoryName }}</span>
+                @if (tenant.isStaff() && t.isOverdue) {
+                  <span class="ops-badge bg-error-container text-on-error-container">{{ 'tickets.list.overdue' | translate }}</span>
+                }
+                <time class="ml-auto font-mono text-mono-timer" [attr.datetime]="t.updatedAtUtc">{{ t.updatedAtUtc | date: 'short' }}</time>
+              </span>
+            </a>
+          </li>
+        }
+      </ul>
+
+      <!-- Footer: page size and pagination -->
+      <div class="flex flex-col items-center justify-between gap-3 border-t border-outline-variant/40 p-3 text-body-sm text-on-surface-variant sm:flex-row sm:px-4">
+        <div class="flex items-center gap-2">
+          <label for="page-size">{{ 'tickets.list.pageSize' | translate }}</label>
+          <select id="page-size" class="ops-select h-8" (change)="setFilter('size', $event)">
+            @for (s of pageSizes; track s) { <option [value]="s" [selected]="query().pageSize === s">{{ s }}</option> }
+          </select>
+        </div>
+        <nav class="flex items-center gap-1" [attr.aria-label]="'tickets.paging' | translate">
+          <button type="button" class="page-btn px-2.5" [disabled]="query().page <= 1" (click)="goTo(query().page - 1)">
+            <span class="ms text-[16px]" aria-hidden="true">chevron_left</span><span class="hidden sm:inline">{{ 'common.previous' | translate }}</span>
+            <span class="sr-only sm:hidden">{{ 'common.previous' | translate }}</span></button>
+          @for (n of pageNumbers(); track n) {
+            <button type="button" class="page-btn w-9 justify-center font-mono" [class.is-current]="n === query().page"
+              [attr.aria-current]="n === query().page ? 'page' : null" [attr.aria-label]="'tickets.list.pageN' | translate: { n }" (click)="goTo(n)">{{ n }}</button>
+          }
+          <button type="button" class="page-btn px-2.5" [disabled]="query().page >= pages()" (click)="goTo(query().page + 1)">
+            <span class="hidden sm:inline">{{ 'common.next' | translate }}</span><span class="sr-only sm:hidden">{{ 'common.next' | translate }}</span>
+            <span class="ms text-[16px]" aria-hidden="true">chevron_right</span></button>
+        </nav>
+      </div>
+    }
+  </section>
+</div>

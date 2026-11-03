@@ -1,0 +1,93 @@
+@if (message(); as m) {
+  <p role="alert" class="mb-3 flex items-start gap-2 rounded-lg bg-error-container p-3 text-body-sm text-on-error-container">
+    <span class="ms text-[18px]" aria-hidden="true">error</span>{{ m | translate }}</p>
+}
+
+<div class="flex flex-col gap-4">
+  @if ((tenant.isStaff() && next().length) || canReopen()) {
+    <section class="ops-card p-4 sm:p-5" aria-labelledby="workflow-title">
+      <h2 id="workflow-title" class="mb-3 text-headline-sm text-on-surface">{{ 'tickets.actions.status' | translate }}</h2>
+      <div class="flex flex-wrap gap-2" role="group" [attr.aria-labelledby]="'workflow-title'">
+        @if (tenant.isStaff()) {
+          @for (s of next(); track s) {
+            <button type="button" [disabled]="busy()" (click)="move(s)" [class]="s === 'Resolved' ? 'ops-btn-primary h-10 px-4' : 'ops-btn-secondary'">
+              <span class="ms text-[18px]" aria-hidden="true">{{ s === 'Resolved' ? 'check_circle' : s === 'OnHold' ? 'pause_circle' : s === 'Closed' ? 'lock' : 'play_circle' }}</span>
+              {{ 'tickets.status.' + s | translate }}</button>
+          }
+        }
+        @if (canReopen()) {
+          <button type="button" class="ops-btn-secondary" [disabled]="busy()" (click)="reopen()">
+            <span class="ms text-[18px]" aria-hidden="true">refresh</span>{{ 'tickets.actions.reopen' | translate }}</button>
+        }
+      </div>
+      @if (canReopen() && tenant.isStaff()) {
+        <p class="mt-2 text-body-sm text-on-surface-variant">{{ 'tickets.actions.reopenHint' | translate }}</p>
+      }
+    </section>
+  }
+
+  @if (ticket().assignees; as assignees) {
+    <section class="ops-card p-4 sm:p-5" aria-labelledby="assignees-title">
+      <h2 id="assignees-title" class="mb-3 text-headline-sm text-on-surface">{{ 'tickets.assignees' | translate }}</h2>
+      <ul class="flex flex-col gap-1.5">
+        @for (a of assignees; track a.membershipId) {
+          <li class="flex items-center justify-between gap-2 rounded-lg bg-surface-container-low px-2 py-1.5">
+            <span class="flex min-w-0 items-center gap-2">
+              <span class="grid size-7 shrink-0 place-items-center rounded-full bg-primary-container text-badge-label font-semibold text-on-primary" aria-hidden="true">{{ initials(a.displayName) }}</span>
+              <span class="truncate text-body-md text-on-surface">{{ a.displayName }}</span>
+              @if (!a.isAgentActive) {
+                <span class="ops-badge bg-tertiary/15 text-tertiary">{{ 'tickets.actions.inactiveAgent' | translate }}</span>
+              }
+            </span>
+            @if (isManager()) {
+              <button type="button" class="grid size-8 shrink-0 place-items-center rounded-md text-on-surface-variant hover:bg-error-container hover:text-on-error-container focus-visible:outline-2 focus-visible:outline-primary-container"
+                [disabled]="busy()" [attr.aria-label]="('tickets.actions.unassign' | translate) + ' ' + a.displayName" (click)="unassign(a.membershipId)">
+                <span class="ms text-[18px]" aria-hidden="true">close</span></button>
+            }
+          </li>
+        } @empty {
+          <li class="flex items-center gap-2 text-body-sm text-on-surface-variant"><span class="ms text-[18px]" aria-hidden="true">person_off</span>{{ 'tickets.unassigned' | translate }}</li>
+        }
+      </ul>
+      @if (isManager()) {
+        <div class="mt-3 flex flex-col gap-1">
+          <label for="assign-agent" class="text-body-sm text-on-surface-variant">{{ 'tickets.actions.assign' | translate }}</label>
+          <select id="assign-agent" class="ops-select h-10 w-full" [disabled]="busy() || !assignable().length" (change)="assign($event)">
+            <option value="">{{ (assignable().length ? 'tickets.actions.chooseAgent' : 'tickets.actions.noAgents') | translate }}</option>
+            @for (m of assignable(); track m.id) { <option [value]="m.id">{{ m.displayName }}</option> }
+          </select>
+        </div>
+      }
+    </section>
+  }
+
+  @if (tenant.isStaff()) {
+    <section class="ops-card p-4 sm:p-5" aria-labelledby="sla-title">
+      <h2 id="sla-title" class="mb-3 text-headline-sm text-on-surface">{{ 'tickets.sla.title' | translate }}</h2>
+      @if (cycles(); as list) {
+        <ol class="flex flex-col gap-2 text-body-sm">
+          @for (c of list; track c.id) {
+            <li class="rounded-lg bg-surface-container-low p-3">
+              <p class="flex flex-wrap items-center justify-between gap-2">
+                <span class="font-semibold text-on-surface">{{ 'tickets.sla.cycle' | translate: { n: c.cycleNumber } }} · {{ 'tickets.sla.reason.' + pascal(c.reason) | translate }}</span>
+                <span class="ops-badge" [class]="c.resolutionState === 'MISSED' || c.resolutionState === 'OVERDUE' ? 'bg-error-container text-on-error-container' : c.resolutionState === 'MET' ? 'bg-secondary-container text-on-secondary-container' : 'bg-surface-container-high text-on-surface'">
+                  {{ 'tickets.sla.state.' + pascal(c.resolutionState) | translate }}</span>
+              </p>
+              <dl class="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-on-surface-variant">
+                <dt>{{ 'tickets.sla.started' | translate }}</dt><dd class="font-mono text-mono-timer">{{ c.startedAtUtc | date: 'short' }}</dd>
+                <dt>{{ 'tickets.sla.responseDue' | translate }}</dt><dd class="font-mono text-mono-timer">{{ c.responseDueAtUtc ? (c.responseDueAtUtc | date: 'short') : ('common.na' | translate) }}</dd>
+                <dt>{{ 'tickets.sla.firstResponse' | translate }}</dt><dd class="font-mono text-mono-timer">{{ c.firstResponseAtUtc ? (c.firstResponseAtUtc | date: 'short') : ('common.na' | translate) }}</dd>
+                <dt>{{ 'tickets.sla.resolutionDue' | translate }}</dt><dd class="font-mono text-mono-timer">{{ c.resolutionDueAtUtc | date: 'short' }}</dd>
+                <dt>{{ 'tickets.sla.resolvedAt' | translate }}</dt><dd class="font-mono text-mono-timer">{{ c.resolvedAtUtc ? (c.resolvedAtUtc | date: 'short') : ('common.na' | translate) }}</dd>
+              </dl>
+            </li>
+          } @empty {
+            <li class="text-on-surface-variant">{{ 'common.noData' | translate }}</li>
+          }
+        </ol>
+      } @else {
+        <p role="status" class="text-body-sm text-on-surface-variant">{{ 'common.loading' | translate }}</p>
+      }
+    </section>
+  }
+</div>

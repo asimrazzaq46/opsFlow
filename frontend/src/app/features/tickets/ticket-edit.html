@@ -1,0 +1,138 @@
+<div class="fixed inset-0 z-50 flex justify-end">
+  <div class="absolute inset-0 bg-inverse-surface/50 backdrop-blur-[2px]" aria-hidden="true" (click)="close()"></div>
+
+  <section #panel role="dialog" aria-modal="true" aria-labelledby="edit-title" (keydown)="trapFocus($event)"
+    class="relative flex h-full w-full max-w-[640px] flex-col bg-surface-container-lowest shadow-2xl">
+    <!-- Header -->
+    <header class="flex items-start justify-between gap-3 px-4 py-4 shadow-[0_1px_0_var(--ops-outline-variant)] sm:px-6">
+      <div class="flex min-w-0 items-start gap-3">
+        <span class="grid size-9 shrink-0 place-items-center rounded-lg bg-primary-fixed text-on-primary-fixed" aria-hidden="true"><span class="ms text-[20px]">edit_note</span></span>
+        <div class="min-w-0">
+          <h2 id="edit-title" class="text-headline-md text-on-surface">{{ 'tickets.edit.title' | translate: { number: ticket().summary.displayNumber } }}</h2>
+          @if (base(); as b) {
+            <p class="font-mono text-mono-timer text-on-surface-variant">{{ 'tickets.edit.basedOn' | translate: { version: b.summary.version } }}
+              @if (dirty()) { · <span class="font-semibold text-tertiary">{{ 'tickets.edit.unsaved' | translate }}</span> }</p>
+          }
+        </div>
+      </div>
+      <button type="button" class="grid size-9 shrink-0 place-items-center rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface focus-visible:outline-2 focus-visible:outline-primary-container"
+        [attr.aria-label]="'tickets.edit.close' | translate" [disabled]="saving()" (click)="close()">
+        <span class="ms text-[20px]" aria-hidden="true">close</span>
+      </button>
+    </header>
+
+    <!-- Conflict: another user saved a newer version -->
+    @if (conflict(); as latest) {
+      <div role="alert" class="mx-4 mt-4 rounded-lg bg-error-container p-4 text-on-error-container sm:mx-6">
+        <p class="flex items-start gap-2 text-headline-sm">
+          <span class="ms text-[20px]" aria-hidden="true">sync_problem</span>
+          {{ 'tickets.edit.conflictTitle' | translate: { from: base()?.summary?.version, to: latest.summary.version } }}</p>
+        <p class="mt-1 text-body-sm">{{ 'tickets.edit.conflictText' | translate }}</p>
+
+        <div class="mt-3 overflow-hidden rounded-md bg-surface-container-lowest text-on-surface">
+          <table class="w-full text-left text-body-sm">
+            <caption class="sr-only">{{ 'tickets.edit.diffCaption' | translate }}</caption>
+            <thead class="bg-surface-container-low">
+              <tr>
+                <th scope="col" class="ops-th">{{ 'tickets.edit.field' | translate }}</th>
+                <th scope="col" class="ops-th"><span class="ms align-middle text-[14px]" aria-hidden="true">edit</span> {{ 'tickets.edit.yours' | translate }}</th>
+                <th scope="col" class="ops-th"><span class="ms align-middle text-[14px]" aria-hidden="true">cloud_done</span> {{ 'tickets.edit.server' | translate }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (d of diff(); track d.field) {
+                <tr class="border-t border-outline-variant/50 align-top">
+                  <th scope="row" class="px-3 py-2 font-medium whitespace-nowrap">{{ 'tickets.edit.fields.' + d.field | translate }}</th>
+                  <td class="px-3 py-2 break-words" [class.font-semibold]="d.changedByMe">
+                    <span class="line-clamp-4 whitespace-pre-wrap">{{ d.field === 'priority' ? ('tickets.priority.' + d.mine | translate) : d.mine }}</span>
+                    @if (d.changedByMe) { <span class="ops-badge mt-1 bg-primary-fixed text-on-primary-fixed">{{ 'tickets.edit.changedByYou' | translate }}</span> }
+                  </td>
+                  <td class="px-3 py-2 break-words" [class.font-semibold]="d.changedOnServer">
+                    <span class="line-clamp-4 whitespace-pre-wrap">{{ d.field === 'priority' ? ('tickets.priority.' + d.theirs | translate) : d.theirs }}</span>
+                    @if (d.changedOnServer) { <span class="ops-badge mt-1 bg-tertiary/15 text-tertiary">{{ 'tickets.edit.changedOnServer' | translate }}</span> }
+                  </td>
+                </tr>
+              } @empty {
+                <tr><td colspan="3" class="px-3 py-2 text-on-surface-variant">{{ 'tickets.edit.noFieldDiff' | translate }}</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <div class="mt-3 flex flex-wrap gap-2">
+          <button type="button" class="ops-btn-secondary" (click)="useServer()">
+            <span class="ms text-[18px]" aria-hidden="true">refresh</span>{{ 'tickets.edit.useServer' | translate }}</button>
+          <button type="button" class="ops-btn-secondary" (click)="keepMine()">
+            <span class="ms text-[18px]" aria-hidden="true">difference</span>{{ 'tickets.edit.keepMine' | translate }}</button>
+        </div>
+      </div>
+    } @else if (staleBase()) {
+      <p role="status" class="mx-4 mt-4 flex items-start gap-2 rounded-lg bg-tertiary/15 p-3 text-body-sm text-tertiary sm:mx-6">
+        <span class="ms text-[18px]" aria-hidden="true">warning</span>{{ 'tickets.edit.staleWarning' | translate }}</p>
+    }
+    @if (notice(); as n) {
+      <p role="status" class="mx-4 mt-4 flex items-start gap-2 rounded-lg bg-primary-fixed p-3 text-body-sm text-on-primary-fixed sm:mx-6">
+        <span class="ms text-[18px]" aria-hidden="true">info</span>{{ n | translate }}</p>
+    }
+
+    <!-- Form -->
+    <form id="ticket-edit-form" [formGroup]="form" (ngSubmit)="save()" novalidate class="flex flex-1 flex-col gap-5 overflow-y-auto px-4 py-5 sm:px-6">
+      <div class="flex flex-col gap-1.5">
+        <label for="edit-title-input" class="text-headline-sm text-on-surface">{{ 'tickets.form.title' | translate }} <span class="text-error" aria-hidden="true">*</span></label>
+        <input id="edit-title-input" formControlName="title" [maxlength]="titleMax" required class="ops-input h-11"
+          [attr.aria-invalid]="invalid('title') || !!serverErrors()['Title']" [attr.aria-describedby]="invalid('title') || serverErrors()['Title'] ? 'edit-title-error' : null" />
+        @if (invalid('title') || serverErrors()['Title']) {
+          <p id="edit-title-error" class="ops-error">{{ serverErrors()['Title'] ?? ((form.controls.title.hasError('required') ? 'validation.required' : 'tickets.form.titleLength') | translate) }}</p>
+        }
+      </div>
+
+      @if (staff) {
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div class="flex flex-col gap-1.5">
+            <label for="edit-priority" class="text-headline-sm text-on-surface">{{ 'tickets.form.priority' | translate }}</label>
+            <select id="edit-priority" formControlName="priority" class="ops-input h-11" aria-describedby="edit-priority-hint">
+              @for (p of priorities; track p) { <option [value]="p">{{ 'tickets.priority.' + p | translate }}</option> }
+            </select>
+            <p id="edit-priority-hint" class="text-body-sm text-on-surface-variant">{{ 'tickets.edit.priorityHint' | translate }}</p>
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <label for="edit-category" class="text-headline-sm text-on-surface">{{ 'tickets.form.category' | translate }}</label>
+            <select id="edit-category" formControlName="categoryId" class="ops-input h-11" [attr.aria-invalid]="!!serverErrors()['CategoryId']">
+              @for (c of categories.value() ?? []; track c.id) {
+                <!-- inactive categories stay listed only when they are the current value -->
+                @if (c.isActive || c.id === form.controls.categoryId.value) { <option [value]="c.id">{{ c.name }}</option> }
+              }
+            </select>
+          </div>
+        </div>
+      } @else {
+        <p class="flex items-start gap-2 rounded-lg bg-surface-container-low p-3 text-body-sm text-on-surface-variant">
+          <span class="ms text-[18px]" aria-hidden="true">info</span>{{ 'tickets.edit.customerHint' | translate }}</p>
+      }
+
+      <div class="flex flex-col gap-1.5">
+        <label for="edit-description" class="text-headline-sm text-on-surface">{{ 'tickets.form.description' | translate }} <span class="text-error" aria-hidden="true">*</span></label>
+        <textarea id="edit-description" formControlName="description" rows="10" [maxlength]="descriptionMax" required class="ops-input h-auto min-h-48 py-2.5 leading-relaxed"
+          [attr.aria-invalid]="invalid('description') || !!serverErrors()['Description']"
+          [attr.aria-describedby]="invalid('description') || serverErrors()['Description'] ? 'edit-description-error' : null"></textarea>
+        @if (invalid('description') || serverErrors()['Description']) {
+          <p id="edit-description-error" class="ops-error">{{ serverErrors()['Description'] ?? ('validation.required' | translate) }}</p>
+        }
+      </div>
+    </form>
+
+    <!-- Footer -->
+    <footer class="flex flex-col gap-2 bg-surface-container-low px-4 py-3 sm:px-6">
+      @if (error(); as e) {
+        <p role="alert" class="flex items-start gap-2 text-body-sm text-error"><span class="ms text-[18px]" aria-hidden="true">error</span>{{ e | translate }}</p>
+      }
+      <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <button type="button" class="ops-btn-secondary h-11" [disabled]="saving()" (click)="close()">{{ 'common.cancel' | translate }}</button>
+        <button type="submit" form="ticket-edit-form" class="ops-btn-primary" [disabled]="saving() || !!conflict() || !dirty()">
+          @if (saving()) { <span class="ms text-[18px] motion-safe:animate-spin" aria-hidden="true">progress_activity</span> }
+          @else { <span class="ms text-[18px]" aria-hidden="true">save</span> }
+          {{ (saving() ? 'common.saving' : 'tickets.edit.save') | translate }}</button>
+      </div>
+    </footer>
+  </section>
+</div>

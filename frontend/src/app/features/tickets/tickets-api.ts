@@ -3,14 +3,31 @@ import { Observable, map } from 'rxjs';
 import { Api } from '../../core/api/generated/api';
 import {
   assignTicketAgents, changeTicketStatus, changeTicketTaskStatus, createTicket, createTicketNote, createTicketTask, downloadTicketAttachment, getTicket,
-  listMembers, listTicketAttachments, listTicketCategories, listTicketMessages, listTicketNotes, listTickets, listTicketTasks, reassignTicketTask, reopenTicket,
-  reorderTicketTasks, sendTicketMessage, unassignTicketAgent, updateTicketTask, uploadTicketAttachment,
+  listMembers, listTicketActivity, listTicketAttachments, listTicketCategories, listTicketMessages, listTicketNotes, listTickets, listTicketTasks, reassignTicketTask, reopenTicket,
+  reorderTicketTasks, sendTicketMessage, unassignTicketAgent, updateTicket, updateTicketTask, uploadTicketAttachment,
 } from '../../core/api/generated/functions';
 import {
-  AttachmentDto, CreateTicketRequest, MemberDto, PagedResultOfTicketMessageDto, PagedResultOfTicketNoteDto, PagedResultOfTicketSummaryDto, TicketCategoryDto,
-  TicketDetailDto, TicketMessageDto, TicketNoteDto, TicketStatus, TicketTaskDto, TicketTaskListDto, TicketTaskStatus,
+  AttachmentDto, CreateTicketRequest, MemberDto, PagedResultOfTicketActivityDto, PagedResultOfTicketMessageDto, PagedResultOfTicketNoteDto, PagedResultOfTicketSummaryDto, TicketCategoryDto,
+  TicketDetailDto, TicketMessageDto, TicketNoteDto, TicketPriority, TicketState, TicketStatus, TicketTaskDto, TicketTaskListDto, TicketTaskStatus,
+  UpdateTicketRequest,
 } from '../../core/api/generated/models';
 import { TenantService } from '../../core/auth/tenant.service';
+
+/** Sort fields the API whitelists (anything else is a 400). */
+export type TicketSort = 'updatedAt' | 'createdAt' | 'number' | 'title' | 'priority' | 'status';
+
+/** Server-side list query: every filter only narrows what the caller is already allowed to see. */
+export interface TicketQuery {
+  search?: string;
+  status?: TicketStatus;
+  priority?: TicketPriority;
+  categoryId?: string;
+  state?: NonNullable<TicketState>;
+  sortBy: TicketSort;
+  descending: boolean;
+  page: number;
+  pageSize: number;
+}
 
 /** Tenant-aware wrapper around the generated ticket, chat, note and attachment operations. */
 @Injectable({ providedIn: 'root' })
@@ -24,8 +41,19 @@ export class TicketsApi {
     return id;
   }
 
-  list(page: number, pageSize: number): Observable<PagedResultOfTicketSummaryDto> {
-    return this.api.invoke(listTickets, { tenantId: this.tenantId, Page: page, PageSize: pageSize, SortBy: 'updatedAt', Descending: true });
+  list(q: TicketQuery): Observable<PagedResultOfTicketSummaryDto> {
+    return this.api.invoke(listTickets, {
+      tenantId: this.tenantId,
+      Search: q.search || undefined,
+      Status: q.status ? [q.status] : undefined,
+      Priority: q.priority,
+      CategoryId: q.categoryId,
+      State: q.state,
+      SortBy: q.sortBy,
+      Descending: q.descending,
+      Page: q.page,
+      PageSize: q.pageSize,
+    });
   }
 
   get(ticketId: string): Observable<TicketDetailDto> {
@@ -66,6 +94,16 @@ export class TicketsApi {
   // REST commands (server stays authoritative; version = optimistic concurrency token)
   create(body: CreateTicketRequest): Observable<TicketDetailDto> {
     return this.api.invoke(createTicket, { tenantId: this.tenantId, body });
+  }
+
+  /** Only title, description, priority and category are editable; `version` makes a concurrent change fail with 409 instead of being overwritten. */
+  update(ticketId: string, body: UpdateTicketRequest): Observable<TicketDetailDto> {
+    return this.api.invoke(updateTicket, { tenantId: this.tenantId, ticketId, body });
+  }
+
+  /** Append-only timeline in sequence order; the server filters out entries a customer may not see. */
+  activity(ticketId: string, page = 1, pageSize = 100): Observable<PagedResultOfTicketActivityDto> {
+    return this.api.invoke(listTicketActivity, { tenantId: this.tenantId, ticketId, page, pageSize });
   }
 
   categories(): Observable<TicketCategoryDto[]> {

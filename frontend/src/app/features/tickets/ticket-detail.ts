@@ -1,54 +1,40 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, effect, inject, input, signal, untracked } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router, RouterLink } from '@angular/router';
 import { TranslatePipe } from '@ngx-translate/core';
+import { Subscription, debounceTime, filter, merge } from 'rxjs';
 import { TicketDetailDto } from '../../core/api/generated/models';
 import { TenantService } from '../../core/auth/tenant.service';
+import { NotificationCreatedEvent } from '../../core/notifications/notification.service';
+import { RealtimeService } from '../../core/realtime/realtime.service';
+import { minutesLabel } from '../../shared/format';
 import { TicketActions } from './ticket-actions';
+import { TicketActivity } from './ticket-activity';
 import { TicketAttachments } from './ticket-attachments';
 import { TicketChat } from './ticket-chat';
+import { TicketEdit } from './ticket-edit';
 import { TicketNotes } from './ticket-notes';
 import { TicketTasks } from './ticket-tasks';
+import { PRIORITY_BADGE, STATUS_BADGE, httpStatus } from './ticket-ui';
 import { TicketsApi } from './tickets-api';
+
+export type DetailTab = 'conversation' | 'notes' | 'attachments' | 'tasks' | 'activity';
+
+// Notifications that mean the ticket header (status, staffing, SLA) changed on the server.
+const TICKET_CHANGES = new Set(['TicketAssigned', 'TicketUnassigned', 'TicketStatusChanged', 'TicketResolved', 'TicketReopened']);
+
+/** Customers may edit only title and description of their open tickets; nobody edits a closed one (the server enforces both). */
+export function canEditTicket(t: TicketDetailDto, staff: boolean): boolean {
+  return t.summary.status !== 'Closed' && (staff || t.summary.status === 'Open');
+}
 
 @Component({
   selector: 'app-ticket-detail',
-  imports: [RouterLink, TranslatePipe, DatePipe, TicketChat, TicketNotes, TicketAttachments, TicketActions, TicketTasks],
+  imports: [RouterLink, TranslatePipe, DatePipe, TicketChat, TicketNotes, TicketAttachments, TicketActions, TicketTasks, TicketActivity, TicketEdit],
+  templateUrl: './ticket-detail.html',
+  styleUrl: './ticket-detail.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <a routerLink="/tickets" class="text-sm text-brand underline">‹ {{ 'tickets.back' | translate }}</a>
-    @if (loading()) {
-      <p class="mt-4 text-muted" aria-live="polite">{{ 'common.loading' | translate }}</p>
-    } @else if (error()) {
-      <p role="alert" class="mt-4 text-danger">{{ 'tickets.loadError' | translate }}
-        <button type="button" class="ml-2 underline" (click)="load()">{{ 'common.retry' | translate }}</button></p>
-    } @else if (ticket(); as t) {
-      <header class="mt-3">
-        <p class="font-mono text-sm text-muted">{{ t.summary.displayNumber }}</p>
-        <h1 class="text-2xl font-bold tracking-tight">{{ t.summary.title }}</h1>
-        <p class="mt-1 flex flex-wrap gap-3 text-sm text-muted">
-          <span>{{ 'tickets.status.' + t.summary.status | translate }}</span>
-          <span>{{ 'tickets.priority.' + t.summary.priority | translate }}</span>
-          <time [attr.datetime]="t.summary.updatedAtUtc">{{ t.summary.updatedAtUtc | date: 'short' }}</time>
-        </p>
-        <p class="mt-3 whitespace-pre-wrap break-words">{{ t.description }}</p>
-      </header>
-      <div class="mt-6"><app-ticket-actions [ticket]="t" (changed)="refresh()" /></div>
-      <!-- Internal child tasks render for staff only (UX only; the API returns 403 to customers anyway) -->
-      @if (tenant.isStaff()) {
-        <div class="mb-6"><app-ticket-tasks [ticket]="t" /></div>
-      }
-      <div class="mt-2 grid gap-6 lg:grid-cols-2">
-        <app-ticket-chat [ticketId]="id()" />
-        <div class="space-y-6">
-          @if (tenant.isStaff()) {
-            <app-ticket-notes [ticketId]="id()" />
-          }
-          <app-ticket-attachments [ticketId]="id()" [staff]="tenant.isStaff()" />
-        </div>
-      </div>
-    }
-  `,
 })
 export class TicketDetail {
   readonly id = input.required<string>();
@@ -57,37 +43,94 @@ export class TicketDetail {
   private readonly api = inject(TicketsApi);
   private readonly router = inject(Router);
 
+  protected readonly statusBadge = STATUS_BADGE;
+  protected readonly priorityBadge = PRIORITY_BADGE;
+  /** Remaining time is computed by the server at read time; the browser only formats it. */
+  protected readonly remaining = (m: number | string | null) => (m === null ? null : minutesLabel(Number(m)));
   protected readonly ticket = signal<TicketDetailDto | null>(null);
   protected readonly loading = signal(false);
-  protected readonly error = signal(false);
+  protected readonly error = signal<string | null>(null);
+  protected readonly editing = signal(false);
+  protected readonly tab = signal<DetailTab>('conversation');
+  /** Tabs are mounted on first visit and then kept, so their realtime subscriptions and drafts survive tab switches. */
+  protected readonly visited = signal<ReadonlySet<DetailTab>>(new Set(['conversation']));
+  protected readonly tabs = computed<{ key: DetailTab; icon: string; label: string }[]>(() => [
+    { key: 'conversation', icon: 'chat', label: 'chat.title' },
+    ...(this.tenant.isStaff() ? [{ key: 'notes' as const, icon: 'lock', label: 'notes.title' }] : []),
+    { key: 'attachments', icon: 'attachment', label: 'attachments.title' },
+    ...(this.tenant.isStaff() ? [{ key: 'tasks' as const, icon: 'task_alt', label: 'tasks.title' }] : []),
+    { key: 'activity', icon: 'timeline', label: 'tickets.activity.title' },
+  ]);
+  protected readonly canEdit = computed(() => {
+    const t = this.ticket();
+    return !!t && canEditTicket(t, this.tenant.isStaff());
+  });
+
   private readonly openedIn = this.tenant.tenantId();
+  private request?: Subscription;
 
   constructor() {
     effect(() => {
-      // a ticket belongs to ONE workspace: switching workspaces leaves the page
+      // a ticket belongs to ONE workspace: switching workspaces leaves the page instead of showing stale data
       if (this.tenant.tenantId() !== this.openedIn) void this.router.navigateByUrl('/tickets');
     });
     effect(() => {
       this.id();
       untracked(() => this.load());
     });
+    const realtime = inject(RealtimeService);
+    merge(
+      realtime.on<NotificationCreatedEvent>('notification.created').pipe(
+        filter((e) => e.notification.ticketId === this.id() && TICKET_CHANGES.has(e.notification.type)),
+      ),
+      realtime.reconnected,
+    )
+      .pipe(debounceTime(500), takeUntilDestroyed())
+      .subscribe(() => this.refresh());
   }
 
-  /** Silent reload after a command: keeps chat/notes mounted. */
+  protected select(tab: DetailTab): void {
+    this.tab.set(tab);
+    this.visited.update((v) => new Set(v).add(tab));
+  }
+
+  /** Arrow keys move between tabs (WAI-ARIA tabs pattern with automatic activation). */
+  protected onTabKey(event: KeyboardEvent, index: number): void {
+    const tabs = this.tabs();
+    const next = event.key === 'ArrowRight' ? index + 1 : event.key === 'ArrowLeft' ? index - 1 : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : null;
+    if (next === null) return;
+    event.preventDefault();
+    const target = tabs[(next + tabs.length) % tabs.length];
+    this.select(target.key);
+    document.getElementById('tab-' + target.key)?.focus();
+  }
+
+  /** Silent reload after a command or a live event: keeps the mounted tabs and their state. */
   protected refresh(): void {
-    this.api.get(this.id()).subscribe((t) => this.ticket.set(t));
+    if (!this.ticket()) return;
+    this.request?.unsubscribe();
+    this.request = this.api.get(this.id()).subscribe({ next: (t) => this.ticket.set(t), error: () => undefined });
+  }
+
+  protected saved(t: TicketDetailDto): void {
+    this.ticket.set(t);
+    this.editing.set(false);
   }
 
   protected load(): void {
+    this.request?.unsubscribe();
     this.loading.set(true);
-    this.error.set(false);
-    this.api.get(this.id()).subscribe({
+    this.error.set(null);
+    this.request = this.api.get(this.id()).subscribe({
       next: (t) => {
         this.ticket.set(t);
         this.loading.set(false);
       },
-      error: () => {
-        this.error.set(true);
+      error: (e: unknown) => {
+        this.ticket.set(null);
+        const status = httpStatus(e);
+        // 404 also covers tickets of other workspaces or outside the caller's visibility: nothing about them is revealed
+        this.error.set(status === 404 ? 'tickets.detail.notFound' : status === 403 ? 'common.forbidden' : 'tickets.loadError');
         this.loading.set(false);
       },
     });

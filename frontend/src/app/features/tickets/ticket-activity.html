@@ -1,0 +1,31 @@
+@if (activity.error()) {
+  <p role="alert" class="flex flex-wrap items-center gap-2 text-body-sm text-error">{{ 'tickets.activity.error' | translate }}
+    <button type="button" class="ops-link" (click)="activity.reload()">{{ 'common.retry' | translate }}</button></p>
+} @else if (!activity.hasValue()) {
+  <p role="status" class="text-body-sm text-on-surface-variant">{{ 'common.loading' | translate }}</p>
+} @else if (!entries().length) {
+  <p class="text-body-sm text-on-surface-variant">{{ 'tickets.activity.empty' | translate }}</p>
+} @else {
+  <ol class="relative flex flex-col gap-4 pl-1" [attr.aria-label]="'tickets.activity.title' | translate">
+    @for (a of entries(); track a.id) {
+      <li class="timeline-item flex gap-3">
+        <span class="relative z-10 grid size-8 shrink-0 place-items-center rounded-full bg-surface-container-high text-primary" aria-hidden="true">
+          <span class="ms text-[16px]">{{ icon(a) }}</span>
+        </span>
+        <div class="flex min-w-0 flex-col pt-1">
+          <p class="text-body-md text-on-surface">
+            {{ 'tickets.activity.type.' + a.type | translate }}
+            @if (valueKey(a, a.newValue); as next) {
+              @if (valueKey(a, a.oldValue); as prev) { <span class="text-on-surface-variant">{{ prev | translate }} →</span> }
+              <span class="font-semibold">{{ next | translate }}</span>
+            }
+          </p>
+          <time class="font-mono text-mono-timer text-on-surface-variant" [attr.datetime]="a.occurredAtUtc">{{ a.occurredAtUtc | date: 'medium' }}</time>
+        </div>
+      </li>
+    }
+  </ol>
+  @if (truncated()) {
+    <p class="mt-3 text-body-sm text-on-surface-variant">{{ 'tickets.activity.truncated' | translate }}</p>
+  }
+}

@@ -1,12 +1,13 @@
 {
   "shell": {
     "language": "Lingua",
-    "toggleTheme": "Cambia tema chiaro/scuro"
+    "toggleTheme": "Cambia tema chiaro/scuro",
+    "skipToContent": "Vai al contenuto principale"
   },
   "health": {
     "checking": "Verifica API…",
-    "online": "API online",
-    "offline": "API offline"
+    "online": "API raggiungibile",
+    "offline": "API non disponibile"
   },
   "home": {
     "eyebrow": "Operazioni di servizio multi-tenant",
@@ -38,7 +39,12 @@
     "reports": "Report",
     "menu": "Navigazione principale",
     "account": "Account",
-    "workspaces": "Workspace"
+    "workspaces": "Workspace",
+    "sidebar": "Barra laterale dell'applicazione",
+    "operations": "Operatività",
+    "preferences": "Preferenze",
+    "openMenu": "Apri navigazione",
+    "closeMenu": "Chiudi navigazione"
   },
   "auth": {
     "signIn": "Accedi",
@@ -84,13 +90,20 @@
       "customer": "Cliente",
       "assignees": "Assegna agenti",
       "submit": "Crea ticket",
-      "error": "Impossibile creare il ticket."
+      "error": "Impossibile creare il ticket.",
+      "titleLength": "Usa da 3 a 200 caratteri.",
+      "invalid": "Alcuni campi non sono validi. Controllali e riprova.",
+      "forbidden": "Non puoi creare questo ticket. Il tuo account potrebbe non essere collegato a un contatto cliente."
     },
     "actions": {
       "status": "Cambia stato",
       "reopen": "Riapri ticket",
       "assign": "Aggiungi un agente",
-      "unassign": "Rimuovi"
+      "unassign": "Rimuovi",
+      "chooseAgent": "Scegli un agente",
+      "noAgents": "Nessun altro agente attivo",
+      "inactiveAgent": "Inattivo",
+      "reopenHint": "La riapertura avvia un nuovo ciclo SLA."
     },
     "errors": {
       "conflict": "Il ticket è stato modificato da qualcun altro. È stato ricaricato.",
@@ -115,6 +128,127 @@
         "Met": "Rispettato",
         "Missed": "Mancato",
         "NotApplicable": "N/D"
+      }
+    },
+    "breadcrumb": "Percorso",
+    "unassignedShort": "Non assegnato",
+    "list": {
+      "viewsLabel": "Viste dei ticket",
+      "views": {
+        "all": "Tutti i ticket",
+        "open": "Aperti",
+        "overdue": "SLA scaduto",
+        "unstaffed": "Da assegnare",
+        "finished": "Risolti e chiusi"
+      },
+      "search": "Cerca ticket",
+      "searchPlaceholder": "Cerca per numero o titolo del ticket…",
+      "reset": "Azzera filtri",
+      "range": "{{from}}–{{to}} di {{total}}",
+      "results": "Risultati dei ticket",
+      "caption": "Ticket corrispondenti ai filtri attuali",
+      "col": {
+        "id": "Ticket",
+        "slaDue": "Scadenza risoluzione SLA",
+        "updated": "Aggiornato"
+      },
+      "internal": "Interno",
+      "ineligible": "Alcuni agenti assegnati non sono più attivi",
+      "overdue": "Scaduto",
+      "noMatches": "Nessun ticket corrisponde a questi filtri.",
+      "invalidFilter": "Questi filtri non sono supportati. Azzerali e riprova.",
+      "pageSize": "Righe per pagina",
+      "pageN": "Pagina {{n}}"
+    },
+    "create": {
+      "title": "Crea ticket",
+      "titlePlaceholder": "Breve riepilogo del problema",
+      "descriptionPlaceholder": "Descrivi cosa è successo, cosa ti aspettavi e gli eventuali passaggi per riprodurlo.",
+      "chooseCategory": "Scegli una categoria",
+      "categoriesError": "Impossibile caricare le categorie.",
+      "noCustomer": "Nessun cliente (ticket interno)",
+      "customerHint": "Il contatto cliente diventa il richiedente e può seguire il ticket.",
+      "routing": "Assegnazione",
+      "noAgents": "Nessun agente attivo disponibile.",
+      "agentSelfAssigned": "I ticket che crei vengono assegnati automaticamente a te.",
+      "customerRouting": "Il nostro team imposta la priorità e assegna l'agente più adatto.",
+      "afterTitle": "Cosa succede dopo",
+      "afterText": "Il ticket riceve un numero e uno SLA in base alla priorità. Risposte e cambi di stato compaiono nella pagina del ticket appena avvengono.",
+      "priorityHint": {
+        "Low": "Problema minore o domanda",
+        "Medium": "Impatto normale sul lavoro",
+        "High": "Lavoro fortemente compromesso",
+        "Urgent": "Interruzione critica o blocco"
+      }
+    },
+    "detail": {
+      "notFound": "Questo ticket non esiste oppure non hai accesso.",
+      "meta": "Dettagli del ticket",
+      "sections": "Sezioni del ticket",
+      "properties": "Proprietà",
+      "created": "Creato",
+      "slaState": "Stato SLA",
+      "remaining": "{{time}} rimanenti"
+    },
+    "activity": {
+      "title": "Attività",
+      "empty": "Nessuna attività registrata.",
+      "error": "Impossibile caricare l'attività.",
+      "truncated": "Sono mostrate solo le prime 100 voci.",
+      "type": {
+        "Created": "Ticket creato",
+        "DetailsUpdated": "Dettagli aggiornati",
+        "PriorityChanged": "Priorità modificata",
+        "CategoryChanged": "Categoria modificata",
+        "AgentAssigned": "Agente assegnato",
+        "AgentUnassigned": "Agente rimosso",
+        "StatusChanged": "Stato modificato",
+        "Resolved": "Ticket risolto",
+        "Reopened": "Ticket riaperto",
+        "SlaCycleStarted": "Ciclo SLA avviato",
+        "SlaCycleCompleted": "Ciclo SLA completato",
+        "AttachmentAdded": "Allegato aggiunto",
+        "TaskCreated": "Attività figlia creata",
+        "TaskDetailsUpdated": "Attività figlia aggiornata",
+        "TaskStatusChanged": "Stato dell'attività figlia modificato",
+        "TaskAssigned": "Attività figlia riassegnata",
+        "TasksReordered": "Attività figlie riordinate"
+      }
+    },
+    "edit": {
+      "open": "Modifica",
+      "title": "Modifica ticket {{number}}",
+      "close": "Chiudi editor",
+      "basedOn": "Modifica della versione {{version}}",
+      "unsaved": "Modifiche non salvate",
+      "save": "Salva modifiche",
+      "priorityHint": "Cambiare la priorità ricalcola gli obiettivi dello SLA attivo.",
+      "customerHint": "Puoi modificare titolo e descrizione finché il ticket è aperto.",
+      "staleWarning": "Qualcuno ha aggiornato questo ticket mentre lo modificavi. Il salvataggio potrebbe segnalare un conflitto.",
+      "conflictTitle": "Conflitto di versione: la versione {{from}} è stata sostituita dalla {{to}}",
+      "conflictText": "Un altro utente ha salvato modifiche mentre lavoravi. Nulla è stato sovrascritto. Confronta i valori e scegli come procedere.",
+      "diffCaption": "I tuoi valori confrontati con quelli attuali sul server",
+      "field": "Campo",
+      "yours": "La tua modifica",
+      "server": "Attuale sul server",
+      "changedByYou": "Modificato da te",
+      "changedOnServer": "Modificato sul server",
+      "noFieldDiff": "I campi modificabili sono invariati; è cambiata un'altra parte del ticket.",
+      "useServer": "Scarta le mie, carica la versione del server",
+      "keepMine": "Mantieni le mie modifiche sulla nuova versione",
+      "loadedServer": "È stata caricata la versione attuale del server. Le tue modifiche sono state scartate.",
+      "keptMine": "Le tue modifiche ora si applicano all'ultima versione. Rivedile e salva di nuovo.",
+      "closed": "Il ticket è stato chiuso e non può più essere modificato. Riaprilo prima.",
+      "notEditable": "Il ticket non può più essere modificato nel suo stato attuale.",
+      "conflictUnknown": "Il ticket è cambiato, ma non è stato possibile caricare l'ultima versione. Chiudi l'editor e ricarica la pagina.",
+      "forbidden": "Non puoi apportare queste modifiche.",
+      "invalid": "Alcuni campi non sono validi. Controllali e riprova.",
+      "error": "Impossibile salvare le modifiche. Le tue modifiche sono conservate; riprova.",
+      "fields": {
+        "title": "Titolo",
+        "description": "Descrizione",
+        "priority": "Priorità",
+        "categoryId": "Categoria"
       }
     }
   },
