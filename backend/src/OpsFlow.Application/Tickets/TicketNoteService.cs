@@ -1,6 +1,8 @@
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using OpsFlow.Application.Abstractions;
 using OpsFlow.Application.Common;
+using OpsFlow.Application.Memberships;
 using OpsFlow.Application.Notifications;
 using OpsFlow.Application.Outbox;
 using OpsFlow.Domain.Notifications;
@@ -24,17 +26,28 @@ public sealed class TicketNoteService(
 {
     private const int MaxPageSize = 100;
 
-    public async Task<WriteResult<TicketNoteDto>> CreateAsync(
+    public async Task<ActionResult<WriteResult<TicketNoteDto>>> CreateAsync(
         Guid ticketId,
         CreateNoteCommand cmd,
         CancellationToken ct
     )
     {
-        var written = await TryWriteAsync(ticketId, cmd, ct);
+        var attempt = await TryWriteAsync(ticketId, cmd, ct);
+        if (attempt.Result is ObjectResult failure)
+        {
+            return failure;
+        }
+
+        var written = attempt.Value;
         if (written is null)
         {
+            // Lost an idempotent-retry race: the winner's note is the answer.
             db.ChangeTracker.Clear();
-            var actor = await access.ResolveAsync(ct);
+            if (await access.TryResolveAsync(ct) is not { } actor)
+            {
+                return ActorAccess.AccessNoLongerValid();
+            }
+
             var existing = await db
                 .TicketNotes.AsNoTracking()
                 .SingleAsync(
@@ -50,18 +63,31 @@ public sealed class TicketNoteService(
         return written;
     }
 
-    private async Task<WriteResult<TicketNoteDto>?> TryWriteAsync(
+    /// <returns>The failure to answer with (Result), else the stored note, or a null Value when a concurrent identical request won.</returns>
+    private async Task<ActionResult<WriteResult<TicketNoteDto>?>> TryWriteAsync(
         Guid ticketId,
         CreateNoteCommand cmd,
         CancellationToken ct
     )
     {
-        var (transaction, actor) = await access.BeginAuthorizedAsync(null, ct);
+        if (await access.TryBeginAuthorizedAsync(null, ct) is not { } begun)
+        {
+            return ActorAccess.AccessNoLongerValid();
+        }
+
+        var (transaction, actor) = begun;
         await using var _ = transaction;
-        RequireStaff(actor);
-        var ticket =
-            await access.Visible(actor).Where(t => t.Id == ticketId).SingleOrDefaultAsync(ct)
-            ?? throw AppException.NotFound("Ticket not found.");
+        if (actor.IsCustomer)
+        {
+            return CustomersExcluded();
+        }
+
+        var ticket = await access.Visible(actor).Where(t => t.Id == ticketId).SingleOrDefaultAsync(ct);
+        if (ticket is null)
+        {
+            return TicketNotFound();
+        }
+
         var existing = await db
             .TicketNotes.AsNoTracking()
             .SingleOrDefaultAsync(
@@ -114,11 +140,17 @@ public sealed class TicketNoteService(
                 || db.IsUniqueViolation(ex, UniqueConstraintKind.OutboxDedup)
             )
         {
-            return null;
+            return default(WriteResult<TicketNoteDto>);
         }
         catch (Exception ex) when (db.IsDeadlock(ex))
         {
-            throw AppException.Conflict("The ticket was changed by someone else.", "Please retry.");
+            return new ConflictObjectResult(
+                new ProblemDetails
+                {
+                    Title = "The ticket was changed by someone else.",
+                    Detail = "Please retry.",
+                }
+            );
         }
 
         // Committed; the outbox dispatcher does the staff push.
@@ -128,18 +160,26 @@ public sealed class TicketNoteService(
         );
     }
 
-    public async Task<PagedResult<TicketNoteDto>> ListAsync(
+    public async Task<ActionResult<PagedResult<TicketNoteDto>>> ListAsync(
         Guid ticketId,
         int page,
         int pageSize,
         CancellationToken ct
     )
     {
-        var actor = await access.ResolveAsync(ct);
-        RequireStaff(actor);
+        if (await access.TryResolveAsync(ct) is not { } actor)
+        {
+            return ActorAccess.AccessNoLongerValid();
+        }
+
+        if (actor.IsCustomer)
+        {
+            return CustomersExcluded();
+        }
+
         if (!await access.Visible(actor).AnyAsync(t => t.Id == ticketId, ct))
         {
-            throw AppException.NotFound("Ticket not found.");
+            return TicketNotFound();
         }
 
         (page, pageSize, var skip) = Paging.Normalize(page, pageSize, MaxPageSize);
@@ -153,13 +193,11 @@ public sealed class TicketNoteService(
         return new PagedResult<TicketNoteDto>(await MapAsync(rows, ct), page, pageSize, total);
     }
 
-    private static void RequireStaff(TicketActor actor)
-    {
-        if (actor.IsCustomer)
-        {
-            throw AppException.Forbidden("Internal notes are not available to customers.");
-        }
-    }
+    private static ObjectResult CustomersExcluded() =>
+        ActorAccess.Forbidden("Internal notes are not available to customers.");
+
+    private static NotFoundObjectResult TicketNotFound() =>
+        new(new ProblemDetails { Title = "Ticket not found." });
 
     private Task<List<TicketNoteDto>> MapAsync(
         IReadOnlyCollection<TicketNote> notes,

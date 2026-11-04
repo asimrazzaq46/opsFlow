@@ -125,16 +125,14 @@ public sealed class NotificationService(
     public async Task<UnreadCountDto> UnreadCountAsync(CancellationToken ct) =>
         new(await Mine().CountAsync(n => n.ReadAtUtc == null, ct));
 
-    public async Task MarkReadAsync(Guid id, CancellationToken ct)
+    /// <returns>False when the notification does not exist for the caller (another user's is reported the same way).</returns>
+    public async Task<bool> MarkReadAsync(Guid id, CancellationToken ct)
     {
         var now = clock.GetUtcNow().UtcDateTime;
         await Mine()
             .Where(n => n.Id == id && n.ReadAtUtc == null)
             .ExecuteUpdateAsync(s => s.SetProperty(n => n.ReadAtUtc, (DateTime?)now), ct);
-        if (!await Mine().AnyAsync(n => n.Id == id, ct))
-        {
-            throw AppException.NotFound("Notification not found.");
-        }
+        return await Mine().AnyAsync(n => n.Id == id, ct);
     }
 
     public async Task MarkAllReadAsync(CancellationToken ct)

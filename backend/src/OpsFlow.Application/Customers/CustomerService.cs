@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using OpsFlow.Application.Abstractions;
@@ -76,7 +77,7 @@ public sealed partial class CustomerService(
         );
     }
 
-    public async Task<CustomerDto> CreateAsync(
+    public async Task<ActionResult<CustomerDto>> CreateAsync(
         string name,
         string email,
         string? phone,
@@ -84,31 +85,47 @@ public sealed partial class CustomerService(
         CancellationToken ct
     )
     {
-        await using var transaction = await actor.BeginManagerAsync(
-            "Only Owners and Managers can manage customers.",
-            ct
-        ); // authorization stays valid until commit
+        if (await actor.TryBeginAuthorizedAsync(null, ct) is not { } begun)
+        {
+            return ActorAccess.AccessNoLongerValid();
+        }
+
+        var (transaction, role) = begun;
+        await using var _ = transaction; // every early return rolls back: nothing is committed
+        if (role is not (TenantRole.TenantOwner or TenantRole.Manager))
+        {
+            return ActorAccess.Forbidden("Only Owners and Managers can manage customers.");
+        }
+
         var normalized = EmailAddress.Normalize(email);
         if (await db.Customers.AnyAsync(c => c.NormalizedEmail == normalized, ct))
         {
-            throw AppException.Conflict("A customer with this email already exists.");
+            return DuplicateEmail();
         }
 
         var customer = Customer.Create(TenantId, name, email, phone, Now);
         if (linkedUserId is { } userId)
         {
-            await ValidateLinkAsync(userId, ct);
+            if (!await IsEligibleLinkAsync(userId, ct))
+            {
+                return IneligibleLink();
+            }
+
             customer.LinkUser(userId, Now);
         }
 
         db.Customers.Add(customer);
-        await SaveAsync(ct);
+        if (await SaveAsync(ct) is { } saveFailure)
+        {
+            return saveFailure;
+        }
+
         await transaction.CommitAsync(ct);
         LogCreated(logger, customer.Id, TenantId);
         return ToDto(customer);
     }
 
-    public async Task<CustomerDto> UpdateAsync(
+    public async Task<ActionResult<CustomerDto>> UpdateAsync(
         Guid id,
         string name,
         string email,
@@ -117,48 +134,81 @@ public sealed partial class CustomerService(
         CancellationToken ct
     )
     {
-        await using var transaction = await actor.BeginManagerAsync(
-            "Only Owners and Managers can manage customers.",
-            ct
-        );
-        var customer =
-            await db.Customers.SingleOrDefaultAsync(c => c.Id == id, ct) ?? throw NotFound();
+        if (await actor.TryBeginAuthorizedAsync(null, ct) is not { } begun)
+        {
+            return ActorAccess.AccessNoLongerValid();
+        }
+
+        var (transaction, role) = begun;
+        await using var _ = transaction; // every early return rolls back: nothing is committed
+        if (role is not (TenantRole.TenantOwner or TenantRole.Manager))
+        {
+            return ActorAccess.Forbidden("Only Owners and Managers can manage customers.");
+        }
+
+        var customer = await db.Customers.SingleOrDefaultAsync(c => c.Id == id, ct);
+        if (customer is null)
+        {
+            return CustomerNotFound();
+        }
+
         var normalized = EmailAddress.Normalize(email);
         if (await db.Customers.AnyAsync(c => c.Id != id && c.NormalizedEmail == normalized, ct))
         {
-            throw AppException.Conflict("A customer with this email already exists.");
+            return DuplicateEmail();
         }
 
-        if (linkedUserId is { } userId && userId != customer.UserId)
+        if (
+            linkedUserId is { } userId
+            && userId != customer.UserId
+            && !await IsEligibleLinkAsync(userId, ct)
+        )
         {
-            await ValidateLinkAsync(userId, ct);
+            return IneligibleLink();
         }
 
         var now = Now;
         customer.Update(name, email, phone, now);
         customer.LinkUser(linkedUserId, now);
-        await SaveAsync(ct);
+        if (await SaveAsync(ct) is { } saveFailure)
+        {
+            return saveFailure;
+        }
+
         await transaction.CommitAsync(ct);
         return ToDto(customer);
     }
 
-    public async Task SetActiveAsync(Guid id, bool isActive, CancellationToken ct)
+    /// <returns>Null when applied; otherwise the failure to answer with.</returns>
+    public async Task<ObjectResult?> SetActiveAsync(Guid id, bool isActive, CancellationToken ct)
     {
-        await using var transaction = await actor.BeginManagerAsync(
-            "Only Owners and Managers can manage customers.",
-            ct
-        );
-        var customer =
-            await db.Customers.SingleOrDefaultAsync(c => c.Id == id, ct) ?? throw NotFound();
+        if (await actor.TryBeginAuthorizedAsync(null, ct) is not { } begun)
+        {
+            return ActorAccess.AccessNoLongerValid();
+        }
+
+        var (transaction, role) = begun;
+        await using var _ = transaction; // every early return rolls back: nothing is committed
+        if (role is not (TenantRole.TenantOwner or TenantRole.Manager))
+        {
+            return ActorAccess.Forbidden("Only Owners and Managers can manage customers.");
+        }
+
+        var customer = await db.Customers.SingleOrDefaultAsync(c => c.Id == id, ct);
+        if (customer is null)
+        {
+            return CustomerNotFound();
+        }
+
         customer.SetActive(isActive, Now);
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
+        return null;
     }
 
     // The linked user must hold an ACTIVE Customer membership in THIS tenant: an email match alone never grants ticket access.
-    private async Task ValidateLinkAsync(Guid userId, CancellationToken ct)
-    {
-        var eligible = await db.Memberships.AnyAsync(
+    private Task<bool> IsEligibleLinkAsync(Guid userId, CancellationToken ct) =>
+        db.Memberships.AnyAsync(
             m =>
                 m.UserId == userId
                 && m.Role == TenantRole.Customer
@@ -166,31 +216,42 @@ public sealed partial class CustomerService(
                 && db.Users.Any(u => u.Id == userId && u.Status == UserStatus.Active),
             ct
         );
-        if (!eligible)
-        {
-            throw AppException.BadRequest(
-                "The user must be an active Customer member of this organization."
-            );
-        }
-    }
 
-    private async Task SaveAsync(CancellationToken ct)
+    private static BadRequestObjectResult IneligibleLink() =>
+        new(
+            new ProblemDetails
+            {
+                Title = "The user must be an active Customer member of this organization.",
+            }
+        );
+
+    /// <returns>Null when saved; the 409 when a unique rule was violated by a concurrent writer.</returns>
+    private async Task<ObjectResult?> SaveAsync(CancellationToken ct)
     {
         try
         {
             await db.SaveChangesAsync(ct);
+            return null;
         }
         catch (DbUpdateException ex)
             when (db.IsUniqueViolation(ex, UniqueConstraintKind.CustomerEmail))
         {
-            throw AppException.Conflict("A customer with this email already exists.");
+            return DuplicateEmail();
         }
         catch (DbUpdateException ex)
             when (db.IsUniqueViolation(ex, UniqueConstraintKind.CustomerUser))
         {
-            throw AppException.Conflict("This user is already linked to another customer.");
+            return new ConflictObjectResult(
+                new ProblemDetails { Title = "This user is already linked to another customer." }
+            );
         }
     }
+
+    private static ConflictObjectResult DuplicateEmail() =>
+        new(new ProblemDetails { Title = "A customer with this email already exists." });
+
+    private static NotFoundObjectResult CustomerNotFound() =>
+        new(new ProblemDetails { Title = "Customer not found." });
 
     private Task RequireManagerAsync(CancellationToken ct) =>
         actor.RequireManagerAsync("Only Owners and Managers can manage customers.", ct);

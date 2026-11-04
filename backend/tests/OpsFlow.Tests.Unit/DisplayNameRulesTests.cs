@@ -1,5 +1,4 @@
 using OpsFlow.Application.Auth;
-using OpsFlow.Application.Common;
 
 namespace OpsFlow.Tests.Unit;
 
@@ -8,8 +7,11 @@ public class DisplayNameRulesTests
     [Theory]
     [InlineData("  Ada Lovelace ", "Ada Lovelace")]
     [InlineData("Zoë Ñúñez", "Zoë Ñúñez")]
-    public void Valid_names_are_trimmed(string input, string expected) =>
-        Assert.Equal(expected, DisplayNameRules.Validate(input, "f"));
+    public void Valid_names_are_trimmed(string input, string expected)
+    {
+        Assert.True(DisplayNameRules.TryValidate(input, out var name, out _));
+        Assert.Equal(expected, name);
+    }
 
     [Theory]
     [InlineData(null)]
@@ -17,12 +19,15 @@ public class DisplayNameRulesTests
     [InlineData(" a ")]
     [InlineData("Tab\tName")]
     [InlineData("Right‮ToLeft")]
-    public void Invalid_names_are_rejected(string? input) =>
-        Assert.Equal(400, Assert.Throws<AppException>(() => DisplayNameRules.Validate(input, "f")).StatusCode);
+    public void Invalid_names_are_rejected(string? input)
+    {
+        Assert.False(DisplayNameRules.TryValidate(input, out _, out var error));
+        Assert.NotEmpty(error);
+    }
 
     [Fact]
     public void Too_long_names_are_rejected() =>
-        Assert.Throws<AppException>(() => DisplayNameRules.Validate(new string('x', 101), "f"));
+        Assert.False(DisplayNameRules.TryValidate(new string('x', 101), out _, out _));
 
     [Theory]
     [InlineData("Gina Google", "gina@gmail.com", "Gina Google")]

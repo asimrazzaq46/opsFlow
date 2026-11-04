@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using OpsFlow.Application.Abstractions;
@@ -23,11 +25,17 @@ public sealed partial class TenantSettingsService(
     ILogger<TenantSettingsService> logger
 )
 {
-    public async Task<TenantSettingsDto> GetAsync(CancellationToken ct)
+    public async Task<ActionResult<TenantSettingsDto>> GetAsync(CancellationToken ct)
     {
-        if (await actor.RequireActiveRoleAsync(ct) == TenantRole.Customer)
+        var role = await actor.GetActiveRoleAsync(ct);
+        if (role is null)
         {
-            throw AppException.Forbidden("Customers cannot view organization settings.");
+            return ActorAccess.AccessNoLongerValid();
+        }
+
+        if (role == TenantRole.Customer)
+        {
+            return ActorAccess.Forbidden("Customers cannot view organization settings.");
         }
 
         // One round trip; legacy tenants without a settings row report the defaults.
@@ -40,7 +48,12 @@ public sealed partial class TenantSettingsService(
                 Zone = db.Settings.Select(s => s.ReportingTimeZone).FirstOrDefault(),
                 Prefix = db.Settings.Select(s => s.TicketNumberPrefix).FirstOrDefault(),
             })
-            .SingleOrDefaultAsync(ct) ?? throw AppException.NotFound("Organization not found.");
+            .SingleOrDefaultAsync(ct);
+        if (row is null)
+        {
+            return new NotFoundObjectResult(new ProblemDetails { Title = "Organization not found." });
+        }
+
         return new TenantSettingsDto(
             row.Zone ?? TenantSettings.DefaultReportingTimeZone,
             row.Name,
@@ -54,19 +67,48 @@ public sealed partial class TenantSettingsService(
     /// the OwnerChangeStamp concurrency token, so a rename racing an ownership change fails with 409 instead of committing on stale
     /// authorization. Categories, SLA policies, memberships and existing SLA deadlines are never touched.
     /// </summary>
-    public async Task<TenantSettingsDto> UpdateAsync(string reportingTimeZone, string? name, CancellationToken ct)
+    public async Task<ActionResult<TenantSettingsDto>> UpdateAsync(string reportingTimeZone, string? name, CancellationToken ct)
     {
-        var zone = ReportingTimeZoneId.Validate(reportingTimeZone, "ReportingTimeZone");
-        var newName = name is null ? null : DisplayNameRules.Validate(name, "Name");
-        var (transaction, role) = await actor.BeginAuthorizedAsync(null, ct);
+        if (!ReportingTimeZoneId.TryValidate(reportingTimeZone, out var zone, out var zoneError))
+        {
+            return FieldError("ReportingTimeZone", zoneError);
+        }
+
+        string? newName = null;
+        if (name is not null)
+        {
+            if (!DisplayNameRules.TryValidate(name, out var validName, out var nameError))
+            {
+                return FieldError("Name", nameError);
+            }
+
+            newName = validName;
+        }
+
+        if (await actor.TryBeginAuthorizedAsync(null, ct) is not { } begun)
+        {
+            return ActorAccess.AccessNoLongerValid();
+        }
+
+        var (transaction, role) = begun;
         await using var _ = transaction;
         if (role != TenantRole.TenantOwner)
         {
-            throw AppException.Forbidden("Only an Owner can change organization settings.");
+            return ActorAccess.Forbidden("Only an Owner can change organization settings.");
         }
 
-        var settings = await db.Settings.SingleOrDefaultAsync(ct)
-            ?? throw AppException.Conflict("Organization settings are not initialized.", "An Owner must initialize the tenant defaults.");
+        var settings = await db.Settings.SingleOrDefaultAsync(ct);
+        if (settings is null)
+        {
+            return new ConflictObjectResult(
+                new ProblemDetails
+                {
+                    Title = "Organization settings are not initialized.",
+                    Detail = "An Owner must initialize the tenant defaults.",
+                }
+            );
+        }
+
         var tenant = await db.Tenants.SingleAsync(ct);
         var tenantId = tenantContext.TenantId!.Value;
         if (settings.ReportingTimeZone != zone)
@@ -85,6 +127,9 @@ public sealed partial class TenantSettingsService(
         await transaction.CommitAsync(ct);
         return new TenantSettingsDto(settings.ReportingTimeZone, tenant.Name, tenant.Slug, settings.TicketNumberPrefix);
     }
+
+    private static BadRequestObjectResult FieldError(string field, string message) =>
+        new(new ValidationProblemDetails(new Dictionary<string, string[]> { [field] = [message] }));
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Reporting timezone of tenant {TenantId} changed to {TimeZoneId}")]
     private static partial void LogChanged(ILogger logger, Guid tenantId, string timeZoneId);

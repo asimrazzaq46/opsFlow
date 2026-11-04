@@ -1,9 +1,11 @@
 using System.Security.Cryptography;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OpsFlow.Application.Abstractions;
 using OpsFlow.Application.Common;
+using OpsFlow.Application.Memberships;
 using OpsFlow.Domain.Tickets;
 
 namespace OpsFlow.Application.Tickets;
@@ -22,7 +24,7 @@ public sealed partial class TicketAttachmentService(
     ILogger<TicketAttachmentService> logger
 )
 {
-    public async Task<AttachmentDto> UploadAsync(
+    public async Task<ActionResult<AttachmentDto>> UploadAsync(
         Guid ticketId,
         string? fileName,
         Stream content,
@@ -33,14 +35,15 @@ public sealed partial class TicketAttachmentService(
         var max = options.Value.MaxBytes;
         if (!content.CanSeek || content.Length is 0 or < 0)
         {
-            throw AppException.BadRequest("The file is empty.");
+            return new BadRequestObjectResult(new ProblemDetails { Title = "The file is empty." });
         }
 
         if (content.Length > max)
         {
-            throw AppException
-                .Validation("file", $"The file exceeds the maximum size of {max} bytes.")
-                .WithCode("ATTACHMENT_TOO_LARGE");
+            return FileError(
+                $"The file exceeds the maximum size of {max} bytes.",
+                "ATTACHMENT_TOO_LARGE"
+            );
         }
 
         var safeName = AttachmentValidator.SanitizeFileName(fileName);
@@ -49,12 +52,10 @@ public sealed partial class TicketAttachmentService(
         var contentType = safeName.Length > 0 ? AttachmentValidator.Verify(safeName, header) : null;
         if (contentType is null)
         {
-            throw AppException
-                .Validation(
-                    "file",
-                    $"Only {AttachmentValidator.AllowedExtensions} files whose content matches their type are accepted."
-                )
-                .WithCode("ATTACHMENT_TYPE_NOT_ALLOWED");
+            return FileError(
+                $"Only {AttachmentValidator.AllowedExtensions} files whose content matches their type are accepted.",
+                "ATTACHMENT_TYPE_NOT_ALLOWED"
+            );
         }
 
         content.Position = 0;
@@ -62,81 +63,31 @@ public sealed partial class TicketAttachmentService(
         content.Position = 0;
 
         // Authorize BEFORE touching storage so an unauthorized caller cannot create files at all.
-        var preActor = await access.ResolveAsync(ct);
-        RequireMayUpload(preActor, isInternal);
+        if (await access.TryResolveAsync(ct) is not { } preActor)
+        {
+            return ActorAccess.AccessNoLongerValid();
+        }
+
+        if (MayNotUpload(preActor, isInternal) is { } notAllowed)
+        {
+            return notAllowed;
+        }
+
         if (!await access.Visible(preActor).AnyAsync(t => t.Id == ticketId, ct))
         {
-            throw AppException.NotFound("Ticket not found.");
+            return TicketNotFound();
         }
 
         var key = await storage.SaveAsync(content, ct);
         try
         {
-            var (transaction, actor) = await access.BeginAuthorizedAsync(null, ct);
-            await using var _ = transaction;
-            RequireMayUpload(actor, isInternal);
-            var ticket =
-                await access.Visible(actor).Where(t => t.Id == ticketId).SingleOrDefaultAsync(ct)
-                ?? throw AppException.NotFound("Ticket not found.");
-            if (ticket.Status == TicketStatus.Closed)
+            var stored = await StoreAsync(ticketId, safeName, contentType, content.Length, key, sha, isInternal, ct);
+            if (stored.Result is not null)
             {
-                throw AppException.Conflict(
-                    "A closed ticket does not accept attachments; reopen it first."
-                );
+                await DeleteQuietlyAsync(key); // metadata was not committed: do not leave an orphaned file
             }
 
-            var now = clock.GetUtcNow().UtcDateTime;
-            var attachment = TicketAttachment.Create(
-                ticket.TenantId,
-                ticketId,
-                actor.UserId,
-                safeName,
-                contentType,
-                content.Length,
-                key,
-                sha,
-                isInternal,
-                now
-            );
-            db.TicketAttachments.Add(attachment);
-            db.TicketActivities.Add(
-                ticket.Record(
-                    TicketActivityType.AttachmentAdded,
-                    actor.UserId,
-                    now,
-                    newValue: isInternal ? "internal" : "visible",
-                    relatedId: attachment.Id
-                )
-            );
-            try
-            {
-                await db.SaveChangesAsync(ct);
-                await transaction.CommitAsync(ct);
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                throw AppException.Conflict(
-                    "The ticket was changed by someone else.",
-                    "Please retry."
-                );
-            }
-            catch (DbUpdateException ex)
-                when (db.IsUniqueViolation(ex, UniqueConstraintKind.ActivitySequence))
-            {
-                throw AppException.Conflict(
-                    "The ticket was changed by someone else.",
-                    "Please retry."
-                );
-            }
-            catch (Exception ex) when (db.IsDeadlock(ex))
-            {
-                throw AppException.Conflict(
-                    "The ticket was changed by someone else.",
-                    "Please retry."
-                );
-            }
-
-            return ToDto(attachment, actor.IsCustomer);
+            return stored;
         }
         catch
         {
@@ -145,12 +96,124 @@ public sealed partial class TicketAttachmentService(
         }
     }
 
-    public async Task<IReadOnlyList<AttachmentDto>> ListAsync(Guid ticketId, CancellationToken ct)
+    private async Task<ActionResult<AttachmentDto>> StoreAsync(
+        Guid ticketId,
+        string safeName,
+        string contentType,
+        long length,
+        string key,
+        string sha,
+        bool isInternal,
+        CancellationToken ct
+    )
     {
-        var actor = await access.ResolveAsync(ct);
+        if (await access.TryBeginAuthorizedAsync(null, ct) is not { } begun)
+        {
+            return ActorAccess.AccessNoLongerValid();
+        }
+
+        var (transaction, actor) = begun;
+        await using var _ = transaction;
+        if (MayNotUpload(actor, isInternal) is { } notAllowed)
+        {
+            return notAllowed;
+        }
+
+        var ticket = await access
+            .Visible(actor)
+            .Where(t => t.Id == ticketId)
+            .SingleOrDefaultAsync(ct);
+        if (ticket is null)
+        {
+            return TicketNotFound();
+        }
+
+        if (ticket.Status == TicketStatus.Closed)
+        {
+            return new ConflictObjectResult(
+                new ProblemDetails
+                {
+                    Title = "A closed ticket does not accept attachments; reopen it first.",
+                }
+            );
+        }
+
+        var now = clock.GetUtcNow().UtcDateTime;
+        var attachment = TicketAttachment.Create(
+            ticket.TenantId,
+            ticketId,
+            actor.UserId,
+            safeName,
+            contentType,
+            length,
+            key,
+            sha,
+            isInternal,
+            now
+        );
+        db.TicketAttachments.Add(attachment);
+        db.TicketActivities.Add(
+            ticket.Record(
+                TicketActivityType.AttachmentAdded,
+                actor.UserId,
+                now,
+                newValue: isInternal ? "internal" : "visible",
+                relatedId: attachment.Id
+            )
+        );
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return new ConflictObjectResult(
+                new ProblemDetails
+                {
+                    Title = "The ticket was changed by someone else.",
+                    Detail = "Please retry.",
+                }
+            );
+        }
+        catch (DbUpdateException ex)
+            when (db.IsUniqueViolation(ex, UniqueConstraintKind.ActivitySequence))
+        {
+            return new ConflictObjectResult(
+                new ProblemDetails
+                {
+                    Title = "The ticket was changed by someone else.",
+                    Detail = "Please retry.",
+                }
+            );
+        }
+        catch (Exception ex) when (db.IsDeadlock(ex))
+        {
+            return new ConflictObjectResult(
+                new ProblemDetails
+                {
+                    Title = "The ticket was changed by someone else.",
+                    Detail = "Please retry.",
+                }
+            );
+        }
+
+        return ToDto(attachment, actor.IsCustomer);
+    }
+
+    public async Task<ActionResult<IReadOnlyList<AttachmentDto>>> ListAsync(
+        Guid ticketId,
+        CancellationToken ct
+    )
+    {
+        if (await access.TryResolveAsync(ct) is not { } actor)
+        {
+            return ActorAccess.AccessNoLongerValid();
+        }
+
         if (!await access.Visible(actor).AnyAsync(t => t.Id == ticketId, ct))
         {
-            throw AppException.NotFound("Ticket not found.");
+            return TicketNotFound();
         }
 
         var rows = await db
@@ -162,13 +225,17 @@ public sealed partial class TicketAttachmentService(
         return rows.ConvertAll(a => ToDto(a, actor.IsCustomer));
     }
 
-    public async Task<AttachmentDownload> DownloadAsync(
+    public async Task<ActionResult<AttachmentDownload>> DownloadAsync(
         Guid ticketId,
         Guid attachmentId,
         CancellationToken ct
     )
     {
-        var actor = await access.ResolveAsync(ct);
+        if (await access.TryResolveAsync(ct) is not { } actor)
+        {
+            return ActorAccess.AccessNoLongerValid();
+        }
+
         var attachment = await (
             from a in db.TicketAttachments.AsNoTracking()
             where
@@ -179,26 +246,37 @@ public sealed partial class TicketAttachmentService(
         ).SingleOrDefaultAsync(ct);
         if (attachment is null || !await access.Visible(actor).AnyAsync(t => t.Id == ticketId, ct))
         {
-            throw AppException.NotFound("Attachment not found.");
+            return AttachmentNotFound();
         }
 
         var stream = await storage.OpenReadAsync(attachment.StorageKey, ct);
         if (stream is null)
         {
             LogMissingFile(logger, attachment.Id);
-            throw AppException.NotFound("Attachment not found.");
+            return AttachmentNotFound();
         }
 
         return new AttachmentDownload(stream, attachment.FileName, attachment.ContentType);
     }
 
-    private static void RequireMayUpload(TicketActor actor, bool isInternal)
-    {
-        if (isInternal && actor.IsCustomer)
-        {
-            throw AppException.Forbidden("Customers cannot upload internal attachments.");
-        }
-    }
+    private static ObjectResult? MayNotUpload(TicketActor actor, bool isInternal) =>
+        isInternal && actor.IsCustomer
+            ? ActorAccess.Forbidden("Customers cannot upload internal attachments.")
+            : null;
+
+    private static NotFoundObjectResult TicketNotFound() =>
+        new(new ProblemDetails { Title = "Ticket not found." });
+
+    private static NotFoundObjectResult AttachmentNotFound() =>
+        new(new ProblemDetails { Title = "Attachment not found." });
+
+    private static BadRequestObjectResult FileError(string message, string code) =>
+        new(
+            new ValidationProblemDetails(new Dictionary<string, string[]> { ["file"] = [message] })
+            {
+                Extensions = { ["code"] = code },
+            }
+        );
 
     private async Task DeleteQuietlyAsync(string key)
     {

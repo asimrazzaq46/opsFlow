@@ -188,6 +188,21 @@ public class GraphQlAnalyticsTests(ApiFactory factory) : IClassFixture<ApiFactor
         Assert.StartsWith("ticket,title,status", csv, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Csv_export_rejects_an_unknown_filter_value_as_a_field_validation_problem()
+    {
+        var w = await TicketWorld.CreateAsync(factory);
+
+        var response = await w.Manager.GetAsync(w.Url("reports/export?priority=Bogus"));
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType!.MediaType);
+        Assert.Contains("\"priority\"", body, StringComparison.Ordinal);
+        Assert.Contains("\"code\":\"VALIDATION_ERROR\"", body, StringComparison.Ordinal);
+        Assert.Contains("\"traceId\"", body, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("=1+1", "'=1+1")]
     [InlineData("@SUM(A1)", "'@SUM(A1)")]

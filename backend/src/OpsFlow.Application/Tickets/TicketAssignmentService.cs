@@ -1,7 +1,9 @@
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using OpsFlow.Application.Abstractions;
 using OpsFlow.Application.Common;
+using OpsFlow.Application.Memberships;
 using OpsFlow.Application.Notifications;
 using OpsFlow.Domain.Notifications;
 using OpsFlow.Domain.Tickets;
@@ -27,7 +29,7 @@ public sealed partial class TicketAssignmentService(
 
     private DateTime Now => clock.GetUtcNow().UtcDateTime;
 
-    public async Task<TicketDetailDto> AssignAsync(
+    public async Task<ActionResult<TicketDetailDto>> AssignAsync(
         Guid ticketId,
         IReadOnlyCollection<Guid> membershipIds,
         int? expectedVersion,
@@ -37,14 +39,35 @@ public sealed partial class TicketAssignmentService(
         for (var attempt = 0; attempt < MaxAttempts; attempt++)
         {
             var tenant = await db.Tenants.SingleAsync(ct); // stamp first, then the actor's CURRENT authorization
-            var actor = await access.ResolveAsync(ct);
-            var ticket = await LoadAsync(actor, ticketId, expectedVersion, ct);
-            if (TicketWorkflow.IsFinished(ticket.Status))
+            if (await access.TryResolveAsync(ct) is not { } actor)
             {
-                throw AppException.Conflict("Reopen the ticket before assigning agents.");
+                return ActorAccess.AccessNoLongerValid();
             }
 
-            var agents = await access.RequireEligibleAgentsAsync(membershipIds, ct);
+            var loaded = await LoadAsync(actor, ticketId, expectedVersion, ct);
+            if (loaded.Result is ObjectResult loadFailure)
+            {
+                return loadFailure;
+            }
+
+            var ticket = loaded.Value!;
+            if (TicketWorkflow.IsFinished(ticket.Status))
+            {
+                return new ConflictObjectResult(
+                    new ProblemDetails { Title = "Reopen the ticket before assigning agents." }
+                );
+            }
+
+            var agents = await access.GetEligibleAgentsAsync(membershipIds, ct);
+            if (agents is null)
+            {
+                return new BadRequestObjectResult(
+                    new ProblemDetails
+                    {
+                        Title = "Every assignee must be an active Agent of this organization.",
+                    }
+                );
+            }
             if (
                 await db.TicketAssignments.AnyAsync(
                     a =>
@@ -55,7 +78,7 @@ public sealed partial class TicketAssignmentService(
                 )
             )
             {
-                throw AppException.Conflict("An agent is already assigned to this ticket.");
+                return AlreadyAssigned();
             }
 
             var now = Now;
@@ -150,15 +173,15 @@ public sealed partial class TicketAssignmentService(
             catch (DbUpdateException ex)
                 when (db.IsUniqueViolation(ex, UniqueConstraintKind.OpenAssignment))
             {
-                throw AppException.Conflict("An agent is already assigned to this ticket.");
+                return AlreadyAssigned();
             }
         }
 
-        throw AppException.Conflict("The ticket was changed concurrently.", "Please retry.");
+        return ChangedConcurrently();
     }
 
     /// <summary>Removes one agent. The last assignee cannot be removed while the ticket's status requires an owner.</summary>
-    public async Task<TicketDetailDto> UnassignAsync(
+    public async Task<ActionResult<TicketDetailDto>> UnassignAsync(
         Guid ticketId,
         Guid membershipId,
         int? expectedVersion,
@@ -170,27 +193,49 @@ public sealed partial class TicketAssignmentService(
             // One transaction per attempt: the ticket row lock serializes this with child-task creation and reassignment.
             await using var transaction = await db.BeginTransactionAsync(ct);
             var tenant = await db.Tenants.SingleAsync(ct);
-            var actor = await access.ResolveAsync(ct);
+            if (await access.TryResolveAsync(ct) is not { } actor)
+            {
+                return ActorAccess.AccessNoLongerValid();
+            }
+
             if (!actor.IsManager)
             {
-                throw AppException.Forbidden("Only Owners and Managers can change assignments.");
+                return ActorAccess.Forbidden("Only Owners and Managers can change assignments.");
             }
 
-            await access.LockTicketAsync(ticketId, ct);
-            var ticket = await LoadAsync(actor, ticketId, expectedVersion, ct);
+            if (!await access.TryLockTicketAsync(ticketId, ct))
+            {
+                return TicketNotFound();
+            }
+
+            var loaded = await LoadAsync(actor, ticketId, expectedVersion, ct);
+            if (loaded.Result is ObjectResult loadFailure)
+            {
+                return loadFailure;
+            }
+
+            var ticket = loaded.Value!;
             if (ticket.Status == TicketStatus.Closed)
             {
-                throw AppException.Conflict("A closed ticket cannot be changed.");
+                return new ConflictObjectResult(
+                    new ProblemDetails { Title = "A closed ticket cannot be changed." }
+                );
             }
 
-            var assignment =
-                await db.TicketAssignments.SingleOrDefaultAsync(
-                    a =>
-                        a.TicketId == ticketId
-                        && a.MembershipId == membershipId
-                        && a.UnassignedAtUtc == null,
-                    ct
-                ) ?? throw AppException.NotFound("The agent is not assigned to this ticket.");
+            var assignment = await db.TicketAssignments.SingleOrDefaultAsync(
+                a =>
+                    a.TicketId == ticketId
+                    && a.MembershipId == membershipId
+                    && a.UnassignedAtUtc == null,
+                ct
+            );
+            if (assignment is null)
+            {
+                return new NotFoundObjectResult(
+                    new ProblemDetails { Title = "The agent is not assigned to this ticket." }
+                );
+            }
+
             // Only ELIGIBLE agents count: the last eligible assignee cannot be removed, but an ineligible (suspended/deactivated)
             // agent can always be removed once another eligible agent is assigned.
             var remainingEligible = await access
@@ -198,11 +243,14 @@ public sealed partial class TicketAssignmentService(
                 .CountAsync(a => a.TicketId == ticketId && a.Id != assignment.Id, ct);
             if (remainingEligible == 0 && TicketWorkflow.RequiresAssignee(ticket.Status))
             {
-                throw AppException.Conflict(
-                    "The last eligible assignee cannot be removed while the ticket is "
-                        + ticket.Status
-                        + ".",
-                    "Assign another active agent first."
+                return new ConflictObjectResult(
+                    new ProblemDetails
+                    {
+                        Title = "The last eligible assignee cannot be removed while the ticket is "
+                            + ticket.Status
+                            + ".",
+                        Detail = "Assign another active agent first.",
+                    }
                 );
             }
 
@@ -218,12 +266,14 @@ public sealed partial class TicketAssignmentService(
                 )
             )
             {
-                throw AppException
-                    .Conflict(
-                        "The agent still owns unfinished child tasks on this ticket.",
-                        "Reassign those tasks to another assigned agent first."
-                    )
-                    .WithCode("TICKET_AGENT_HAS_OPEN_TASKS");
+                return new ConflictObjectResult(
+                    new ProblemDetails
+                    {
+                        Title = "The agent still owns unfinished child tasks on this ticket.",
+                        Detail = "Reassign those tasks to another assigned agent first.",
+                        Extensions = { ["code"] = "TICKET_AGENT_HAS_OPEN_TASKS" },
+                    }
+                );
             }
 
             var now = Now;
@@ -277,25 +327,29 @@ public sealed partial class TicketAssignmentService(
             }
         }
 
-        throw AppException.Conflict("The ticket was changed concurrently.", "Please retry.");
+        return ChangedConcurrently();
     }
 
     /// <summary>Current assignees, or the complete history (including removed agents). Staff only.</summary>
-    public async Task<IReadOnlyList<AssignmentHistoryDto>> ListAsync(
+    public async Task<ActionResult<IReadOnlyList<AssignmentHistoryDto>>> ListAsync(
         Guid ticketId,
         bool includeHistory,
         CancellationToken ct
     )
     {
-        var actor = await access.ResolveAsync(ct);
+        if (await access.TryResolveAsync(ct) is not { } actor)
+        {
+            return ActorAccess.AccessNoLongerValid();
+        }
+
         if (actor.IsCustomer)
         {
-            throw AppException.Forbidden("Customers cannot view assignments.");
+            return ActorAccess.Forbidden("Customers cannot view assignments.");
         }
 
         if (!await access.Visible(actor).AnyAsync(t => t.Id == ticketId, ct))
         {
-            throw AppException.NotFound("Ticket not found.");
+            return TicketNotFound();
         }
 
         return await (
@@ -318,7 +372,7 @@ public sealed partial class TicketAssignmentService(
         ).ToListAsync(ct);
     }
 
-    private async Task<Ticket> LoadAsync(
+    private async Task<ActionResult<Ticket>> LoadAsync(
         TicketActor actor,
         Guid ticketId,
         int? expectedVersion,
@@ -327,19 +381,40 @@ public sealed partial class TicketAssignmentService(
     {
         if (!actor.IsManager)
         {
-            throw AppException.Forbidden("Only Owners and Managers can change assignments.");
+            return ActorAccess.Forbidden("Only Owners and Managers can change assignments.");
         }
 
-        var ticket =
-            await access.Visible(actor).Where(t => t.Id == ticketId).SingleOrDefaultAsync(ct)
-            ?? throw AppException.NotFound("Ticket not found.");
+        var ticket = await access.Visible(actor).Where(t => t.Id == ticketId).SingleOrDefaultAsync(ct);
+        if (ticket is null)
+        {
+            return TicketNotFound();
+        }
+
         return expectedVersion is { } v && v != ticket.Version
-            ? throw AppException.Conflict(
-                "The ticket was changed by someone else.",
-                "Reload the ticket and retry."
+            ? new ConflictObjectResult(
+                new ProblemDetails
+                {
+                    Title = "The ticket was changed by someone else.",
+                    Detail = "Reload the ticket and retry.",
+                }
             )
             : ticket;
     }
+
+    private static NotFoundObjectResult TicketNotFound() =>
+        new(new ProblemDetails { Title = "Ticket not found." });
+
+    private static ConflictObjectResult AlreadyAssigned() =>
+        new(new ProblemDetails { Title = "An agent is already assigned to this ticket." });
+
+    private static ConflictObjectResult ChangedConcurrently() =>
+        new(
+            new ProblemDetails
+            {
+                Title = "The ticket was changed concurrently.",
+                Detail = "Please retry.",
+            }
+        );
 
     [LoggerMessage(
         Level = LogLevel.Information,

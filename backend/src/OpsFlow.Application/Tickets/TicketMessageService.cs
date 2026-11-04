@@ -1,6 +1,9 @@
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using OpsFlow.Application.Abstractions;
 using OpsFlow.Application.Common;
+using OpsFlow.Application.Memberships;
 using OpsFlow.Realtime.Chat;
 
 namespace OpsFlow.Application.Tickets;
@@ -20,8 +23,9 @@ public sealed class TicketMessageService(
 {
     private const int MaxPageSize = 100;
 
-    // Runs through the generic ChatService pipeline; the sender is always the authenticated user.
-    public async Task<WriteResult<TicketMessageDto>> SendAsync(
+    // Runs through the generic ChatService pipeline; the sender is always the authenticated user. The pipeline and TicketChatStore
+    // still signal their failures with exceptions (the OpsFlow.Realtime contract), so the library's ChatException is answered here.
+    public async Task<ActionResult<WriteResult<TicketMessageDto>>> SendAsync(
         Guid ticketId,
         SendMessageCommand cmd,
         CancellationToken ct
@@ -40,13 +44,19 @@ public sealed class TicketMessageService(
         }
         catch (ChatException ex)
         {
-            throw ex.Failure switch
+            return ex.Failure switch
             {
-                ChatFailure.Forbidden => AppException.NotFound("Ticket not found."), // same answer as before: no hint that the ticket exists
-                ChatFailure.Unauthenticated => AppException.Unauthorized(
-                    "Authentication is required."
+                ChatFailure.Forbidden => new NotFoundObjectResult(
+                    new ProblemDetails { Title = "Ticket not found." } // no hint that the ticket exists
                 ),
-                _ => AppException.BadRequest(ex.Message),
+                ChatFailure.Unauthenticated => new UnauthorizedObjectResult(
+                    new ProblemDetails
+                    {
+                        Title = "Authentication is required.",
+                        Status = StatusCodes.Status401Unauthorized,
+                    }
+                ),
+                _ => new BadRequestObjectResult(new ProblemDetails { Title = ex.Message }),
             };
         }
     }
@@ -55,7 +65,7 @@ public sealed class TicketMessageService(
     /// Newest-first page by default; with <paramref name="afterSequence"/> the messages newer than that sequence in ascending order
     /// (reconnect sync). Deterministic: Sequence is unique per ticket.
     /// </summary>
-    public async Task<PagedResult<TicketMessageDto>> ListAsync(
+    public async Task<ActionResult<PagedResult<TicketMessageDto>>> ListAsync(
         Guid ticketId,
         int? afterSequence,
         int page,
@@ -63,10 +73,14 @@ public sealed class TicketMessageService(
         CancellationToken ct
     )
     {
-        var actor = await access.ResolveAsync(ct);
+        if (await access.TryResolveAsync(ct) is not { } actor)
+        {
+            return ActorAccess.AccessNoLongerValid();
+        }
+
         if (!await access.Visible(actor).AnyAsync(t => t.Id == ticketId, ct))
         {
-            throw AppException.NotFound("Ticket not found.");
+            return new NotFoundObjectResult(new ProblemDetails { Title = "Ticket not found." });
         }
 
         (page, pageSize, var skip) = Paging.Normalize(page, pageSize, MaxPageSize);

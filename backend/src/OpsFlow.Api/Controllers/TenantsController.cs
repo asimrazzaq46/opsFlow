@@ -28,7 +28,10 @@ public sealed class TenantsController(
     )]
     public async Task<ActionResult<OrganizationDto>> GetTenant(CancellationToken ct)
     {
-        return Ok(await organizations.GetCurrentAsync(ct));
+        var organization = await organizations.GetCurrentAsync(ct);
+        return organization is null
+            ? Problem(statusCode: StatusCodes.Status404NotFound, title: "Organization not found.")
+            : Ok(organization);
     }
 
     [HttpGet("members", Name = "ListMembers")]
@@ -63,8 +66,9 @@ public sealed class TenantsController(
         CancellationToken ct
     )
     {
-        await members.ChangeRoleAsync(membershipId, request.Role, ct);
-        return NoContent();
+        return await members.ChangeRoleAsync(membershipId, request.Role, ct) is { } failure
+            ? this.Answer(failure)
+            : NoContent();
     }
 
     [HttpPut("members/{membershipId:guid}/status", Name = "SetMemberStatus")]
@@ -84,8 +88,9 @@ public sealed class TenantsController(
         CancellationToken ct
     )
     {
-        await members.SetActiveAsync(membershipId, request.IsActive, ct);
-        return NoContent();
+        return await members.SetActiveAsync(membershipId, request.IsActive, ct) is { } failure
+            ? this.Answer(failure)
+            : NoContent();
     }
 
     [HttpPost("defaults", Name = "InitializeTenantDefaults")]
@@ -108,7 +113,8 @@ public sealed class TenantsController(
     )]
     public async Task<ActionResult<TenantSettingsDto>> GetTenantSettings(CancellationToken ct)
     {
-        return Ok(await settings.GetAsync(ct));
+        var result = await settings.GetAsync(ct);
+        return result.Result is ObjectResult failure ? this.Answer(failure) : Ok(result.Value);
     }
 
     [HttpPut("settings", Name = "UpdateTenantSettings")]
@@ -127,6 +133,7 @@ public sealed class TenantsController(
         CancellationToken ct
     )
     {
-        return Ok(await settings.UpdateAsync(request.ReportingTimeZone, request.Name, ct));
+        var result = await settings.UpdateAsync(request.ReportingTimeZone, request.Name, ct);
+        return result.Result is ObjectResult failure ? this.Answer(failure) : Ok(result.Value);
     }
 }

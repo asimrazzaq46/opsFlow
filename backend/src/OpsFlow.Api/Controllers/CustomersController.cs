@@ -46,13 +46,19 @@ public sealed class CustomersController(CustomerService customers) : ControllerB
         CancellationToken ct
     )
     {
-        var customer = await customers.CreateAsync(
+        var result = await customers.CreateAsync(
             request.Name,
             request.Email,
             request.Phone,
             request.LinkedUserId,
             ct
         );
+        if (result.Result is ObjectResult failure)
+        {
+            return this.Answer(failure);
+        }
+
+        var customer = result.Value!;
         return Created($"/api/v1/tenants/{tenantId}/customers/{customer.Id}", customer);
     }
 
@@ -82,16 +88,15 @@ public sealed class CustomersController(CustomerService customers) : ControllerB
         CancellationToken ct
     )
     {
-        return Ok(
-            await customers.UpdateAsync(
-                customerId,
-                request.Name,
-                request.Email,
-                request.Phone,
-                request.LinkedUserId,
-                ct
-            )
+        var result = await customers.UpdateAsync(
+            customerId,
+            request.Name,
+            request.Email,
+            request.Phone,
+            request.LinkedUserId,
+            ct
         );
+        return result.Result is ObjectResult failure ? this.Answer(failure) : Ok(result.Value);
     }
 
     [HttpPut("{customerId:guid}/status", Name = "SetCustomerStatus")]
@@ -106,7 +111,8 @@ public sealed class CustomersController(CustomerService customers) : ControllerB
         CancellationToken ct
     )
     {
-        await customers.SetActiveAsync(customerId, request.IsActive, ct);
-        return NoContent();
+        return await customers.SetActiveAsync(customerId, request.IsActive, ct) is { } failure
+            ? this.Answer(failure)
+            : NoContent();
     }
 }

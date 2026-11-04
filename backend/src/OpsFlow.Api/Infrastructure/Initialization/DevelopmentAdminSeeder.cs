@@ -71,11 +71,11 @@ public sealed partial class DevelopmentAdminSeeder(
                 "Seeding the development admin failed: the email is already registered."
             );
 
-        var organization = await organizations.CreateAsync(
-            user.Id,
-            seed.OrganizationName,
-            cancellationToken
-        );
+        var organization =
+            await organizations.CreateAsync(user.Id, seed.OrganizationName, cancellationToken)
+            ?? throw new InvalidOperationException(
+                "Seeding the development admin failed: the organization could not be created."
+            );
         await transaction.CommitAsync(cancellationToken);
         LogSeeded(logger, organization.Id, seed.OrganizationName);
     }

@@ -46,8 +46,9 @@ public sealed class NotificationsController(NotificationService notifications) :
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> MarkNotificationRead(Guid notificationId, CancellationToken ct)
     {
-        await notifications.MarkReadAsync(notificationId, ct);
-        return NoContent();
+        return await notifications.MarkReadAsync(notificationId, ct)
+            ? NoContent()
+            : Problem(statusCode: StatusCodes.Status404NotFound, title: "Notification not found.");
     }
 
     [HttpPost("read-all", Name = "MarkAllNotificationsRead")]

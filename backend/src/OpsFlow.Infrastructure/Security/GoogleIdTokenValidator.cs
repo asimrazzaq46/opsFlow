@@ -20,11 +20,11 @@ internal sealed partial class GoogleIdTokenValidator(
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan ClockTolerance = TimeSpan.FromSeconds(30);
 
-    public async Task<GoogleIdentity> ValidateAsync(string idToken, CancellationToken cancellationToken)
+    public async Task<GoogleIdentity?> ValidateAsync(string idToken, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(idToken) || idToken.Length > MaxTokenLength)
         {
-            throw Invalid();
+            return null;
         }
 
         var clientId = options.Value.ClientId;
@@ -46,7 +46,7 @@ internal sealed partial class GoogleIdTokenValidator(
         catch (InvalidJwtException ex)
         {
             LogRejected(logger, ex.Message);
-            throw Invalid();
+            return null;
         }
         catch (Exception ex)
             when ((ex is HttpRequestException or TimeoutException or TaskCanceledException)
@@ -68,7 +68,7 @@ internal sealed partial class GoogleIdTokenValidator(
         )
         {
             LogRejected(logger, "authorized party mismatch");
-            throw Invalid();
+            return null;
         }
 
         return new GoogleIdentity(
@@ -80,9 +80,6 @@ internal sealed partial class GoogleIdTokenValidator(
             payload.Name
         );
     }
-
-    private static AppException Invalid() =>
-        AppException.Unauthorized("The Google credential is invalid.").WithCode("AUTH_GOOGLE_TOKEN_INVALID");
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Google ID token rejected: {Reason}")]
     private static partial void LogRejected(ILogger logger, string reason);

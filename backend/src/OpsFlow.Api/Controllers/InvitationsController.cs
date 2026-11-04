@@ -30,7 +30,8 @@ public sealed class InvitationsController(InvitationService invitations) : Contr
         CancellationToken ct
     )
     {
-        return Ok(await invitations.AcceptAsync(request.Token, ct));
+        var result = await invitations.AcceptAsync(request.Token, ct);
+        return result.Result is ObjectResult failure ? this.Answer(failure) : Ok(result.Value);
     }
 
     [HttpGet("tenants/{tenantId:guid}/invitations", Name = "ListInvitations")]
@@ -64,7 +65,13 @@ public sealed class InvitationsController(InvitationService invitations) : Contr
         CancellationToken ct
     )
     {
-        var invitation = await invitations.CreateAsync(request.Email, request.Role, ct);
+        var result = await invitations.CreateAsync(request.Email, request.Role, ct);
+        if (result.Result is ObjectResult failure)
+        {
+            return this.Answer(failure);
+        }
+
+        var invitation = result.Value!;
         return Created($"/api/v1/tenants/{tenantId}/invitations/{invitation.Id}", invitation);
     }
 
@@ -90,7 +97,8 @@ public sealed class InvitationsController(InvitationService invitations) : Contr
         CancellationToken ct
     )
     {
-        return Ok(await invitations.ResendAsync(invitationId, ct));
+        var result = await invitations.ResendAsync(invitationId, ct);
+        return result.Result is ObjectResult failure ? this.Answer(failure) : Ok(result.Value);
     }
 
     [HttpDelete(
@@ -109,7 +117,8 @@ public sealed class InvitationsController(InvitationService invitations) : Contr
     )]
     public async Task<IActionResult> RevokeInvitation(Guid invitationId, CancellationToken ct)
     {
-        await invitations.RevokeAsync(invitationId, ct);
-        return NoContent();
+        return await invitations.RevokeAsync(invitationId, ct) is { } failure
+            ? this.Answer(failure)
+            : NoContent();
     }
 }

@@ -26,7 +26,8 @@ public sealed class TicketAssignmentsController(TicketAssignmentService assignme
         bool includeHistory = false
     )
     {
-        return Ok(await assignments.ListAsync(ticketId, includeHistory, ct));
+        var result = await assignments.ListAsync(ticketId, includeHistory, ct);
+        return result.Result is ObjectResult failure ? this.Answer(failure) : Ok(result.Value);
     }
 
     [HttpPost(Name = "AssignTicketAgents")]
@@ -45,9 +46,8 @@ public sealed class TicketAssignmentsController(TicketAssignmentService assignme
         CancellationToken ct
     )
     {
-        return Ok(
-            await assignments.AssignAsync(ticketId, request.MembershipIds, request.Version, ct)
-        );
+        var result = await assignments.AssignAsync(ticketId, request.MembershipIds, request.Version, ct);
+        return result.Result is ObjectResult failure ? this.Answer(failure) : Ok(result.Value);
     }
 
     [HttpDelete("{membershipId:guid}", Name = "UnassignTicketAgent")]
@@ -67,6 +67,7 @@ public sealed class TicketAssignmentsController(TicketAssignmentService assignme
         int? version = null
     )
     {
-        return Ok(await assignments.UnassignAsync(ticketId, membershipId, version, ct));
+        var result = await assignments.UnassignAsync(ticketId, membershipId, version, ct);
+        return result.Result is ObjectResult failure ? this.Answer(failure) : Ok(result.Value);
     }
 }

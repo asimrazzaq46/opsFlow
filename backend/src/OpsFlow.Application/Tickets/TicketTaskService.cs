@@ -1,6 +1,8 @@
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using OpsFlow.Application.Abstractions;
 using OpsFlow.Application.Common;
+using OpsFlow.Application.Memberships;
 using OpsFlow.Application.Outbox;
 using OpsFlow.Domain.Outbox;
 using OpsFlow.Domain.Tenants;
@@ -26,26 +28,40 @@ public sealed class TicketTaskService(
     /// <summary>Largest Kanban board: 6 status columns x the GraphQL page maximum of 50 cards.</summary>
     public const int MaxProgressTickets = 300;
 
-    public async Task<TicketTaskListDto> ListAsync(Guid ticketId, CancellationToken ct)
+    public async Task<ActionResult<TicketTaskListDto>> ListAsync(Guid ticketId, CancellationToken ct)
     {
-        var actor = await access.ResolveAsync(ct);
-        RequireStaff(actor);
-        var status =
-            await TaskTicket(actor, ticketId)
-                .AsNoTracking()
-                .Select(t => (TicketStatus?)t.Status)
-                .SingleOrDefaultAsync(ct) ?? throw TicketNotFound();
-        return await BuildListAsync(actor, ticketId, TicketWorkflow.IsFinished(status), ct);
+        if (await access.TryResolveAsync(ct) is not { } actor)
+        {
+            return ActorAccess.AccessNoLongerValid();
+        }
+
+        if (actor.IsCustomer)
+        {
+            return CustomersExcluded();
+        }
+
+        var status = await TaskTicket(actor, ticketId)
+            .AsNoTracking()
+            .Select(t => (TicketStatus?)t.Status)
+            .SingleOrDefaultAsync(ct);
+        return status is null
+            ? TicketNotFound()
+            : await BuildListAsync(actor, ticketId, TicketWorkflow.IsFinished(status.Value), ct);
     }
 
-    public async Task<TicketTaskDto> CreateAsync(
+    public async Task<ActionResult<TicketTaskDto>> CreateAsync(
         Guid ticketId,
         CreateTicketTaskCommand cmd,
         CancellationToken ct
     )
     {
-        var (title, description) = Validate(cmd.Title, cmd.Description);
-        var (task, actor) = await WriteAsync(
+        if (Validate(cmd.Title, cmd.Description, out var title, out var description) is { } invalid)
+        {
+            return invalid;
+        }
+
+        var taskId = Guid.Empty;
+        var written = await WriteAsync(
             ticketId,
             cmd.AssigneeMembershipId is { } requested ? [requested] : null,
             async (actor, ticket, now) =>
@@ -53,19 +69,19 @@ public sealed class TicketTaskService(
                 Guid assignee;
                 if (actor.IsManager)
                 {
-                    assignee =
-                        cmd.AssigneeMembershipId
-                        ?? throw AppException.Validation(
-                            "AssigneeMembershipId",
-                            "An assignee is required."
-                        );
+                    if (cmd.AssigneeMembershipId is not { } chosen)
+                    {
+                        return FieldError("AssigneeMembershipId", "An assignee is required.");
+                    }
+
+                    assignee = chosen;
                 }
                 else if (
                     cmd.AssigneeMembershipId is { } other
                     && other != actor.MembershipId
                 )
                 {
-                    throw AppException.Forbidden(
+                    return ActorAccess.Forbidden(
                         "Agents can only create tasks assigned to themselves."
                     );
                 }
@@ -74,7 +90,11 @@ public sealed class TicketTaskService(
                     assignee = actor.MembershipId; // server-derived self-assignment
                 }
 
-                await RequireEligibleAssigneeAsync(ticketId, assignee, ct);
+                if (await CheckEligibleAssigneeAsync(ticketId, assignee, ct) is { } ineligible)
+                {
+                    return ineligible;
+                }
+
                 var sortOrder =
                     (
                         await db
@@ -101,15 +121,18 @@ public sealed class TicketTaskService(
                         relatedId: task.Id
                     )
                 );
-                return (task, Event(task, TicketTaskChanges.Created));
+                taskId = task.Id;
+                return Event(task, TicketTaskChanges.Created);
             },
             ct
         );
-        return await MapOneAsync(actor, ticketId, task.Id);
+        return written.Result is ObjectResult failure
+            ? failure
+            : await MapOneAsync(written.Value!, ticketId, taskId);
     }
 
     /// <summary>Replaces title AND description (a null/blank description clears it).</summary>
-    public async Task<TicketTaskDto> UpdateDetailsAsync(
+    public async Task<ActionResult<TicketTaskDto>> UpdateDetailsAsync(
         Guid ticketId,
         Guid taskId,
         string title,
@@ -118,17 +141,31 @@ public sealed class TicketTaskService(
         CancellationToken ct
     )
     {
-        var (newTitle, newDescription) = Validate(title, description);
-        var (_, actor) = await WriteAsync(
+        if (Validate(title, description, out var newTitle, out var newDescription) is { } invalid)
+        {
+            return invalid;
+        }
+
+        var written = await WriteAsync(
             ticketId,
             null,
             async (actor, ticket, now) =>
             {
-                var task = await LoadTaskAsync(ticketId, taskId, expectedVersion, ct);
-                RequireOwnTaskOrManager(actor, task);
+                var loaded = await LoadTaskAsync(ticketId, taskId, expectedVersion, ct);
+                if (loaded.Result is ObjectResult missing)
+                {
+                    return missing;
+                }
+
+                var task = loaded.Value!;
+                if (NotOwnTaskOrManager(actor, task) is { } forbidden)
+                {
+                    return forbidden;
+                }
+
                 if (task.Title == newTitle && task.Description == newDescription)
                 {
-                    return (task, null);
+                    return NoChange;
                 }
 
                 task.UpdateDetails(newTitle, newDescription, actor.MembershipId, now);
@@ -140,14 +177,16 @@ public sealed class TicketTaskService(
                         relatedId: task.Id
                     )
                 );
-                return (task, Event(task, TicketTaskChanges.Updated));
+                return Event(task, TicketTaskChanges.Updated);
             },
             ct
         );
-        return await MapOneAsync(actor, ticketId, taskId);
+        return written.Result is ObjectResult failure
+            ? failure
+            : await MapOneAsync(written.Value!, ticketId, taskId);
     }
 
-    public async Task<TicketTaskDto> ChangeStatusAsync(
+    public async Task<ActionResult<TicketTaskDto>> ChangeStatusAsync(
         Guid ticketId,
         Guid taskId,
         TicketTaskStatus status,
@@ -157,19 +196,29 @@ public sealed class TicketTaskService(
     {
         if (!Enum.IsDefined(status))
         {
-            throw AppException.Validation("Status", "Unknown task status.");
+            return FieldError("Status", "Unknown task status.");
         }
 
-        var (_, actor) = await WriteAsync(
+        var written = await WriteAsync(
             ticketId,
             null,
             async (actor, ticket, now) =>
             {
-                var task = await LoadTaskAsync(ticketId, taskId, expectedVersion, ct);
-                RequireOwnTaskOrManager(actor, task);
+                var loaded = await LoadTaskAsync(ticketId, taskId, expectedVersion, ct);
+                if (loaded.Result is ObjectResult missing)
+                {
+                    return missing;
+                }
+
+                var task = loaded.Value!;
+                if (NotOwnTaskOrManager(actor, task) is { } forbidden)
+                {
+                    return forbidden;
+                }
+
                 if (task.Status == status)
                 {
-                    return (task, null);
+                    return NoChange;
                 }
 
                 var old = task.Status;
@@ -184,14 +233,16 @@ public sealed class TicketTaskService(
                         task.Id
                     )
                 );
-                return (task, Event(task, TicketTaskChanges.StatusChanged));
+                return Event(task, TicketTaskChanges.StatusChanged);
             },
             ct
         );
-        return await MapOneAsync(actor, ticketId, taskId);
+        return written.Result is ObjectResult failure
+            ? failure
+            : await MapOneAsync(written.Value!, ticketId, taskId);
     }
 
-    public async Task<TicketTaskDto> ReassignAsync(
+    public async Task<ActionResult<TicketTaskDto>> ReassignAsync(
         Guid ticketId,
         Guid taskId,
         Guid assigneeMembershipId,
@@ -199,19 +250,33 @@ public sealed class TicketTaskService(
         CancellationToken ct
     )
     {
-        var (_, actor) = await WriteAsync(
+        var written = await WriteAsync(
             ticketId,
             [assigneeMembershipId],
             async (actor, ticket, now) =>
             {
-                RequireManager(actor, "Only Owners and Managers can reassign tasks.");
-                var task = await LoadTaskAsync(ticketId, taskId, expectedVersion, ct);
-                if (task.AssigneeMembershipId == assigneeMembershipId)
+                if (!actor.IsManager)
                 {
-                    return (task, null);
+                    return ActorAccess.Forbidden("Only Owners and Managers can reassign tasks.");
                 }
 
-                await RequireEligibleAssigneeAsync(ticketId, assigneeMembershipId, ct);
+                var loaded = await LoadTaskAsync(ticketId, taskId, expectedVersion, ct);
+                if (loaded.Result is ObjectResult missing)
+                {
+                    return missing;
+                }
+
+                var task = loaded.Value!;
+                if (task.AssigneeMembershipId == assigneeMembershipId)
+                {
+                    return NoChange;
+                }
+
+                if (await CheckEligibleAssigneeAsync(ticketId, assigneeMembershipId, ct) is { } ineligible)
+                {
+                    return ineligible;
+                }
+
                 var old = task.AssigneeMembershipId;
                 task.Reassign(assigneeMembershipId, actor.MembershipId, now);
                 db.TicketActivities.Add(
@@ -224,18 +289,20 @@ public sealed class TicketTaskService(
                         task.Id
                     )
                 );
-                return (task, Event(task, TicketTaskChanges.Assigned));
+                return Event(task, TicketTaskChanges.Assigned);
             },
             ct
         );
-        return await MapOneAsync(actor, ticketId, taskId);
+        return written.Result is ObjectResult failure
+            ? failure
+            : await MapOneAsync(written.Value!, ticketId, taskId);
     }
 
     /// <summary>
     /// Atomic reorder of the COMPLETE task list of the ticket. Unknown ids (other ticket/tenant) are a 400; a missing task (created
     /// concurrently) or a stale version is a 409. Positions become 1..n in the given order.
     /// </summary>
-    public async Task<TicketTaskListDto> ReorderAsync(
+    public async Task<ActionResult<TicketTaskListDto>> ReorderAsync(
         Guid ticketId,
         IReadOnlyList<TaskOrderItem> order,
         CancellationToken ct
@@ -243,24 +310,25 @@ public sealed class TicketTaskService(
     {
         if (order.Select(o => o.TaskId).Distinct().Count() != order.Count)
         {
-            throw AppException.Validation("Tasks", "Each task may appear only once.");
+            return FieldError("Tasks", "Each task may appear only once.");
         }
 
-        var (_, actor) = await WriteAsync<TicketTask?>(
+        var written = await WriteAsync(
             ticketId,
             null,
             async (actor, ticket, now) =>
             {
-                RequireManager(actor, "Only Owners and Managers can reorder tasks.");
+                if (!actor.IsManager)
+                {
+                    return ActorAccess.Forbidden("Only Owners and Managers can reorder tasks.");
+                }
+
                 var current = await db
                     .TicketTasks.Where(t => t.TicketId == ticketId)
                     .ToDictionaryAsync(t => t.Id, ct);
                 if (order.Any(o => !current.ContainsKey(o.TaskId)))
                 {
-                    throw AppException.Validation(
-                        "Tasks",
-                        "Every task must belong to this ticket."
-                    );
+                    return FieldError("Tasks", "Every task must belong to this ticket.");
                 }
 
                 if (
@@ -268,9 +336,12 @@ public sealed class TicketTaskService(
                     || order.Any(o => current[o.TaskId].Version != o.Version)
                 )
                 {
-                    throw AppException.Conflict(
-                        "The task list was changed by someone else.",
-                        "Reload the tasks and retry."
+                    return new ConflictObjectResult(
+                        new ProblemDetails
+                        {
+                            Title = "The task list was changed by someone else.",
+                            Detail = "Reload the tasks and retry.",
+                        }
                     );
                 }
 
@@ -287,20 +358,19 @@ public sealed class TicketTaskService(
 
                 if (!moved)
                 {
-                    return (null, null);
+                    return NoChange;
                 }
 
                 db.TicketActivities.Add(
                     ticket.Record(TicketActivityType.TasksReordered, actor.UserId, now)
                 );
-                return (
-                    null,
-                    new TicketTaskEvent(ticketId, null, TicketTaskChanges.Reordered, null)
-                );
+                return new TicketTaskEvent(ticketId, null, TicketTaskChanges.Reordered, null);
             },
             ct
         );
-        return await BuildListAsync(actor, ticketId, false, CancellationToken.None);
+        return written.Result is ObjectResult failure
+            ? failure
+            : await BuildListAsync(written.Value!, ticketId, false, CancellationToken.None);
     }
 
     /// <summary>Kanban indicator for many tickets in ONE grouped query; tickets the caller may not see tasks of are simply absent.</summary>
@@ -310,7 +380,11 @@ public sealed class TicketTaskService(
     )
     {
         var actor = await access.ResolveAsync(ct);
-        RequireStaff(actor);
+        if (actor.IsCustomer)
+        {
+            throw AppException.Forbidden("Child tasks are not available to customers.");
+        }
+
         var ids = ticketIds.Distinct().ToList();
         if (ids.Count > MaxProgressTickets)
         {
@@ -341,30 +415,59 @@ public sealed class TicketTaskService(
 
     // ---------------------------------------------------------------- internals
 
-    private async Task<(T Result, TicketActor Actor)> WriteAsync<T>(
+    /// <summary>
+    /// Runs one task write in an authorized transaction. The change returns a failure (nothing is committed: the transaction is disposed
+    /// without commit), <see cref="NoChange"/>, or the realtime event to stage. The result carries the actor on success.
+    /// </summary>
+    private async Task<ActionResult<TicketActor>> WriteAsync(
         Guid ticketId,
         IReadOnlyCollection<Guid>? alsoLock,
-        Func<TicketActor, Ticket, DateTime, Task<(T Result, TicketTaskEvent? Event)>> change,
+        Func<TicketActor, Ticket, DateTime, Task<ActionResult<TicketTaskEvent?>>> change,
         CancellationToken ct
     )
     {
-        var (transaction, actor) = await access.BeginAuthorizedAsync(alsoLock, ct);
+        if (await access.TryBeginAuthorizedAsync(alsoLock, ct) is not { } begun)
+        {
+            return ActorAccess.AccessNoLongerValid();
+        }
+
+        var (transaction, actor) = begun;
         await using var _ = transaction;
-        RequireStaff(actor);
-        await access.LockTicketAsync(ticketId, ct);
+        if (actor.IsCustomer)
+        {
+            return CustomersExcluded();
+        }
+
+        if (!await access.TryLockTicketAsync(ticketId, ct))
+        {
+            return TicketNotFound();
+        }
+
         // Access is checked AFTER the lock, so a concurrent unassignment cannot slip in between check and commit.
-        var ticket =
-            await TaskTicket(actor, ticketId).SingleOrDefaultAsync(ct) ?? throw TicketNotFound();
+        var ticket = await TaskTicket(actor, ticketId).SingleOrDefaultAsync(ct);
+        if (ticket is null)
+        {
+            return TicketNotFound();
+        }
+
         if (TicketWorkflow.IsFinished(ticket.Status))
         {
-            throw AppException.Conflict(
-                "Child tasks are read-only while the ticket is resolved or closed.",
-                "Reopen the ticket to change its tasks."
+            return new ConflictObjectResult(
+                new ProblemDetails
+                {
+                    Title = "Child tasks are read-only while the ticket is resolved or closed.",
+                    Detail = "Reopen the ticket to change its tasks.",
+                }
             );
         }
 
-        var (result, ev) = await change(actor, ticket, clock.GetUtcNow().UtcDateTime);
-        if (ev is not null)
+        var outcome = await change(actor, ticket, clock.GetUtcNow().UtcDateTime);
+        if (outcome.Result is ObjectResult failure)
+        {
+            return failure;
+        }
+
+        if (outcome.Value is { } ev)
         {
             outbox.Stage(
                 ticket.TenantId,
@@ -383,19 +486,19 @@ public sealed class TicketTaskService(
         }
         catch (DbUpdateConcurrencyException)
         {
-            throw Stale();
+            return Stale();
         }
         catch (DbUpdateException ex)
             when (db.IsUniqueViolation(ex, UniqueConstraintKind.ActivitySequence))
         {
-            throw Stale();
+            return Stale();
         }
         catch (Exception ex) when (db.IsDeadlock(ex))
         {
-            throw Stale();
+            return Stale();
         }
 
-        return (result, actor);
+        return actor;
     }
 
     /// <summary>
@@ -416,7 +519,8 @@ public sealed class TicketTaskService(
         );
     }
 
-    private async Task RequireEligibleAssigneeAsync(
+    /// <returns>Null when the agent is assigned to the ticket; otherwise the 400 (not an eligible Agent) or 409 (not assigned).</returns>
+    private async Task<ObjectResult?> CheckEligibleAssigneeAsync(
         Guid ticketId,
         Guid membershipId,
         CancellationToken ct
@@ -428,29 +532,45 @@ public sealed class TicketTaskService(
                 .AnyAsync(a => a.TicketId == ticketId && a.MembershipId == membershipId, ct)
         )
         {
-            return;
+            return null;
         }
 
-        await access.RequireEligibleAgentsAsync([membershipId], ct); // 400: not an active Agent of this tenant
-        throw AppException.Conflict(
-            "The agent is not assigned to this ticket.",
-            "Assign the agent to the ticket first."
+        if (await access.GetEligibleAgentsAsync([membershipId], ct) is null)
+        {
+            return new BadRequestObjectResult(
+                new ProblemDetails
+                {
+                    Title = "Every assignee must be an active Agent of this organization.",
+                }
+            );
+        }
+
+        return new ConflictObjectResult(
+            new ProblemDetails
+            {
+                Title = "The agent is not assigned to this ticket.",
+                Detail = "Assign the agent to the ticket first.",
+            }
         );
     }
 
-    private async Task<TicketTask> LoadTaskAsync(
+    private async Task<ActionResult<TicketTask>> LoadTaskAsync(
         Guid ticketId,
         Guid taskId,
         int expectedVersion,
         CancellationToken ct
     )
     {
-        var task =
-            await db.TicketTasks.SingleOrDefaultAsync(
-                t => t.Id == taskId && t.TicketId == ticketId,
-                ct
-            ) ?? throw AppException.NotFound("Task not found.");
-        return task.Version == expectedVersion ? task : throw Stale();
+        var task = await db.TicketTasks.SingleOrDefaultAsync(
+            t => t.Id == taskId && t.TicketId == ticketId,
+            ct
+        );
+        if (task is null)
+        {
+            return new NotFoundObjectResult(new ProblemDetails { Title = "Task not found." });
+        }
+
+        return task.Version == expectedVersion ? task : Stale();
     }
 
     private async Task<TicketTaskListDto> BuildListAsync(
@@ -531,61 +651,63 @@ public sealed class TicketTaskService(
         });
     }
 
-    private static (string Title, string? Description) Validate(string? title, string? description)
+    /// <returns>Null when valid; otherwise the 400 for the first invalid field.</returns>
+    private static BadRequestObjectResult? Validate(
+        string? title,
+        string? description,
+        out string trimmedTitle,
+        out string? trimmedDescription
+    )
     {
-        var t = title?.Trim() ?? string.Empty;
-        if (t.Length is 0 or > TicketTask.TitleMaxLength)
+        trimmedTitle = title?.Trim() ?? string.Empty;
+        trimmedDescription = description?.Trim();
+        if (trimmedDescription is { Length: 0 })
         {
-            throw AppException.Validation(
+            trimmedDescription = null;
+        }
+
+        if (trimmedTitle.Length is 0 or > TicketTask.TitleMaxLength)
+        {
+            return FieldError(
                 "Title",
                 $"Title is required and must be at most {TicketTask.TitleMaxLength} characters."
             );
         }
 
-        var d = description?.Trim();
-        if (d is { Length: > TicketTask.DescriptionMaxLength })
-        {
-            throw AppException.Validation(
+        return trimmedDescription is { Length: > TicketTask.DescriptionMaxLength }
+            ? FieldError(
                 "Description",
                 $"Description must be at most {TicketTask.DescriptionMaxLength} characters."
-            );
-        }
-
-        return (t, string.IsNullOrEmpty(d) ? null : d);
+            )
+            : null;
     }
 
     private static TicketTaskEvent Event(TicketTask task, string change) =>
         new(task.TicketId, task.Id, change, task.Version);
 
-    private static void RequireStaff(TicketActor actor)
-    {
-        if (actor.IsCustomer)
-        {
-            throw AppException.Forbidden("Child tasks are not available to customers.");
-        }
-    }
+    /// <summary>"No change to persist": a null event leaves the outbox untouched while the write still commits.</summary>
+    private static readonly ActionResult<TicketTaskEvent?> NoChange = new(default(TicketTaskEvent));
 
-    private static void RequireManager(TicketActor actor, string message)
-    {
-        if (!actor.IsManager)
-        {
-            throw AppException.Forbidden(message);
-        }
-    }
+    private static ObjectResult CustomersExcluded() =>
+        ActorAccess.Forbidden("Child tasks are not available to customers.");
 
-    private static void RequireOwnTaskOrManager(TicketActor actor, TicketTask task)
-    {
-        if (!actor.IsManager && task.AssigneeMembershipId != actor.MembershipId)
-        {
-            throw AppException.Forbidden("Agents can only change their own tasks.");
-        }
-    }
+    private static ObjectResult? NotOwnTaskOrManager(TicketActor actor, TicketTask task) =>
+        !actor.IsManager && task.AssigneeMembershipId != actor.MembershipId
+            ? ActorAccess.Forbidden("Agents can only change their own tasks.")
+            : null;
 
-    private static AppException TicketNotFound() => AppException.NotFound("Ticket not found.");
+    private static BadRequestObjectResult FieldError(string field, string message) =>
+        new(new ValidationProblemDetails(new Dictionary<string, string[]> { [field] = [message] }));
 
-    private static AppException Stale() =>
-        AppException.Conflict(
-            "The task was changed by someone else.",
-            "Reload the tasks and retry."
+    private static NotFoundObjectResult TicketNotFound() =>
+        new(new ProblemDetails { Title = "Ticket not found." });
+
+    private static ConflictObjectResult Stale() =>
+        new(
+            new ProblemDetails
+            {
+                Title = "The task was changed by someone else.",
+                Detail = "Reload the tasks and retry.",
+            }
         );
 }

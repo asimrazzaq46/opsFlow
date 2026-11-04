@@ -31,7 +31,7 @@ public sealed class TicketsController(TicketService tickets, TicketWorkflowServi
         CancellationToken ct
     )
     {
-        var ticket = await tickets.CreateAsync(
+        var result = await tickets.CreateAsync(
             new CreateTicketCommand(
                 request.Title,
                 request.Description,
@@ -42,6 +42,12 @@ public sealed class TicketsController(TicketService tickets, TicketWorkflowServi
             ),
             ct
         );
+        if (result.Result is ObjectResult failure)
+        {
+            return this.Answer(failure);
+        }
+
+        var ticket = result.Value!;
         return Created($"/api/v1/tenants/{tenantId}/tickets/{ticket.Summary.Id}", ticket);
     }
 
@@ -103,19 +109,18 @@ public sealed class TicketsController(TicketService tickets, TicketWorkflowServi
         CancellationToken ct
     )
     {
-        return Ok(
-            await tickets.UpdateAsync(
-                ticketId,
-                new UpdateTicketCommand(
-                    request.Title,
-                    request.Description,
-                    request.Priority,
-                    request.CategoryId,
-                    request.Version
-                ),
-                ct
-            )
+        var result = await tickets.UpdateAsync(
+            ticketId,
+            new UpdateTicketCommand(
+                request.Title,
+                request.Description,
+                request.Priority,
+                request.CategoryId,
+                request.Version
+            ),
+            ct
         );
+        return result.Result is ObjectResult failure ? this.Answer(failure) : Ok(result.Value);
     }
 
     [HttpPost("{ticketId:guid}/status", Name = "ChangeTicketStatus")]
@@ -134,7 +139,8 @@ public sealed class TicketsController(TicketService tickets, TicketWorkflowServi
         CancellationToken ct
     )
     {
-        return Ok(await workflow.TransitionAsync(ticketId, request.Status, request.Version, ct));
+        var result = await workflow.TransitionAsync(ticketId, request.Status, request.Version, ct);
+        return result.Result is ObjectResult failure ? this.Answer(failure) : Ok(result.Value);
     }
 
     [HttpPost("{ticketId:guid}/reopen", Name = "ReopenTicket")]
@@ -153,7 +159,8 @@ public sealed class TicketsController(TicketService tickets, TicketWorkflowServi
         CancellationToken ct
     )
     {
-        return Ok(await workflow.ReopenAsync(ticketId, request.Version, ct));
+        var result = await workflow.ReopenAsync(ticketId, request.Version, ct);
+        return result.Result is ObjectResult failure ? this.Answer(failure) : Ok(result.Value);
     }
 
     [HttpGet("{ticketId:guid}/activity", Name = "ListTicketActivity")]

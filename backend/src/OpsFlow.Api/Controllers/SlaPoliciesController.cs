@@ -22,7 +22,8 @@ public sealed class SlaPoliciesController(SlaPolicyService policies) : Controlle
         CancellationToken ct
     )
     {
-        return Ok(await policies.ListAsync(ct));
+        var result = await policies.ListAsync(ct);
+        return result.Result is ObjectResult failure ? this.Answer(failure) : Ok(result.Value);
     }
 
     [HttpPost(Name = "CreateSlaPolicy")]
@@ -42,12 +43,18 @@ public sealed class SlaPoliciesController(SlaPolicyService policies) : Controlle
         CancellationToken ct
     )
     {
-        var policy = await policies.CreateAsync(
+        var result = await policies.CreateAsync(
             request.Priority,
             request.ResponseMinutes,
             request.ResolutionMinutes,
             ct
         );
+        if (result.Result is ObjectResult failure)
+        {
+            return this.Answer(failure);
+        }
+
+        var policy = result.Value!;
         return Created($"/api/v1/tenants/{tenantId}/sla-policies/{policy.Id}", policy);
     }
 
@@ -63,14 +70,13 @@ public sealed class SlaPoliciesController(SlaPolicyService policies) : Controlle
         CancellationToken ct
     )
     {
-        return Ok(
-            await policies.UpdateAsync(
-                policyId,
-                request.ResponseMinutes,
-                request.ResolutionMinutes,
-                ct
-            )
+        var result = await policies.UpdateAsync(
+            policyId,
+            request.ResponseMinutes,
+            request.ResolutionMinutes,
+            ct
         );
+        return result.Result is ObjectResult failure ? this.Answer(failure) : Ok(result.Value);
     }
 
     [HttpPut("{policyId:guid}/status", Name = "SetSlaPolicyStatus")]
@@ -90,7 +96,8 @@ public sealed class SlaPoliciesController(SlaPolicyService policies) : Controlle
         CancellationToken ct
     )
     {
-        await policies.SetActiveAsync(policyId, request.IsActive, ct);
-        return NoContent();
+        return await policies.SetActiveAsync(policyId, request.IsActive, ct) is { } failure
+            ? this.Answer(failure)
+            : NoContent();
     }
 }

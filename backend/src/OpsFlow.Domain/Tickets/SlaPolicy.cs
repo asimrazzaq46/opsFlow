@@ -54,17 +54,19 @@ public sealed class SlaPolicy : ITenantOwned
         UpdatedAtUtc = nowUtc;
     }
 
+    public const string TargetsRequirement =
+        "SLA targets must be 1..525600 minutes and resolution must not be shorter than response.";
+
+    public static bool AreTargetsValid(int responseMinutes, int resolutionMinutes) =>
+        responseMinutes is >= 1 and <= MaxMinutes
+        && resolutionMinutes is >= 1 and <= MaxMinutes
+        && resolutionMinutes >= responseMinutes;
+
     private static void Validate(int responseMinutes, int resolutionMinutes)
     {
-        if (
-            responseMinutes is < 1 or > MaxMinutes
-            || resolutionMinutes is < 1 or > MaxMinutes
-            || resolutionMinutes < responseMinutes
-        )
+        if (!AreTargetsValid(responseMinutes, resolutionMinutes))
         {
-            throw new ArgumentException(
-                "SLA targets must be 1..525600 minutes and resolution must not be shorter than response."
-            );
+            throw new ArgumentException(TargetsRequirement);
         }
     }
 }

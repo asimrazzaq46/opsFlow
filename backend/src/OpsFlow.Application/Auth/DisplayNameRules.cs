@@ -1,5 +1,3 @@
-using OpsFlow.Application.Common;
-
 namespace OpsFlow.Application.Auth;
 
 /// <summary>Shared display-name rules: trimmed, 2-100 characters, no control or invisible formatting characters.</summary>
@@ -8,20 +6,24 @@ public static class DisplayNameRules
     public const int MinLength = 2;
     public const int MaxLength = 100;
 
-    public static string Validate(string? value, string field)
+    /// <summary>True with the trimmed name when it is acceptable; otherwise false with a client-safe message.</summary>
+    public static bool TryValidate(string? value, out string name, out string error)
     {
-        var name = value?.Trim() ?? string.Empty;
+        name = value?.Trim() ?? string.Empty;
+        error = string.Empty;
         if (name.Length is < MinLength or > MaxLength)
         {
-            throw AppException.Validation(field, $"Use {MinLength} to {MaxLength} characters.");
+            error = $"Use {MinLength} to {MaxLength} characters.";
+            return false;
         }
 
         if (name.Any(c => char.IsControl(c) || char.GetUnicodeCategory(c) == System.Globalization.UnicodeCategory.Format))
         {
-            throw AppException.Validation(field, "Control or invisible formatting characters are not allowed.");
+            error = "Control or invisible formatting characters are not allowed.";
+            return false;
         }
 
-        return name;
+        return true;
     }
 
     /// <summary>Best-effort name from an external profile; falls back to the email's local part. Never throws.</summary>

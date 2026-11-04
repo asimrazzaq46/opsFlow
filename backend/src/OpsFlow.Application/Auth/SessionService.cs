@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -38,7 +40,8 @@ public sealed partial class SessionService(
 {
     private DateTime Now => clock.GetUtcNow().UtcDateTime;
 
-    public async Task<(SessionTokens Tokens, User User)> LoginAsync(
+    /// <summary>Null for every expected login failure, so nothing tells an unknown account from a wrong password, a lockout or an unavailable account.</summary>
+    public async Task<(SessionTokens Tokens, User User)?> LoginAsync(
         string email,
         string password,
         string? userAgent,
@@ -53,18 +56,18 @@ public sealed partial class SessionService(
         if (user is null || user.IsLockedOut(now) || !user.HasPassword)
         {
             hasher.SimulateVerify(password);
-            throw InvalidCredentials();
+            return null;
         }
 
         if (!hasher.Verify(user.PasswordHash, password))
         {
             await RegisterFailureAsync(user.Id, now, ct);
-            throw InvalidCredentials();
+            return null;
         }
 
         if (!user.IsActive || !user.IsEmailVerified)
         {
-            throw InvalidCredentials();
+            return null;
         }
 
         user.RecordSuccessfulLogin(
@@ -81,31 +84,43 @@ public sealed partial class SessionService(
     /// Re-authenticates a signed-in user with their password for a security-sensitive step. Uses the same lockout counter as login, so
     /// it cannot be used to guess passwords. Accounts without a local password are rejected: there is no passwordless fallback.
     /// </summary>
-    public async Task VerifyPasswordAsync(Guid userId, string password, CancellationToken ct)
+    /// <returns>Null when the password is correct; otherwise the failure to answer with.</returns>
+    public async Task<ObjectResult?> VerifyPasswordAsync(
+        Guid userId,
+        string password,
+        CancellationToken ct
+    )
     {
         var now = Now;
         var user = await db.Users.AsNoTracking().SingleAsync(u => u.Id == userId, ct);
         if (!user.HasPassword)
         {
-            throw AppException
-                .Forbidden(
-                    "This account has no password.",
-                    "Set a password with the password-reset flow first."
-                )
-                .WithCode("AUTH_PASSWORD_NOT_SET");
+            return new ObjectResult(
+                new ProblemDetails
+                {
+                    Title = "This account has no password.",
+                    Detail = "Set a password with the password-reset flow first.",
+                    Extensions = { ["code"] = "AUTH_PASSWORD_NOT_SET" },
+                }
+            )
+            {
+                StatusCode = StatusCodes.Status403Forbidden,
+            };
         }
 
         if (user.IsLockedOut(now))
         {
             hasher.SimulateVerify(password);
-            throw IncorrectPassword();
+            return IncorrectPassword();
         }
 
         if (!hasher.Verify(user.PasswordHash, password))
         {
             await RegisterFailureAsync(user.Id, now, ct);
-            throw IncorrectPassword();
+            return IncorrectPassword();
         }
+
+        return null;
     }
 
     /// <summary>Starts a brand-new session for an already authenticated user (used after a password change).</summary>
@@ -121,7 +136,7 @@ public sealed partial class SessionService(
     /// concurrency token on <c>UsedAtUtc</c>, so of N concurrent rotations exactly one persists. A reused token later than
     /// the grace window means theft: the whole session (token family) is revoked.
     /// </summary>
-    public async Task<(SessionTokens Tokens, User User)> RefreshAsync(
+    public async Task<ActionResult<(SessionTokens Tokens, User User)>> RefreshAsync(
         string? rawToken,
         string? userAgent,
         CancellationToken ct
@@ -129,33 +144,40 @@ public sealed partial class SessionService(
     {
         if (string.IsNullOrWhiteSpace(rawToken))
         {
-            throw InvalidRefresh();
+            return InvalidRefresh();
         }
 
         // Validate the JWT first (signature/issuer/audience/expiry/algorithm/type), then the stored hash + ownership.
-        var claims =
-            await tokenService.ValidateRefreshTokenAsync(rawToken) ?? throw InvalidRefresh();
+        var claims = await tokenService.ValidateRefreshTokenAsync(rawToken);
+        if (claims is null)
+        {
+            return InvalidRefresh();
+        }
+
         var now = Now;
         var hash = SecureToken.Hash(rawToken);
-        var token =
-            await db.RefreshTokens.SingleOrDefaultAsync(t => t.TokenHash == hash, ct)
-            ?? throw InvalidRefresh();
+        var token = await db.RefreshTokens.SingleOrDefaultAsync(t => t.TokenHash == hash, ct);
+        if (token is null)
+        {
+            return InvalidRefresh();
+        }
+
         var session = await db.UserSessions.SingleAsync(s => s.Id == token.SessionId, ct);
         if (session.Id != claims.SessionId || session.UserId != claims.UserId)
         {
-            throw InvalidRefresh();
+            return InvalidRefresh();
         }
 
         var user = await db.Users.SingleAsync(u => u.Id == session.UserId, ct);
 
         if (token.UsedAtUtc is { } usedAt)
         {
-            throw await ReuseAsync(session, usedAt, now, ct);
+            return await ReuseAsync(session, usedAt, now, ct);
         }
 
         if (!session.IsActive(now) || token.ExpiresAtUtc <= now || !user.IsActive)
         {
-            throw InvalidRefresh();
+            return InvalidRefresh();
         }
 
         token.MarkUsed(now);
@@ -182,7 +204,7 @@ public sealed partial class SessionService(
                 .SingleAsync(ct);
             // Clear() detached the session; reload it tracked so the revoke is persisted.
             session = await db.UserSessions.SingleAsync(s => s.Id == session.Id, ct);
-            throw await ReuseAsync(session, winnerUsedAt ?? now, Now, ct); // fresh Now: a stale timestamp from a stalled request would grant the wrong grace
+            return await ReuseAsync(session, winnerUsedAt ?? now, Now, ct); // fresh Now: a stale timestamp from a stalled request would grant the wrong grace
         }
 
         var access = tokenService.CreateAccessToken(user.Id, session.Id, user.AuthVersion, now);
@@ -256,16 +278,22 @@ public sealed partial class SessionService(
         ));
     }
 
-    public async Task RevokeAsync(Guid userId, Guid sessionId, CancellationToken ct)
+    /// <returns>False when the user has no such session.</returns>
+    public async Task<bool> RevokeAsync(Guid userId, Guid sessionId, CancellationToken ct)
     {
-        var session =
-            await db.UserSessions.SingleOrDefaultAsync(
-                s => s.Id == sessionId && s.UserId == userId,
-                ct
-            ) ?? throw AppException.NotFound("Session not found.");
+        var session = await db.UserSessions.SingleOrDefaultAsync(
+            s => s.Id == sessionId && s.UserId == userId,
+            ct
+        );
+        if (session is null)
+        {
+            return false;
+        }
+
         session.Revoke("revoked-by-user", Now);
         await db.SaveChangesAsync(ct);
         await connections.RequestAsync(CancellationToken.None);
+        return true;
     }
 
     private SessionTokens Start(User user, string? userAgent, DateTime now)
@@ -315,7 +343,7 @@ public sealed partial class SessionService(
         }
     }
 
-    private async Task<AppException> ReuseAsync(
+    private async Task<ObjectResult> ReuseAsync(
         UserSession session,
         DateTime usedAt,
         DateTime now,
@@ -324,12 +352,14 @@ public sealed partial class SessionService(
     {
         if (now - usedAt <= TimeSpan.FromSeconds(options.Value.RefreshToken.ReplayGraceSeconds))
         {
-            return AppException
-                .Conflict(
-                    "The refresh token was just used.",
-                    "Retry with the newest refresh token."
-                )
-                .WithCode("AUTH_REFRESH_TOKEN_IN_USE");
+            return new ConflictObjectResult(
+                new ProblemDetails
+                {
+                    Title = "The refresh token was just used.",
+                    Detail = "Retry with the newest refresh token.",
+                    Extensions = { ["code"] = "AUTH_REFRESH_TOKEN_IN_USE" },
+                }
+            );
         }
 
         session.Revoke("refresh-token-reuse", now);
@@ -341,18 +371,21 @@ public sealed partial class SessionService(
 
     private static DateTime Earliest(DateTime a, DateTime b) => a < b ? a : b;
 
-    private static AppException InvalidCredentials() =>
-        AppException
-            .Unauthorized("Invalid credentials or the account is not available.")
-            .WithCode("AUTH_INVALID_CREDENTIALS");
+    private static BadRequestObjectResult IncorrectPassword() =>
+        new(
+            new ValidationProblemDetails(
+                new Dictionary<string, string[]> { ["password"] = ["The password is incorrect."] }
+            )
+        );
 
-    private static AppException IncorrectPassword() =>
-        AppException.Validation("password", "The password is incorrect.");
-
-    private static AppException InvalidRefresh() =>
-        AppException
-            .Unauthorized("The session is invalid or has expired.")
-            .WithCode("AUTH_INVALID_REFRESH_TOKEN");
+    private static UnauthorizedObjectResult InvalidRefresh() =>
+        new(
+            new ProblemDetails
+            {
+                Title = "The session is invalid or has expired.",
+                Extensions = { ["code"] = "AUTH_INVALID_REFRESH_TOKEN" },
+            }
+        );
 
     [LoggerMessage(
         Level = LogLevel.Information,

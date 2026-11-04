@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -29,7 +31,10 @@ public sealed partial class AccountService(
 
     private DateTime Now => clock.GetUtcNow().UtcDateTime;
 
-    /// <summary>Creates a user; returns null when the email already exists (callers must not reveal that).</summary>
+    /// <summary>
+    /// Creates a user; returns null when the email already exists (callers must not reveal that). Request handlers validate the password policy
+    /// first; a violating password reaching this method is a configuration or programming defect.
+    /// </summary>
     public async Task<User?> CreateAsync(
         string address,
         string displayName,
@@ -38,7 +43,11 @@ public sealed partial class AccountService(
         CancellationToken ct
     )
     {
-        PasswordPolicy.EnsureValid(password);
+        if (PasswordPolicy.Validate(password) is { Count: > 0 } violations)
+        {
+            throw new ArgumentException(string.Join(" ", violations), nameof(password));
+        }
+
         var hash = hasher.Hash(password); // hashed BEFORE the duplicate check so both outcomes cost the same time
         var normalized = EmailAddress.Normalize(address);
         if (await db.Users.AnyAsync(u => u.NormalizedEmail == normalized, ct))
@@ -75,21 +84,26 @@ public sealed partial class AccountService(
         }
     }
 
-    public async Task ConfirmEmailAsync(Guid userId, string rawToken, CancellationToken ct)
+    /// <returns>False when the link is invalid, expired or already used.</returns>
+    public async Task<bool> ConfirmEmailAsync(Guid userId, string rawToken, CancellationToken ct)
     {
         var now = Now;
-        var token =
-            await tokens.FindUsableAsync(
-                userId,
-                UserTokenPurpose.EmailVerification,
-                rawToken,
-                now,
-                ct
-            ) ?? throw InvalidLink();
+        var token = await tokens.FindUsableAsync(
+            userId,
+            UserTokenPurpose.EmailVerification,
+            rawToken,
+            now,
+            ct
+        );
+        if (token is null)
+        {
+            return false;
+        }
+
         var user = await db.Users.SingleAsync(u => u.Id == userId, ct);
         token.MarkUsed(now);
         user.VerifyEmail(now);
-        await SaveSingleUseAsync(ct);
+        return await SaveSingleUseAsync(ct);
     }
 
     public async Task ResendVerificationAsync(string address, CancellationToken ct)
@@ -130,20 +144,20 @@ public sealed partial class AccountService(
         }
     }
 
-    public async Task ResetPasswordAsync(
+    /// <summary>The new password must already satisfy <see cref="PasswordPolicy"/>. False when the link is invalid, expired or already used.</summary>
+    public async Task<bool> ResetPasswordAsync(
         string address,
         string rawToken,
         string newPassword,
         CancellationToken ct
     )
     {
-        PasswordPolicy.EnsureValid(newPassword, "newPassword");
         var now = Now;
         var user = await FindByEmailAsync(address, ct);
         if (user is null)
         {
             hasher.SimulateVerify(newPassword);
-            throw InvalidLink();
+            return false;
         }
 
         var token = await tokens.FindUsableAsync(
@@ -155,31 +169,38 @@ public sealed partial class AccountService(
         );
         if (token is null || !user.IsActive)
         {
-            throw InvalidLink();
+            return false;
         }
 
         token.MarkUsed(now);
         user.SetPassword(hasher.Hash(newPassword), now);
         await sessions.MarkAllRevokedAsync(user.Id, "password-reset", now, ct); // same transaction as the new password
-        await SaveSingleUseAsync(ct);
+        if (!await SaveSingleUseAsync(ct))
+        {
+            return false;
+        }
+
         await connections.RequestAsync(CancellationToken.None); // committed: close the live realtime connections of the revoked sessions
         LogPasswordChanged(logger, user.Id, "reset");
+        return true;
     }
 
-    /// <summary>Changes the password and revokes EVERY session (including the caller's); the caller starts a fresh one.</summary>
-    public async Task<User> ChangePasswordAsync(
+    /// <summary>
+    /// Changes the password and revokes EVERY session (including the caller's); the caller starts a fresh one. The new password must already
+    /// satisfy <see cref="PasswordPolicy"/>. Null when the current password is wrong.
+    /// </summary>
+    public async Task<User?> ChangePasswordAsync(
         Guid userId,
         string currentPassword,
         string newPassword,
         CancellationToken ct
     )
     {
-        PasswordPolicy.EnsureValid(newPassword, "newPassword");
         var now = Now;
         var user = await db.Users.SingleAsync(u => u.Id == userId, ct);
         if (!hasher.Verify(user.PasswordHash, currentPassword))
         {
-            throw AppException.Validation("currentPassword", "The current password is incorrect.");
+            return null;
         }
 
         user.SetPassword(hasher.Hash(newPassword), now);
@@ -197,12 +218,21 @@ public sealed partial class AccountService(
     /// concurrent demotion/deactivation therefore either conflicts (and this retries against fresh data) or commits first and
     /// is seen by the re-check; a rejected or conflicting attempt rolls back completely.
     /// </summary>
-    public async Task DeactivateAsync(Guid userId, string password, CancellationToken ct)
+    /// <returns>Null when the account was deactivated; otherwise the failure to answer with.</returns>
+    public async Task<ObjectResult?> DeactivateAsync(
+        Guid userId,
+        string password,
+        CancellationToken ct
+    )
     {
         var current = await db.Users.AsNoTracking().SingleAsync(u => u.Id == userId, ct);
         if (!hasher.Verify(current.PasswordHash, password))
         {
-            throw AppException.Validation("password", "The password is incorrect.");
+            return new BadRequestObjectResult(
+                new ValidationProblemDetails(
+                    new Dictionary<string, string[]> { ["password"] = ["The password is incorrect."] }
+                )
+            );
         }
 
         for (var attempt = 0; attempt < MaxAttempts; attempt++)
@@ -231,9 +261,12 @@ public sealed partial class AccountService(
                 );
             if (soleOwner)
             {
-                throw AppException.Conflict(
-                    "You are the only active Owner of an organization.",
-                    "Promote another Owner before deactivating your account."
+                return new ConflictObjectResult(
+                    new ProblemDetails
+                    {
+                        Title = "You are the only active Owner of an organization.",
+                        Detail = "Promote another Owner before deactivating your account.",
+                    }
                 );
             }
 
@@ -265,13 +298,20 @@ public sealed partial class AccountService(
             await transaction.CommitAsync(ct);
             await connections.RequestAsync(CancellationToken.None);
             LogDeactivated(logger, userId);
-            return;
+            return null;
         }
 
-        throw AppException.Conflict("The organization changed concurrently.", "Please retry.");
+        return new ConflictObjectResult(
+            new ProblemDetails
+            {
+                Title = "The organization changed concurrently.",
+                Detail = "Please retry.",
+            }
+        );
     }
 
-    public async Task<UserProfileDto> GetProfileAsync(Guid userId, CancellationToken ct) =>
+    /// <returns>Null when the user does not exist.</returns>
+    public async Task<UserProfileDto?> GetProfileAsync(Guid userId, CancellationToken ct) =>
         await db
             .Users.AsNoTracking()
             .Where(u => u.Id == userId)
@@ -284,16 +324,24 @@ public sealed partial class AccountService(
                     i.UserId == u.Id && i.Provider == ExternalIdentityProvider.Google
                 )
             ))
-            .SingleOrDefaultAsync(ct) ?? throw AppException.NotFound("User not found.");
+            .SingleOrDefaultAsync(ct);
 
     /// <summary>Only the display name is editable here; email, password, status and memberships have their own protected flows.</summary>
-    public async Task<UserProfileDto> UpdateDisplayNameAsync(
+    public async Task<ActionResult<UserProfileDto>> UpdateDisplayNameAsync(
         Guid userId,
         string displayName,
         CancellationToken ct
     )
     {
-        var name = DisplayNameRules.Validate(displayName, "displayName");
+        if (!DisplayNameRules.TryValidate(displayName, out var name, out var error))
+        {
+            return new BadRequestObjectResult(
+                new ValidationProblemDetails(
+                    new Dictionary<string, string[]> { ["displayName"] = [error] }
+                )
+            );
+        }
+
         var user = await db.Users.SingleAsync(u => u.Id == userId, ct);
         if (user.DisplayName != name)
         {
@@ -302,7 +350,10 @@ public sealed partial class AccountService(
             LogDisplayNameChanged(logger, userId);
         }
 
-        return await GetProfileAsync(userId, ct);
+        var profile = await GetProfileAsync(userId, ct);
+        return profile is null
+            ? new NotFoundObjectResult(new ProblemDetails { Title = "User not found." })
+            : profile;
     }
 
     private Task<User?> FindByEmailAsync(string address, CancellationToken ct)
@@ -347,16 +398,18 @@ public sealed partial class AccountService(
         }
     }
 
-    private async Task SaveSingleUseAsync(CancellationToken ct)
+    /// <returns>False when the one-time token was consumed concurrently (nothing was persisted).</returns>
+    private async Task<bool> SaveSingleUseAsync(CancellationToken ct)
     {
         try
         {
             await db.SaveChangesAsync(ct);
+            return true;
         }
         catch (DbUpdateConcurrencyException)
         {
             db.ChangeTracker.Clear();
-            throw InvalidLink(); // the one-time token was consumed concurrently
+            return false;
         }
     }
 
@@ -379,9 +432,6 @@ public sealed partial class AccountService(
     }
 
     private string Base => app.Value.BaseUrl.TrimEnd('/');
-
-    private static AppException InvalidLink() =>
-        AppException.BadRequest("The link is invalid or has expired.");
 
     [LoggerMessage(
         Level = LogLevel.Information,

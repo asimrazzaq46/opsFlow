@@ -1,6 +1,8 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -52,29 +54,43 @@ public sealed partial class GoogleAuthService(
 
     private DateTime Now => clock.GetUtcNow().UtcDateTime;
 
-    public Task<GoogleChallenge> CreateSignInChallengeAsync(CancellationToken ct) =>
-        IssueAsync(GoogleChallengePurpose.SignIn, null, ct);
+    public async Task<ActionResult<GoogleChallenge>> CreateSignInChallengeAsync(CancellationToken ct) =>
+        Disabled() is { } off ? off : await IssueAsync(GoogleChallengePurpose.SignIn, null, ct);
 
     /// <summary>Linking requires a password re-authentication now; the challenge is then bound to this user and usable for linking only.</summary>
-    public async Task<GoogleChallenge> CreateLinkChallengeAsync(
+    public async Task<ActionResult<GoogleChallenge>> CreateLinkChallengeAsync(
         Guid userId,
         string password,
         CancellationToken ct
     )
     {
-        EnsureEnabled();
-        await sessions.VerifyPasswordAsync(userId, password, ct);
+        if (Disabled() is { } off)
+        {
+            return off;
+        }
+
+        if (await sessions.VerifyPasswordAsync(userId, password, ct) is { } failure)
+        {
+            return failure;
+        }
+
         return await IssueAsync(GoogleChallengePurpose.Link, userId, ct);
     }
 
-    public async Task<GoogleSignInResult> SignInAsync(
+    public async Task<ActionResult<GoogleSignInResult>> SignInAsync(
         string credential,
         string challengeId,
         string? userAgent,
         CancellationToken ct
     )
     {
-        var identity = await VerifyAsync(credential, challengeId, GoogleChallengePurpose.SignIn, null, ct);
+        var verified = await VerifyAsync(credential, challengeId, GoogleChallengePurpose.SignIn, null, ct);
+        if (verified.Result is ObjectResult rejected)
+        {
+            return rejected;
+        }
+
+        var identity = verified.Value!;
 
         // Second pass only after losing a concurrent first-sign-in race for the same subject: the winner's link then exists.
         for (var attempt = 0; attempt < 2; attempt++)
@@ -89,18 +105,33 @@ public sealed partial class GoogleAuthService(
                 return await SignInLinkedAsync(userId, identity.Subject, userAgent, ct);
             }
 
-            if (await TryRegisterAsync(identity, userAgent, ct) is { } registered)
+            var attemptResult = await TryRegisterAsync(identity, userAgent, ct);
+            if (attemptResult.Result is ObjectResult failure)
+            {
+                return failure;
+            }
+
+            if (attemptResult.Value is { } registered)
             {
                 return registered;
             }
         }
 
-        throw AppException.Conflict("The sign-in changed concurrently.", "Please retry.");
+        return new ConflictObjectResult(
+            new ProblemDetails { Title = "The sign-in changed concurrently.", Detail = "Please retry." }
+        );
     }
 
-    public async Task LinkAsync(Guid userId, string credential, string challengeId, CancellationToken ct)
+    /// <returns>Null when linked (or already linked to this user); otherwise the failure to answer with.</returns>
+    public async Task<ObjectResult?> LinkAsync(Guid userId, string credential, string challengeId, CancellationToken ct)
     {
-        var identity = await VerifyAsync(credential, challengeId, GoogleChallengePurpose.Link, userId, ct);
+        var verified = await VerifyAsync(credential, challengeId, GoogleChallengePurpose.Link, userId, ct);
+        if (verified.Result is ObjectResult rejected)
+        {
+            return rejected;
+        }
+
+        var identity = verified.Value!;
         var existing = await db
             .UserExternalIdentities.AsNoTracking()
             .Where(i => i.Provider == Google && (i.ProviderSubject == identity.Subject || i.UserId == userId))
@@ -110,15 +141,15 @@ public sealed partial class GoogleAuthService(
         {
             if (existing.Exists(e => e.ProviderSubject == identity.Subject && e.UserId == userId))
             {
-                return; // already linked to this user: idempotent
+                return null; // already linked to this user: idempotent
             }
 
-            throw IdentityConflict();
+            return IdentityConflict();
         }
 
         if (existing.Count > 0)
         {
-            throw AlreadyLinked();
+            return AlreadyLinked();
         }
 
         db.UserExternalIdentities.Add(UserExternalIdentity.Create(userId, Google, identity.Subject, Now));
@@ -134,20 +165,18 @@ public sealed partial class GoogleAuthService(
                 .Where(i => i.Provider == Google && i.ProviderSubject == identity.Subject)
                 .Select(i => (Guid?)i.UserId)
                 .SingleOrDefaultAsync(ct);
-            if (owner == userId)
-            {
-                return; // the same user won a concurrent duplicate request
-            }
-
-            throw IdentityConflict();
+            return owner == userId
+                ? null // the same user won a concurrent duplicate request
+                : IdentityConflict();
         }
         catch (DbUpdateException ex) when (db.IsUniqueViolation(ex, UniqueConstraintKind.ExternalIdentityUser))
         {
             db.ChangeTracker.Clear();
-            throw AlreadyLinked();
+            return AlreadyLinked();
         }
 
         LogLinked(logger, userId);
+        return null;
     }
 
     private async Task<GoogleChallenge> IssueAsync(
@@ -156,7 +185,6 @@ public sealed partial class GoogleAuthService(
         CancellationToken ct
     )
     {
-        EnsureEnabled();
         var (challengeId, _) = SecureToken.Generate();
         var (nonce, nonceHash) = SecureToken.Generate();
         var lifetime = TimeSpan.FromSeconds(options.Value.ChallengeLifetimeSeconds);
@@ -173,7 +201,7 @@ public sealed partial class GoogleAuthService(
     /// Consumes the challenge FIRST (atomic, so a replay or a parallel duplicate fails even before Google is contacted), then verifies the
     /// token and binds it to the challenge through the nonce. No database transaction is open during the network call.
     /// </summary>
-    private async Task<GoogleIdentity> VerifyAsync(
+    private async Task<ActionResult<GoogleIdentity>> VerifyAsync(
         string credential,
         string challengeId,
         GoogleChallengePurpose purpose,
@@ -181,10 +209,14 @@ public sealed partial class GoogleAuthService(
         CancellationToken ct
     )
     {
-        EnsureEnabled();
+        if (Disabled() is { } off)
+        {
+            return off;
+        }
+
         if (string.IsNullOrWhiteSpace(challengeId) || challengeId.Length > MaxChallengeIdLength)
         {
-            throw ChallengeInvalid();
+            return ChallengeInvalid();
         }
 
         var stored = await challenges.TakeAsync(Key(challengeId), ct) is { } json
@@ -192,10 +224,14 @@ public sealed partial class GoogleAuthService(
             : null;
         if (stored is null || stored.Purpose != purpose || stored.UserId != userId)
         {
-            throw ChallengeInvalid();
+            return ChallengeInvalid();
         }
 
-        var identity = await validator.ValidateAsync(credential, ct);
+        if (await validator.ValidateAsync(credential, ct) is not { } identity)
+        {
+            return TokenInvalid();
+        }
+
         if (
             identity.Nonce is null
             || !CryptographicOperations.FixedTimeEquals(
@@ -204,12 +240,12 @@ public sealed partial class GoogleAuthService(
             )
         )
         {
-            throw ChallengeInvalid();
+            return ChallengeInvalid();
         }
 
         if (string.IsNullOrEmpty(identity.Subject) || identity.Subject.Length > UserExternalIdentity.MaxSubjectLength)
         {
-            throw TokenInvalid();
+            return TokenInvalid();
         }
 
         if (
@@ -219,15 +255,17 @@ public sealed partial class GoogleAuthService(
             || !identity.Email.Contains('@', StringComparison.Ordinal)
         )
         {
-            throw AppException
-                .Forbidden("The Google account has no verified email address.")
-                .WithCode("AUTH_GOOGLE_EMAIL_NOT_VERIFIED");
+            return Fail(
+                StatusCodes.Status403Forbidden,
+                "AUTH_GOOGLE_EMAIL_NOT_VERIFIED",
+                "The Google account has no verified email address."
+            );
         }
 
         return identity;
     }
 
-    private async Task<GoogleSignInResult> SignInLinkedAsync(
+    private async Task<ActionResult<GoogleSignInResult>> SignInLinkedAsync(
         Guid userId,
         string subject,
         string? userAgent,
@@ -237,14 +275,17 @@ public sealed partial class GoogleAuthService(
         var user = await db.Users.SingleAsync(u => u.Id == userId, ct);
         if (!user.IsActive)
         {
-            throw AppException.Forbidden("This account is deactivated.").WithCode("AUTH_ACCOUNT_DISABLED");
+            return Fail(StatusCodes.Status403Forbidden, "AUTH_ACCOUNT_DISABLED", "This account is deactivated.");
         }
 
         if (!user.IsEmailVerified)
         {
-            throw AppException
-                .Forbidden("Confirm your email address first.", "Use the link in the confirmation email.")
-                .WithCode("AUTH_EMAIL_NOT_VERIFIED");
+            return Fail(
+                StatusCodes.Status403Forbidden,
+                "AUTH_EMAIL_NOT_VERIFIED",
+                "Confirm your email address first.",
+                "Use the link in the confirmation email."
+            );
         }
 
         var link = await db.UserExternalIdentities.SingleAsync(
@@ -259,8 +300,8 @@ public sealed partial class GoogleAuthService(
         return new GoogleSignInResult(tokens, user);
     }
 
-    /// <summary>Null when a concurrent request registered the same Google subject first (the caller then signs in through that link).</summary>
-    private async Task<GoogleSignInResult?> TryRegisterAsync(
+    /// <returns>The failure (Result), the registration, or a null Value when a concurrent request registered the same Google subject first (the caller then signs in through that link).</returns>
+    private async Task<ActionResult<GoogleSignInResult?>> TryRegisterAsync(
         GoogleIdentity identity,
         string? userAgent,
         CancellationToken ct
@@ -270,7 +311,7 @@ public sealed partial class GoogleAuthService(
         var normalized = EmailAddress.Normalize(email);
         if (await db.Users.AnyAsync(u => u.NormalizedEmail == normalized, ct))
         {
-            throw LinkRequired(); // never sign in to, or link, an existing account by email equality
+            return LinkRequired(); // never sign in to, or link, an existing account by email equality
         }
 
         var now = Now;
@@ -296,12 +337,12 @@ public sealed partial class GoogleAuthService(
         catch (DbUpdateException ex) when (db.IsUniqueViolation(ex, UniqueConstraintKind.ExternalIdentitySubject))
         {
             db.ChangeTracker.Clear();
-            return null;
+            return default(GoogleSignInResult);
         }
         catch (DbUpdateException ex) when (db.IsUniqueViolation(ex, UniqueConstraintKind.UserEmail))
         {
             db.ChangeTracker.Clear();
-            throw LinkRequired();
+            return LinkRequired();
         }
 
         LogRegistered(logger, user.Id);
@@ -322,42 +363,59 @@ public sealed partial class GoogleAuthService(
             );
     }
 
-    private void EnsureEnabled()
-    {
-        if (!options.Value.Enabled)
-        {
-            throw AppException.NotFound("Google sign-in is not enabled.").WithCode("AUTH_GOOGLE_DISABLED");
-        }
-    }
+    private ObjectResult? Disabled() =>
+        options.Value.Enabled
+            ? null
+            : Fail(StatusCodes.Status404NotFound, "AUTH_GOOGLE_DISABLED", "Google sign-in is not enabled.");
 
     // Only the hash of the challenge id is used as the key, so the store never holds a usable reference.
     private static string Key(string challengeId) => $"google:{SecureToken.Hash(challengeId)}";
 
-    private static AppException ChallengeInvalid() =>
-        AppException
-            .BadRequest("The Google sign-in request is invalid or has expired.", "Start the Google sign-in again.")
-            .WithCode("AUTH_GOOGLE_CHALLENGE_INVALID");
+    /// <summary>A failure carrying a stable <c>code</c>, which the API copies into the ProblemDetails body.</summary>
+    private static ObjectResult Fail(int status, string code, string title, string? detail = null) =>
+        new(new ProblemDetails
+        {
+            Title = title,
+            Detail = detail,
+            Status = status,
+            Extensions = { ["code"] = code },
+        })
+        {
+            StatusCode = status,
+        };
 
-    private static AppException TokenInvalid() =>
-        AppException.Unauthorized("The Google credential is invalid.").WithCode("AUTH_GOOGLE_TOKEN_INVALID");
+    private static ObjectResult ChallengeInvalid() =>
+        Fail(
+            StatusCodes.Status400BadRequest,
+            "AUTH_GOOGLE_CHALLENGE_INVALID",
+            "The Google sign-in request is invalid or has expired.",
+            "Start the Google sign-in again."
+        );
 
-    private static AppException LinkRequired() =>
-        AppException
-            .Conflict(
-                "An OpsFlow account already uses this email address.",
-                "Sign in with your password, then link Google from your account settings."
-            )
-            .WithCode("AUTH_GOOGLE_LINK_REQUIRED");
+    private static ObjectResult TokenInvalid() =>
+        Fail(StatusCodes.Status401Unauthorized, "AUTH_GOOGLE_TOKEN_INVALID", "The Google credential is invalid.");
 
-    private static AppException IdentityConflict() =>
-        AppException
-            .Conflict("This Google account is linked to a different OpsFlow account.")
-            .WithCode("AUTH_GOOGLE_IDENTITY_CONFLICT");
+    private static ObjectResult LinkRequired() =>
+        Fail(
+            StatusCodes.Status409Conflict,
+            "AUTH_GOOGLE_LINK_REQUIRED",
+            "An OpsFlow account already uses this email address.",
+            "Sign in with your password, then link Google from your account settings."
+        );
 
-    private static AppException AlreadyLinked() =>
-        AppException
-            .Conflict("Your account is already linked to another Google account.")
-            .WithCode("AUTH_GOOGLE_ALREADY_LINKED");
+    private static ObjectResult IdentityConflict() =>
+        Fail(
+            StatusCodes.Status409Conflict,
+            "AUTH_GOOGLE_IDENTITY_CONFLICT",
+            "This Google account is linked to a different OpsFlow account."
+        );
+
+    private static ObjectResult AlreadyLinked() =>
+        Fail(
+            StatusCodes.Status409Conflict,
+            "AUTH_GOOGLE_ALREADY_LINKED",
+            "Your account is already linked to another Google account."
+        );
 
     [LoggerMessage(Level = LogLevel.Information, Message = "User {UserId} signed in with Google (session {SessionId})")]
     private static partial void LogSignedIn(ILogger logger, Guid userId, Guid sessionId);

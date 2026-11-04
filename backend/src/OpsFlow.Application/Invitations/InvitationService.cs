@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -43,7 +45,7 @@ public sealed partial class InvitationService(
     /// The inviter's role is read from the database NOW (membership + user must be active), the tenant stamp is read first and
     /// rotated on commit, so an inviter who loses authorization during the request cannot commit the invitation.
     /// </summary>
-    public async Task<InvitationDto> CreateAsync(
+    public async Task<ActionResult<InvitationDto>> CreateAsync(
         string address,
         TenantRole role,
         CancellationToken ct
@@ -55,10 +57,14 @@ public sealed partial class InvitationService(
         {
             // Current DB authorization, not a role snapshot; the stamp is read first and rotated on commit.
             var tenant = await db.Tenants.SingleAsync(ct);
-            var actorRole = await actor.RequireActiveRoleAsync(ct);
+            if (await actor.GetActiveRoleAsync(ct) is not { } actorRole)
+            {
+                return ActorAccess.AccessNoLongerValid();
+            }
+
             if (!CanManage(actorRole, role))
             {
-                throw AppException.Forbidden(
+                return ActorAccess.Forbidden(
                     actorRole == TenantRole.Manager
                         ? "You can only invite Agents and Customers."
                         : "You are not allowed to invite members."
@@ -75,7 +81,7 @@ public sealed partial class InvitationService(
                 .ToListAsync(ct);
             if (open.Exists(i => i.IsPending(now)))
             {
-                throw AppException.Conflict("A pending invitation already exists for this email.");
+                return PendingInvitationExists();
             }
 
             open.ForEach(i => i.Revoke(now)); // expired leftovers must not block the unique pending index
@@ -104,7 +110,7 @@ public sealed partial class InvitationService(
             catch (DbUpdateException ex)
                 when (db.IsUniqueViolation(ex, UniqueConstraintKind.OpenInvitation))
             {
-                throw AppException.Conflict("A pending invitation already exists for this email.");
+                return PendingInvitationExists();
             }
 
             LogCreated(logger, invitation.Id, tenantId, role);
@@ -112,7 +118,7 @@ public sealed partial class InvitationService(
             return ToDto(invitation);
         }
 
-        throw AppException.Conflict("The organization changed concurrently.", "Please retry.");
+        return ChangedConcurrently();
     }
 
     public async Task<IReadOnlyList<InvitationDto>> ListPendingAsync(CancellationToken ct)
@@ -127,24 +133,34 @@ public sealed partial class InvitationService(
             .ToList();
     }
 
-    public async Task RevokeAsync(Guid invitationId, CancellationToken ct)
+    /// <returns>Null when the invitation was revoked; otherwise the failure to answer with.</returns>
+    public async Task<ObjectResult?> RevokeAsync(Guid invitationId, CancellationToken ct)
     {
         for (var attempt = 0; attempt < MaxAttempts; attempt++)
         {
             // Revoke follows the same current-authorization + stamp protocol (Managers only Agent invitations).
             var tenant = await db.Tenants.SingleAsync(ct);
-            var actorRole = await actor.RequireActiveRoleAsync(ct);
-            var invitation =
-                await db.Invitations.SingleOrDefaultAsync(i => i.Id == invitationId, ct)
-                ?? throw AppException.NotFound("Invitation not found.");
+            if (await actor.GetActiveRoleAsync(ct) is not { } actorRole)
+            {
+                return ActorAccess.AccessNoLongerValid();
+            }
+
+            var invitation = await db.Invitations.SingleOrDefaultAsync(i => i.Id == invitationId, ct);
+            if (invitation is null)
+            {
+                return new NotFoundObjectResult(new ProblemDetails { Title = "Invitation not found." });
+            }
+
             if (!CanManage(actorRole, invitation.Role))
             {
-                throw AppException.Forbidden("You can only revoke Agent invitations.");
+                return ActorAccess.Forbidden("You can only revoke Agent invitations.");
             }
 
             if (invitation.AcceptedAtUtc is not null)
             {
-                throw AppException.Conflict("The invitation was already accepted.");
+                return new ConflictObjectResult(
+                    new ProblemDetails { Title = "The invitation was already accepted." }
+                );
             }
 
             invitation.Revoke(clock.GetUtcNow().UtcDateTime);
@@ -152,7 +168,7 @@ public sealed partial class InvitationService(
             try
             {
                 await db.SaveChangesAsync(ct);
-                return;
+                return null;
             }
             catch (DbUpdateConcurrencyException)
             {
@@ -160,7 +176,7 @@ public sealed partial class InvitationService(
             }
         }
 
-        throw AppException.Conflict("The organization changed concurrently.", "Please retry.");
+        return ChangedConcurrently();
     }
 
     /// <summary>
@@ -170,25 +186,36 @@ public sealed partial class InvitationService(
     /// invitation creation, the email carries a one-time secret and is therefore sent directly (best effort) after the commit, never
     /// through the durable outbox; if delivery fails the invitation can be resent again after the cooldown.
     /// </summary>
-    public async Task<InvitationDto> ResendAsync(Guid invitationId, CancellationToken ct)
+    public async Task<ActionResult<InvitationDto>> ResendAsync(Guid invitationId, CancellationToken ct)
     {
         for (var attempt = 0; attempt < MaxAttempts; attempt++)
         {
             var tenant = await db.Tenants.SingleAsync(ct);
-            var actorRole = await actor.RequireActiveRoleAsync(ct);
-            var invitation =
-                await db.Invitations.AsNoTracking().SingleOrDefaultAsync(i => i.Id == invitationId, ct)
-                ?? throw AppException.NotFound("Invitation not found.");
+            if (await actor.GetActiveRoleAsync(ct) is not { } actorRole)
+            {
+                return ActorAccess.AccessNoLongerValid();
+            }
+
+            var invitation = await db.Invitations.AsNoTracking().SingleOrDefaultAsync(i => i.Id == invitationId, ct);
+            if (invitation is null)
+            {
+                return new NotFoundObjectResult(new ProblemDetails { Title = "Invitation not found." });
+            }
+
             if (!CanManage(actorRole, invitation.Role))
             {
-                throw AppException.Forbidden("You can only resend Agent and Customer invitations.");
+                return ActorAccess.Forbidden("You can only resend Agent and Customer invitations.");
             }
 
             if (!invitation.IsOpen)
             {
-                throw AppException
-                    .Conflict("The invitation was already accepted or revoked.")
-                    .WithCode("INVITATION_NOT_RESENDABLE");
+                return new ConflictObjectResult(
+                    new ProblemDetails
+                    {
+                        Title = "The invitation was already accepted or revoked.",
+                        Extensions = { ["code"] = "INVITATION_NOT_RESENDABLE" },
+                    }
+                );
             }
 
             if (
@@ -200,9 +227,13 @@ public sealed partial class InvitationService(
                 )
             )
             {
-                throw AppException
-                    .Conflict("This person is already an active member of the organization.")
-                    .WithCode("INVITATION_ALREADY_MEMBER");
+                return new ConflictObjectResult(
+                    new ProblemDetails
+                    {
+                        Title = "This person is already an active member of the organization.",
+                        Extensions = { ["code"] = "INVITATION_ALREADY_MEMBER" },
+                    }
+                );
             }
 
             var now = clock.GetUtcNow().UtcDateTime;
@@ -210,11 +241,17 @@ public sealed partial class InvitationService(
             var lastSentAt = invitation.ExpiresAtUtc - Lifetime;
             if (now - lastSentAt < ResendCooldown)
             {
-                throw new AppException(
-                    429,
-                    "The invitation was sent moments ago.",
-                    $"Wait {ResendCooldown.TotalMinutes:0} minutes before resending it."
-                ).WithCode("INVITATION_RESEND_COOLDOWN");
+                return new ObjectResult(
+                    new ProblemDetails
+                    {
+                        Title = "The invitation was sent moments ago.",
+                        Detail = $"Wait {ResendCooldown.TotalMinutes:0} minutes before resending it.",
+                        Extensions = { ["code"] = "INVITATION_RESEND_COOLDOWN" },
+                    }
+                )
+                {
+                    StatusCode = StatusCodes.Status429TooManyRequests,
+                };
             }
 
             var (token, hash) = SecureToken.Generate();
@@ -259,14 +296,14 @@ public sealed partial class InvitationService(
             return ToDto(invitation);
         }
 
-        throw AppException.Conflict("The organization changed concurrently.", "Please retry.");
+        return ChangedConcurrently();
     }
 
     /// <summary>
     /// Accepts an invitation as the signed-in user. Their verified email must match the invited address.
     /// Retry-safe: the same user repeating (or racing) the request gets the membership they already have.
     /// </summary>
-    public async Task<OrganizationDto> AcceptAsync(string token, CancellationToken ct)
+    public async Task<ActionResult<OrganizationDto>> AcceptAsync(string token, CancellationToken ct)
     {
         var now = clock.GetUtcNow().UtcDateTime;
         var hash = SecureToken.Hash(token);
@@ -277,13 +314,14 @@ public sealed partial class InvitationService(
 
         if (invitation is not null && invitation.AcceptedByUserId == userId)
         {
-            return await ExistingAsync(invitation.TenantId, userId, ct)
-                ?? throw InvalidInvitation();
+            return await ExistingAsync(invitation.TenantId, userId, ct) is { } repeated
+                ? repeated
+                : InvalidInvitation();
         }
 
         if (invitation is null || !invitation.IsPending(now))
         {
-            throw InvalidInvitation();
+            return InvalidInvitation();
         }
 
         var user = (await users.GetAsync([userId], ct)).GetValueOrDefault(userId);
@@ -293,15 +331,13 @@ public sealed partial class InvitationService(
             || Invitation.Normalize(user.Email) != invitation.NormalizedEmail
         )
         {
-            throw AppException.Forbidden(
-                "This invitation was issued to a different email address."
-            );
+            return ActorAccess.Forbidden("This invitation was issued to a different email address.");
         }
 
         // The inviter must still be authorized; after demotion/suspension/deactivation an old invitation no longer works.
         if (!await InviterStillAuthorizedAsync(invitation, ct))
         {
-            throw InvalidInvitation();
+            return InvalidInvitation();
         }
 
         using (tenantContext.Begin(invitation.TenantId))
@@ -309,11 +345,14 @@ public sealed partial class InvitationService(
             if (await db.Memberships.AnyAsync(m => m.UserId == userId, ct))
             {
                 // An existing member keeps their membership (role unchanged) and the invitation is consumed.
-                var existing =
-                    await ExistingAsync(invitation.TenantId, userId, ct)
-                    ?? throw AppException.Conflict(
-                        "You are already a member of this organization."
+                var existing = await ExistingAsync(invitation.TenantId, userId, ct);
+                if (existing is null)
+                {
+                    return new ConflictObjectResult(
+                        new ProblemDetails { Title = "You are already a member of this organization." }
                     );
+                }
+
                 await db
                     .Invitations.Where(i =>
                         i.Id == invitation.Id
@@ -349,9 +388,14 @@ public sealed partial class InvitationService(
                     .Select(i => i.AcceptedByUserId)
                     .SingleAsync(ct);
                 // The same user's concurrent request won: idempotent success, as for a repeated accept.
-                return acceptedBy == userId
-                    ? await ExistingAsync(invitation.TenantId, userId, ct) ?? throw InvalidInvitation()
-                    : throw InvalidInvitation();
+                if (acceptedBy != userId)
+                {
+                    return InvalidInvitation();
+                }
+
+                return await ExistingAsync(invitation.TenantId, userId, ct) is { } won
+                    ? won
+                    : InvalidInvitation();
             }
 
             db.Memberships.Add(
@@ -368,10 +412,14 @@ public sealed partial class InvitationService(
                 // The user became a member concurrently; the claim is rolled back and the existing membership returned.
                 db.ChangeTracker.Clear();
                 await transaction.RollbackAsync(ct);
-                return await ExistingAsync(invitation.TenantId, userId, ct)
-                    ?? throw AppException.Conflict(
-                        "The invitation could not be accepted.",
-                        "It may already have been used."
+                return await ExistingAsync(invitation.TenantId, userId, ct) is { } existingMember
+                    ? existingMember
+                    : new ConflictObjectResult(
+                        new ProblemDetails
+                        {
+                            Title = "The invitation could not be accepted.",
+                            Detail = "It may already have been used.",
+                        }
                     );
             }
         }
@@ -421,8 +469,20 @@ public sealed partial class InvitationService(
             : new OrganizationDto(tenant.Id, tenant.Name, tenant.Slug, membership!.Role);
     }
 
-    private static AppException InvalidInvitation() =>
-        AppException.BadRequest("The invitation is invalid or has expired.");
+    private static BadRequestObjectResult InvalidInvitation() =>
+        new(new ProblemDetails { Title = "The invitation is invalid or has expired." });
+
+    private static ConflictObjectResult PendingInvitationExists() =>
+        new(new ProblemDetails { Title = "A pending invitation already exists for this email." });
+
+    private static ConflictObjectResult ChangedConcurrently() =>
+        new(
+            new ProblemDetails
+            {
+                Title = "The organization changed concurrently.",
+                Detail = "Please retry.",
+            }
+        );
 
     private async Task SendAsync(Invitation invitation, string token, CancellationToken ct)
     {

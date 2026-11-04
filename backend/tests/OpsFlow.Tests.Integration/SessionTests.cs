@@ -203,14 +203,14 @@ public class SessionTests(ApiFactory factory) : IClassFixture<ApiFactory>
             var losing = Task.Run(() => loser.RefreshAsync(refresh1, null, CancellationToken.None));
             Assert.True(await factory.SaveGate.WaitUntilPausedAsync());
 
-            var (winning, _) = await winner.RefreshAsync(refresh1, null, CancellationToken.None); // commits first
+            var winning = (await winner.RefreshAsync(refresh1, null, CancellationToken.None)).Value.Tokens; // commits first
             factory.SaveGate.Resume();
-            var failure = await Assert.ThrowsAsync<AppException>(() => losing.WaitAsync(QueryGate.Timeout));
+            var failure = (await losing.WaitAsync(QueryGate.Timeout)).Result as Microsoft.AspNetCore.Mvc.ObjectResult;
 
-            Assert.Equal(409, failure.StatusCode);
+            Assert.Equal(409, failure!.StatusCode);
             var state = await TokenStateAsync(refresh1);
             Assert.Equal((2, 1, false), state); // original (used) + exactly ONE successor; session alive
-            Assert.NotNull((await winner.RefreshAsync(winning.RefreshToken, null, CancellationToken.None)).Tokens); // the one successor works
+            Assert.NotNull((await winner.RefreshAsync(winning.RefreshToken, null, CancellationToken.None)).Value.Tokens); // the one successor works
         }
     }
 
@@ -227,17 +227,17 @@ public class SessionTests(ApiFactory factory) : IClassFixture<ApiFactory>
             var losing = Task.Run(() => loser.RefreshAsync(refresh1, null, CancellationToken.None));
             Assert.True(await factory.SaveGate.WaitUntilPausedAsync());
 
-            var (winning, _) = await winner.RefreshAsync(refresh1, null, CancellationToken.None);
+            var winning = (await winner.RefreshAsync(refresh1, null, CancellationToken.None)).Value.Tokens;
             factory.Clock.Advance(TimeSpan.FromSeconds(11)); // the stalled request resumes after the grace window
             factory.SaveGate.Resume();
-            var failure = await Assert.ThrowsAsync<AppException>(() => losing.WaitAsync(QueryGate.Timeout));
+            var failure = (await losing.WaitAsync(QueryGate.Timeout)).Result as Microsoft.AspNetCore.Mvc.ObjectResult;
 
-            Assert.Equal(401, failure.StatusCode);
+            Assert.Equal(401, failure!.StatusCode);
             Assert.Equal((2, 1, true), await TokenStateAsync(refresh1)); // no second successor, session revoked
             var (_, fresh, freshScope) = await ServiceScopeAsync(); // a NEW request/scope, like in production
             using var _ = freshScope;
-            var successor = await Assert.ThrowsAsync<AppException>(() => fresh.RefreshAsync(winning.RefreshToken, null, CancellationToken.None));
-            Assert.Equal(401, successor.StatusCode); // the only successor died with its family
+            var successor = (await fresh.RefreshAsync(winning.RefreshToken, null, CancellationToken.None)).Result as Microsoft.AspNetCore.Mvc.ObjectResult;
+            Assert.Equal(401, successor!.StatusCode); // the only successor died with its family
         }
     }
 

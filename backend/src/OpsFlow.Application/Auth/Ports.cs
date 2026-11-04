@@ -91,10 +91,11 @@ public sealed record GoogleIdentity(
 public interface IGoogleIdTokenValidator
 {
     /// <summary>
-    /// Verifies the ID token cryptographically against Google's published keys and the configured client id. Throws an
-    /// <see cref="Common.AppException"/>: 401 for an invalid token, 503 when Google's keys cannot be retrieved.
+    /// Verifies the ID token cryptographically against Google's published keys and the configured client id. Returns null for an
+    /// invalid token; throws an <see cref="Common.AppException"/> (503) when Google's keys cannot be retrieved, which is a
+    /// dependency failure rather than a verdict on the credential.
     /// </summary>
-    Task<GoogleIdentity> ValidateAsync(string idToken, CancellationToken cancellationToken);
+    Task<GoogleIdentity?> ValidateAsync(string idToken, CancellationToken cancellationToken);
 }
 
 /// <summary>Shared short-lived store for one-time authentication challenges. Implementations must make <see cref="TakeAsync"/> atomic.</summary>

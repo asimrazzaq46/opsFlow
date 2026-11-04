@@ -100,7 +100,7 @@ public class DevelopmentSeedingTests(ApiFactory factory) : IClassFixture<ApiFact
     {
         var options = NewOptions("weak");
 
-        await Assert.ThrowsAsync<OpsFlow.Application.Common.AppException>(() => RunAsync(options)); // password policy rejects it
+        await Assert.ThrowsAsync<ArgumentException>(() => RunAsync(options)); // the password policy rejects the configured password: a startup configuration defect
 
         Assert.Equal((0, 0, 0), await CountsAsync(options));
     }

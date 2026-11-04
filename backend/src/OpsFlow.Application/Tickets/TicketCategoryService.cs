@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using OpsFlow.Application.Abstractions;
 using OpsFlow.Application.Common;
@@ -17,12 +18,17 @@ public sealed class TicketCategoryService(
     TimeProvider clock
 )
 {
-    public async Task<IReadOnlyList<TicketCategoryDto>> ListAsync(
+    /// <returns>Null when the caller's access is no longer valid.</returns>
+    public async Task<IReadOnlyList<TicketCategoryDto>?> ListAsync(
         bool includeInactive,
         CancellationToken ct
     )
     {
-        var role = await actor.RequireActiveRoleAsync(ct);
+        if (await actor.GetActiveRoleAsync(ct) is not { } role)
+        {
+            return null;
+        }
+
         var all = includeInactive && role is TenantRole.TenantOwner or TenantRole.Manager;
         // Role already checked above; the cache holds the tenant's full list (incl. inactive), filtered by role here.
         var categories = await cache.GetOrCreateAsync<List<TicketCategoryDto>>(
@@ -39,22 +45,33 @@ public sealed class TicketCategoryService(
         return categories.Where(c => all || c.IsActive).ToList();
     }
 
-    public async Task<TicketCategoryDto> CreateAsync(string name, CancellationToken ct)
+    public async Task<ActionResult<TicketCategoryDto>> CreateAsync(string name, CancellationToken ct)
     {
-        await using var transaction = await actor.BeginManagerAsync(
-            "Only Owners and Managers can manage categories.",
-            ct
-        ); // authorization stays valid until commit
+        if (await actor.TryBeginAuthorizedAsync(null, ct) is not { } begun)
+        {
+            return ActorAccess.AccessNoLongerValid();
+        }
+
+        var (transaction, role) = begun;
+        await using var _ = transaction; // every early return rolls back: nothing is committed
+        if (role is not (TenantRole.TenantOwner or TenantRole.Manager))
+        {
+            return ActorAccess.Forbidden("Only Owners and Managers can manage categories.");
+        }
         var normalized = TicketCategory.Normalize(name);
         if (await db.TicketCategories.AnyAsync(c => c.NormalizedName == normalized, ct))
         {
-            throw AppException.Conflict("A category with this name already exists.");
+            return DuplicateName();
         }
 
         var category = TicketCategory.Create(actor.TenantId, name, clock.GetUtcNow().UtcDateTime);
         db.TicketCategories.Add(category);
         outbox.StageCacheInvalidation(actor.TenantId, CacheResources.Categories);
-        await SaveAsync(ct);
+        if (await SaveAsync(ct) is { } saveFailure)
+        {
+            return saveFailure;
+        }
+
         await transaction.CommitAsync(ct);
         await cache.InvalidateAsync(
             actor.TenantId,
@@ -64,12 +81,19 @@ public sealed class TicketCategoryService(
         return new TicketCategoryDto(category.Id, category.Name, category.IsActive);
     }
 
-    public async Task<TicketCategoryDto> RenameAsync(Guid id, string name, CancellationToken ct)
+    public async Task<ActionResult<TicketCategoryDto>> RenameAsync(Guid id, string name, CancellationToken ct)
     {
-        await using var transaction = await actor.BeginManagerAsync(
-            "Only Owners and Managers can manage categories.",
-            ct
-        );
+        if (await actor.TryBeginAuthorizedAsync(null, ct) is not { } begun)
+        {
+            return ActorAccess.AccessNoLongerValid();
+        }
+
+        var (transaction, role) = begun;
+        await using var _ = transaction; // every early return rolls back: nothing is committed
+        if (role is not (TenantRole.TenantOwner or TenantRole.Manager))
+        {
+            return ActorAccess.Forbidden("Only Owners and Managers can manage categories.");
+        }
         var normalized = TicketCategory.Normalize(name);
         if (
             await db.TicketCategories.AnyAsync(
@@ -78,14 +102,22 @@ public sealed class TicketCategoryService(
             )
         )
         {
-            throw AppException.Conflict("A category with this name already exists.");
+            return DuplicateName();
         }
 
-        var category =
-            await db.TicketCategories.SingleOrDefaultAsync(c => c.Id == id, ct) ?? throw NotFound();
+        var category = await db.TicketCategories.SingleOrDefaultAsync(c => c.Id == id, ct);
+        if (category is null)
+        {
+            return CategoryNotFound();
+        }
+
         category.Rename(name, clock.GetUtcNow().UtcDateTime);
         outbox.StageCacheInvalidation(actor.TenantId, CacheResources.Categories);
-        await SaveAsync(ct);
+        if (await SaveAsync(ct) is { } saveFailure)
+        {
+            return saveFailure;
+        }
+
         await transaction.CommitAsync(ct);
         await cache.InvalidateAsync(
             actor.TenantId,
@@ -95,14 +127,26 @@ public sealed class TicketCategoryService(
         return new TicketCategoryDto(category.Id, category.Name, category.IsActive);
     }
 
-    public async Task SetActiveAsync(Guid id, bool isActive, CancellationToken ct)
+    /// <returns>Null when applied; otherwise the failure to answer with.</returns>
+    public async Task<ObjectResult?> SetActiveAsync(Guid id, bool isActive, CancellationToken ct)
     {
-        await using var transaction = await actor.BeginManagerAsync(
-            "Only Owners and Managers can manage categories.",
-            ct
-        );
-        var category =
-            await db.TicketCategories.SingleOrDefaultAsync(c => c.Id == id, ct) ?? throw NotFound();
+        if (await actor.TryBeginAuthorizedAsync(null, ct) is not { } begun)
+        {
+            return ActorAccess.AccessNoLongerValid();
+        }
+
+        var (transaction, role) = begun;
+        await using var _ = transaction; // every early return rolls back: nothing is committed
+        if (role is not (TenantRole.TenantOwner or TenantRole.Manager))
+        {
+            return ActorAccess.Forbidden("Only Owners and Managers can manage categories.");
+        }
+        var category = await db.TicketCategories.SingleOrDefaultAsync(c => c.Id == id, ct);
+        if (category is null)
+        {
+            return CategoryNotFound();
+        }
+
         category.SetActive(isActive, clock.GetUtcNow().UtcDateTime);
         outbox.StageCacheInvalidation(actor.TenantId, CacheResources.Categories);
         await db.SaveChangesAsync(ct);
@@ -112,20 +156,27 @@ public sealed class TicketCategoryService(
             CacheResources.Categories,
             CancellationToken.None
         );
+        return null;
     }
 
-    private async Task SaveAsync(CancellationToken ct)
+    /// <returns>Null when saved; the 409 when the name is taken.</returns>
+    private async Task<ObjectResult?> SaveAsync(CancellationToken ct)
     {
         try
         {
             await db.SaveChangesAsync(ct);
+            return null;
         }
         catch (DbUpdateException ex)
             when (db.IsUniqueViolation(ex, UniqueConstraintKind.CategoryName))
         {
-            throw AppException.Conflict("A category with this name already exists.");
+            return DuplicateName();
         }
     }
 
-    private static AppException NotFound() => AppException.NotFound("Category not found.");
+    private static ConflictObjectResult DuplicateName() =>
+        new(new ProblemDetails { Title = "A category with this name already exists." });
+
+    private static NotFoundObjectResult CategoryNotFound() =>
+        new(new ProblemDetails { Title = "Category not found." });
 }

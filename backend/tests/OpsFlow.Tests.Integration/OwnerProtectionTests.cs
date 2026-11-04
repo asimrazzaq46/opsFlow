@@ -120,7 +120,7 @@ public class OwnerProtectionTests(ApiFactory factory) : IClassFixture<ApiFactory
             Assert.NotEqual(before.Stamp, afterWinner.Stamp);
 
             factory.Gate.Resume();
-            var failure = await Assert.ThrowsAsync<AppException>(() => losing.WaitAsync(QueryGate.Timeout));
+            var failure = await ServiceOutcome.FailureAsync(losing.WaitAsync(QueryGate.Timeout));
 
             // the stale save hit the stamp, rolled back completely, and the retry saw owner2 is no longer an Owner
             Assert.Equal(403, failure.StatusCode);
@@ -150,7 +150,7 @@ public class OwnerProtectionTests(ApiFactory factory) : IClassFixture<ApiFactory
             var afterWinner = await StateAsync(org.Id, owner2);
 
             factory.Gate.Resume();
-            var failure = await Assert.ThrowsAsync<AppException>(() => stepDown.WaitAsync(QueryGate.Timeout));
+            var failure = await ServiceOutcome.FailureAsync(stepDown.WaitAsync(QueryGate.Timeout));
 
             Assert.Equal(409, failure.StatusCode);
             var after = await StateAsync(org.Id, owner1);
@@ -243,7 +243,7 @@ public class OwnerProtectionTests(ApiFactory factory) : IClassFixture<ApiFactory
 
             await accounts2.DeactivateAsync(f.Owner2.UserId, ApiClient.Password, CancellationToken.None); // commits first
             factory.Gate.Resume();
-            var failure = await Assert.ThrowsAsync<AppException>(() => first.WaitAsync(QueryGate.Timeout));
+            var failure = await ServiceOutcome.FailureAsync(first.WaitAsync(QueryGate.Timeout));
 
             Assert.Equal(409, failure.StatusCode); // the retry re-counted and saw owner2 gone
         }
@@ -273,7 +273,7 @@ public class OwnerProtectionTests(ApiFactory factory) : IClassFixture<ApiFactory
             await winner.ChangeRoleAsync(f.Membership2, TenantRole.Agent, CancellationToken.None); // the actor loses Owner
             var stampAfterWinner = (await StateAsync(f.Org.Id, agentId)).Stamp;
             factory.SaveGate.Resume();
-            var failure = await Assert.ThrowsAsync<AppException>(() => losing.WaitAsync(QueryGate.Timeout));
+            var failure = await ServiceOutcome.FailureAsync(losing.WaitAsync(QueryGate.Timeout));
 
             Assert.Equal(403, failure.StatusCode);
             var after = await StateAsync(f.Org.Id, agentId);
@@ -300,7 +300,7 @@ public class OwnerProtectionTests(ApiFactory factory) : IClassFixture<ApiFactory
             await winner.SetActiveAsync(f.Membership2, false, CancellationToken.None); // the actor is suspended
             factory.SaveGate.Resume();
 
-            Assert.Equal(403, (await Assert.ThrowsAsync<AppException>(() => losing.WaitAsync(QueryGate.Timeout))).StatusCode);
+            Assert.Equal(403, (await ServiceOutcome.FailureAsync(losing.WaitAsync(QueryGate.Timeout))).StatusCode);
             Assert.False((await f.Owner1.MembersAsync(f.Org.Id)).Single(m => m.Id == suspendedId).IsActive);
         }
     }
@@ -320,7 +320,7 @@ public class OwnerProtectionTests(ApiFactory factory) : IClassFixture<ApiFactory
             Assert.Equal(HttpStatusCode.NoContent, (await f.Owner2.PostAsync("/api/v1/auth/deactivate", new { password = ApiClient.Password })).StatusCode);
             factory.SaveGate.Resume();
 
-            Assert.Equal(403, (await Assert.ThrowsAsync<AppException>(() => losing.WaitAsync(QueryGate.Timeout))).StatusCode);
+            Assert.Equal(403, (await ServiceOutcome.FailureAsync(losing.WaitAsync(QueryGate.Timeout))).StatusCode);
             Assert.Equal(TenantRole.Agent, (await StateAsync(f.Org.Id, agentId)).Role);
         }
     }

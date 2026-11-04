@@ -329,7 +329,7 @@ public class TicketWorkflowTests(ApiFactory factory) : IClassFixture<ApiFactory>
             await winner.AssignAsync(ticket.Id, [w.Agent1Membership], null, CancellationToken.None); // commits first
             factory.SaveGate.Resume();
 
-            var failure = await Assert.ThrowsAsync<AppException>(() => losing.WaitAsync(QueryGate.Timeout));
+            var failure = await ServiceOutcome.FailureAsync(losing.WaitAsync(QueryGate.Timeout));
             Assert.Equal(409, failure.StatusCode); // its retry re-checked and found the agent already assigned
         }
 
@@ -365,7 +365,7 @@ public class TicketWorkflowTests(ApiFactory factory) : IClassFixture<ApiFactory>
             (await w.Owner.PutAsync(w.Url($"members/{w.ManagerMembership}/role"), new { role = "Agent" })).EnsureSuccessStatusCode(); // authorization is lost mid-request
             factory.SaveGate.Resume();
 
-            Assert.Equal(403, (await Assert.ThrowsAsync<AppException>(() => assigning.WaitAsync(QueryGate.Timeout))).StatusCode);
+            Assert.Equal(403, (await ServiceOutcome.FailureAsync(assigning.WaitAsync(QueryGate.Timeout))).StatusCode);
         }
 
         Assert.Equal("Open", (await w.GetTicketAsync(w.Owner, ticket.Id)).Status);
@@ -391,7 +391,7 @@ public class TicketWorkflowTests(ApiFactory factory) : IClassFixture<ApiFactory>
             await winner.ReopenAsync(ticket.Id, null, CancellationToken.None);
             factory.SaveGate.Resume();
 
-            Assert.Equal(409, (await Assert.ThrowsAsync<AppException>(() => losing.WaitAsync(QueryGate.Timeout))).StatusCode);
+            Assert.Equal(409, (await ServiceOutcome.FailureAsync(losing.WaitAsync(QueryGate.Timeout))).StatusCode);
         }
 
         var sla = await w.SlaAsync(ticket.Id);
@@ -433,7 +433,7 @@ public class TicketWorkflowTests(ApiFactory factory) : IClassFixture<ApiFactory>
             await winner.TransitionAsync(ticket.Id, TicketStatus.Resolved, null, CancellationToken.None);
             factory.SaveGate.Resume();
 
-            Assert.Equal(409, (await Assert.ThrowsAsync<AppException>(() => losing.WaitAsync(QueryGate.Timeout))).StatusCode);
+            Assert.Equal(409, (await ServiceOutcome.FailureAsync(losing.WaitAsync(QueryGate.Timeout))).StatusCode);
         }
 
         var after = await w.GetTicketAsync(w.Manager, ticket.Id);

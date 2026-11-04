@@ -17,8 +17,8 @@ public sealed partial class OrganizationService(
 {
     private const int MaxSlugLength = 50;
 
-    /// <summary>Creates the tenant and its first Owner membership in one atomic SaveChanges.</summary>
-    public async Task<OrganizationDto> CreateAsync(Guid userId, string name, CancellationToken ct)
+    /// <summary>Creates the tenant and its first Owner membership in one atomic SaveChanges; null when a concurrent creation took the slug.</summary>
+    public async Task<OrganizationDto?> CreateAsync(Guid userId, string name, CancellationToken ct)
     {
         name = name.Trim();
         var tenantId = Guid.NewGuid();
@@ -36,11 +36,8 @@ public sealed partial class OrganizationService(
         catch (DbUpdateException ex)
             when (db.IsUniqueViolation(ex, UniqueConstraintKind.TenantSlug))
         {
-            // Only the slug race is a 409; other DB failures propagate as a 500.
-            throw AppException.Conflict(
-                "The organization could not be created.",
-                "Please try again."
-            );
+            // Only the slug race is an expected outcome; other DB failures propagate as a 500.
+            return null;
         }
 
         LogCreated(logger, tenantId, userId);
@@ -59,12 +56,13 @@ public sealed partial class OrganizationService(
             select new OrganizationDto(t.Id, t.Name, t.Slug, m.Role)
         ).ToListAsync(ct);
 
-    public async Task<OrganizationDto> GetCurrentAsync(CancellationToken ct)
+    /// <returns>Null when the tenant does not exist.</returns>
+    public async Task<OrganizationDto?> GetCurrentAsync(CancellationToken ct)
     {
-        var tenant =
-            await db.Tenants.SingleOrDefaultAsync(ct)
-            ?? throw AppException.NotFound("Organization not found.");
-        return new OrganizationDto(tenant.Id, tenant.Name, tenant.Slug, tenantContext.Role!.Value);
+        var tenant = await db.Tenants.SingleOrDefaultAsync(ct);
+        return tenant is null
+            ? null
+            : new OrganizationDto(tenant.Id, tenant.Name, tenant.Slug, tenantContext.Role!.Value);
     }
 
     private async Task<string> UniqueSlugAsync(string name, CancellationToken ct)

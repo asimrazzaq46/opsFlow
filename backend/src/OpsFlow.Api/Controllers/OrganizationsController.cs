@@ -39,6 +39,12 @@ public sealed class OrganizationsController(OrganizationService organizations, I
     )
     {
         var org = await organizations.CreateAsync(user.UserId, request.Name, ct);
-        return Created($"/api/v1/tenants/{org.Id}", org);
+        return org is null
+            ? Problem(
+                statusCode: StatusCodes.Status409Conflict,
+                title: "The organization could not be created.",
+                detail: "Please try again."
+            )
+            : Created($"/api/v1/tenants/{org.Id}", org);
     }
 }

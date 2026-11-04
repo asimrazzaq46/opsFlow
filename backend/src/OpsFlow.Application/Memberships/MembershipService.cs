@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using OpsFlow.Application.Abstractions;
@@ -52,11 +53,14 @@ public sealed partial class MembershipService(
         return new PagedResult<MemberDto>(items, page, pageSize, total);
     }
 
-    public Task ChangeRoleAsync(Guid membershipId, TenantRole role, CancellationToken ct)
+    /// <returns>Null when the change was applied; otherwise the failure to answer with.</returns>
+    public Task<ObjectResult?> ChangeRoleAsync(Guid membershipId, TenantRole role, CancellationToken ct)
     {
         if (!role.IsStaff())
         {
-            throw AppException.BadRequest("Only staff roles can be assigned.");
+            return Task.FromResult<ObjectResult?>(
+                new BadRequestObjectResult(new ProblemDetails { Title = "Only staff roles can be assigned." })
+            );
         }
 
         return UpdateAsync(
@@ -66,7 +70,7 @@ public sealed partial class MembershipService(
         );
     }
 
-    public Task SetActiveAsync(Guid membershipId, bool isActive, CancellationToken ct) =>
+    public Task<ObjectResult?> SetActiveAsync(Guid membershipId, bool isActive, CancellationToken ct) =>
         UpdateAsync(membershipId, m => m.SetActive(isActive, clock.GetUtcNow().UtcDateTime), ct);
 
     /// <summary>
@@ -75,7 +79,7 @@ public sealed partial class MembershipService(
     /// actor's or an Owner's authorization (demotion, suspension, deactivation) makes this commit fail; the retry then
     /// re-reads the actor's CURRENT authorization and the Owner count against fresh data. Rejected attempts roll back fully.
     /// </summary>
-    private async Task UpdateAsync(
+    private async Task<ObjectResult?> UpdateAsync(
         Guid membershipId,
         Action<Membership> change,
         CancellationToken ct
@@ -85,14 +89,22 @@ public sealed partial class MembershipService(
         {
             // Read the stamp first, then the actor's current authorization (membership + user status); every mutation rotates the stamp.
             var tenant = await db.Tenants.SingleAsync(ct);
-            await actor.RequireOwnerAsync(ct);
+            if (await actor.CheckOwnerAsync(ct) is { } notOwner)
+            {
+                return notOwner;
+            }
 
-            var member =
-                await db.Memberships.SingleOrDefaultAsync(m => m.Id == membershipId, ct)
-                ?? throw AppException.NotFound("Member not found.");
+            var member = await db.Memberships.SingleOrDefaultAsync(m => m.Id == membershipId, ct);
+            if (member is null)
+            {
+                return new NotFoundObjectResult(new ProblemDetails { Title = "Member not found." });
+            }
+
             if (!member.Role.IsStaff())
             {
-                throw AppException.BadRequest("Only staff memberships can be managed here.");
+                return new BadRequestObjectResult(
+                    new ProblemDetails { Title = "Only staff memberships can be managed here." }
+                );
             }
 
             var removesUsableOwner =
@@ -108,7 +120,9 @@ public sealed partial class MembershipService(
                 var otherOwners = await db.UsableOwners().CountAsync(m => m.Id != member.Id, ct);
                 if (otherOwners == 0)
                 {
-                    throw AppException.Conflict("A tenant must keep at least one active Owner.");
+                    return new ConflictObjectResult(
+                        new ProblemDetails { Title = "A tenant must keep at least one active Owner." }
+                    );
                 }
             }
 
@@ -118,7 +132,7 @@ public sealed partial class MembershipService(
             {
                 await db.SaveChangesAsync(ct);
                 LogChanged(logger, member.TenantId, member.Id, member.Role, member.Status);
-                return;
+                return null;
             }
             catch (DbUpdateConcurrencyException)
             {
@@ -126,7 +140,13 @@ public sealed partial class MembershipService(
             }
         }
 
-        throw AppException.Conflict("The membership was changed concurrently.", "Please retry.");
+        return new ConflictObjectResult(
+            new ProblemDetails
+            {
+                Title = "The membership was changed concurrently.",
+                Detail = "Please retry.",
+            }
+        );
     }
 
     [LoggerMessage(

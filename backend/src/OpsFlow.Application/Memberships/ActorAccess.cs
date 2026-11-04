@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using OpsFlow.Application.Abstractions;
@@ -16,7 +18,30 @@ public sealed class ActorAccess(IOpsFlowDbContext db, ITenantContext tenantConte
 {
     public Guid TenantId => tenantContext.TenantId!.Value;
 
-    public async Task<TenantRole> RequireActiveRoleAsync(CancellationToken ct)
+    /// <summary>A 403 answer for a caller that lacks permission (title is client-safe).</summary>
+    public static ObjectResult Forbidden(string title) =>
+        new(new ProblemDetails { Title = title }) { StatusCode = StatusCodes.Status403Forbidden };
+
+    /// <summary>The 403 answer for an actor whose membership or account is no longer active.</summary>
+    public static ObjectResult AccessNoLongerValid() =>
+        Forbidden("Your access to this organization is no longer valid.");
+
+    /// <summary>Throws Forbidden for callers shared with GraphQL; request handlers use <see cref="GetActiveRoleAsync"/>.</summary>
+    public async Task<TenantRole> RequireActiveRoleAsync(CancellationToken ct) =>
+        await GetActiveRoleAsync(ct)
+        ?? throw AppException.Forbidden("Your access to this organization is no longer valid.");
+
+    /// <returns>Null for an active Owner; otherwise the 403 to answer with.</returns>
+    public async Task<ObjectResult?> CheckOwnerAsync(CancellationToken ct) =>
+        await GetActiveRoleAsync(ct) switch
+        {
+            null => AccessNoLongerValid(),
+            TenantRole.TenantOwner => null,
+            _ => Forbidden("Only an active Owner can change memberships."),
+        };
+
+    /// <returns>The actor's CURRENT role, or null when the membership or the user account is no longer active.</returns>
+    public async Task<TenantRole?> GetActiveRoleAsync(CancellationToken ct)
     {
         var actorId = tenantContext.MembershipId;
         TenantRole? role = actorId is null
@@ -29,8 +54,7 @@ public sealed class ActorAccess(IOpsFlowDbContext db, ITenantContext tenantConte
                 )
                 .Select(m => (TenantRole?)m.Role)
                 .SingleOrDefaultAsync(ct);
-        return role
-            ?? throw AppException.Forbidden("Your access to this organization is no longer valid.");
+        return role;
     }
 
     /// <summary>
@@ -38,19 +62,27 @@ public sealed class ActorAccess(IOpsFlowDbContext db, ITenantContext tenantConte
     /// current role. Until the caller commits or disposes, no demotion/suspension/deactivation of those rows can commit, so authorization
     /// is valid at the commit boundary. The caller commits.
     /// </summary>
-    public async Task<(IDbContextTransaction Transaction, TenantRole Role)> BeginAuthorizedAsync(
-        IReadOnlyCollection<Guid>? alsoLock,
-        CancellationToken ct
-    )
+    public async Task<(
+        IDbContextTransaction Transaction,
+        TenantRole Role
+    )?> TryBeginAuthorizedAsync(IReadOnlyCollection<Guid>? alsoLock, CancellationToken ct)
     {
-        var actorId =
-            tenantContext.MembershipId
-            ?? throw AppException.Forbidden("Your access to this organization is no longer valid.");
+        if (tenantContext.MembershipId is not { } actorId)
+        {
+            return null;
+        }
+
         var transaction = await db.BeginTransactionAsync(ct);
         try
         {
             await db.LockMembershipsAsync([actorId, .. alsoLock ?? []], ct);
-            return (transaction, await RequireActiveRoleAsync(ct));
+            if (await GetActiveRoleAsync(ct) is { } role)
+            {
+                return (transaction, role);
+            }
+
+            await transaction.DisposeAsync(); // rejected: nothing was written
+            return null;
         }
         catch
         {
@@ -59,35 +91,19 @@ public sealed class ActorAccess(IOpsFlowDbContext db, ITenantContext tenantConte
         }
     }
 
+    /// <summary>Throwing form of <see cref="TryBeginAuthorizedAsync"/> for callers that have not been migrated.</summary>
+    public async Task<(IDbContextTransaction Transaction, TenantRole Role)> BeginAuthorizedAsync(
+        IReadOnlyCollection<Guid>? alsoLock,
+        CancellationToken ct
+    ) =>
+        await TryBeginAuthorizedAsync(alsoLock, ct)
+        ?? throw AppException.Forbidden("Your access to this organization is no longer valid.");
+
     public async Task RequireManagerAsync(string forbiddenMessage, CancellationToken ct)
     {
         if (await RequireActiveRoleAsync(ct) is not (TenantRole.TenantOwner or TenantRole.Manager))
         {
             throw AppException.Forbidden(forbiddenMessage);
-        }
-    }
-
-    /// <summary>Owner/Manager-only mutation: an authorized transaction that is rejected (and rolled back) for everybody else.</summary>
-    public async Task<IDbContextTransaction> BeginManagerAsync(
-        string forbiddenMessage,
-        CancellationToken ct
-    )
-    {
-        var (transaction, role) = await BeginAuthorizedAsync(null, ct);
-        if (role is not (TenantRole.TenantOwner or TenantRole.Manager))
-        {
-            await transaction.DisposeAsync();
-            throw AppException.Forbidden(forbiddenMessage);
-        }
-
-        return transaction;
-    }
-
-    public async Task RequireOwnerAsync(CancellationToken ct)
-    {
-        if (await RequireActiveRoleAsync(ct) != TenantRole.TenantOwner)
-        {
-            throw AppException.Forbidden("Only an active Owner can change memberships.");
         }
     }
 }

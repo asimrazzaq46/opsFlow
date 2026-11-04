@@ -24,7 +24,8 @@ public sealed class TicketTasksController(TicketTaskService tasks) : ControllerB
         CancellationToken ct
     )
     {
-        return Ok(await tasks.ListAsync(ticketId, ct));
+        var result = await tasks.ListAsync(ticketId, ct);
+        return result.Result is ObjectResult failure ? this.Answer(failure) : Ok(result.Value);
     }
 
     [HttpPost(Name = "CreateTicketTask")]
@@ -44,7 +45,7 @@ public sealed class TicketTasksController(TicketTaskService tasks) : ControllerB
         CancellationToken ct
     )
     {
-        var task = await tasks.CreateAsync(
+        var result = await tasks.CreateAsync(
             ticketId,
             new CreateTicketTaskCommand(
                 request.Title,
@@ -53,7 +54,9 @@ public sealed class TicketTasksController(TicketTaskService tasks) : ControllerB
             ),
             ct
         );
-        return Created($"/api/v1/tenants/{tenantId}/tickets/{ticketId}/tasks", task);
+        return result.Result is ObjectResult failure
+            ? this.Answer(failure)
+            : Created($"/api/v1/tenants/{tenantId}/tickets/{ticketId}/tasks", result.Value);
     }
 
     [HttpPatch("{taskId:guid}", Name = "UpdateTicketTask")]
@@ -73,16 +76,15 @@ public sealed class TicketTasksController(TicketTaskService tasks) : ControllerB
         CancellationToken ct
     )
     {
-        return Ok(
-            await tasks.UpdateDetailsAsync(
-                ticketId,
-                taskId,
-                request.Title,
-                request.Description,
-                request.Version!.Value,
-                ct
-            )
+        var result = await tasks.UpdateDetailsAsync(
+            ticketId,
+            taskId,
+            request.Title,
+            request.Description,
+            request.Version!.Value,
+            ct
         );
+        return result.Result is ObjectResult failure ? this.Answer(failure) : Ok(result.Value);
     }
 
     [HttpPatch("{taskId:guid}/status", Name = "ChangeTicketTaskStatus")]
@@ -102,15 +104,14 @@ public sealed class TicketTasksController(TicketTaskService tasks) : ControllerB
         CancellationToken ct
     )
     {
-        return Ok(
-            await tasks.ChangeStatusAsync(
-                ticketId,
-                taskId,
-                request.Status!.Value,
-                request.Version!.Value,
-                ct
-            )
+        var result = await tasks.ChangeStatusAsync(
+            ticketId,
+            taskId,
+            request.Status!.Value,
+            request.Version!.Value,
+            ct
         );
+        return result.Result is ObjectResult failure ? this.Answer(failure) : Ok(result.Value);
     }
 
     [HttpPatch("{taskId:guid}/assignee", Name = "ReassignTicketTask")]
@@ -130,15 +131,14 @@ public sealed class TicketTasksController(TicketTaskService tasks) : ControllerB
         CancellationToken ct
     )
     {
-        return Ok(
-            await tasks.ReassignAsync(
-                ticketId,
-                taskId,
-                request.AssigneeMembershipId!.Value,
-                request.Version!.Value,
-                ct
-            )
+        var result = await tasks.ReassignAsync(
+            ticketId,
+            taskId,
+            request.AssigneeMembershipId!.Value,
+            request.Version!.Value,
+            ct
         );
+        return result.Result is ObjectResult failure ? this.Answer(failure) : Ok(result.Value);
     }
 
     [HttpPut("order", Name = "ReorderTicketTasks")]
@@ -157,12 +157,11 @@ public sealed class TicketTasksController(TicketTaskService tasks) : ControllerB
         CancellationToken ct
     )
     {
-        return Ok(
-            await tasks.ReorderAsync(
-                ticketId,
-                request.Tasks.ConvertAll(t => new TaskOrderItem(t.TaskId!.Value, t.Version!.Value)),
-                ct
-            )
+        var result = await tasks.ReorderAsync(
+            ticketId,
+            request.Tasks.ConvertAll(t => new TaskOrderItem(t.TaskId!.Value, t.Version!.Value)),
+            ct
         );
+        return result.Result is ObjectResult failure ? this.Answer(failure) : Ok(result.Value);
     }
 }

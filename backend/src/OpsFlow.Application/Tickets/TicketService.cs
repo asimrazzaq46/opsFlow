@@ -1,8 +1,10 @@
 using System.Text.RegularExpressions;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using OpsFlow.Application.Abstractions;
 using OpsFlow.Application.Common;
+using OpsFlow.Application.Memberships;
 using OpsFlow.Application.Notifications;
 using OpsFlow.Domain.Notifications;
 using OpsFlow.Domain.Tenants;
@@ -31,16 +33,23 @@ public sealed partial class TicketService(
     /// (and is self-assigned); Owners/Managers may pick an active customer and assign agents. Number, ticket, first SLA cycle,
     /// assignments and timeline are ONE transaction.
     /// </summary>
-    public async Task<TicketDetailDto> CreateAsync(CreateTicketCommand cmd, CancellationToken ct)
+    public async Task<ActionResult<TicketDetailDto>> CreateAsync(CreateTicketCommand cmd, CancellationToken ct)
     {
         // Starts the transaction with the actor's and any assignees' rows locked, so authorization/eligibility cannot change before commit.
-        var (transaction, actor) = await access.BeginAuthorizedAsync(cmd.AssigneeMembershipIds, ct);
+        if (await access.TryBeginAuthorizedAsync(cmd.AssigneeMembershipIds, ct) is not { } begun)
+        {
+            return ActorAccess.AccessNoLongerValid();
+        }
+
+        var (transaction, actor) = begun;
         await using var _ = transaction;
-        var category =
-            await db
-                .TicketCategories.AsNoTracking()
-                .SingleOrDefaultAsync(c => c.Id == cmd.CategoryId && c.IsActive, ct)
-            ?? throw AppException.BadRequest("The category is not available.");
+        var category = await db
+            .TicketCategories.AsNoTracking()
+            .SingleOrDefaultAsync(c => c.Id == cmd.CategoryId && c.IsActive, ct);
+        if (category is null)
+        {
+            return CategoryUnavailable();
+        }
 
         var priority = cmd.Priority ?? TicketPriority.Medium;
         Guid? customerId = null;
@@ -54,25 +63,27 @@ public sealed partial class TicketService(
                     || cmd.AssigneeMembershipIds is { Count: > 0 }
                 )
                 {
-                    throw AppException.Forbidden(
+                    return ActorAccess.Forbidden(
                         "Customers cannot choose the customer, priority or assignees."
                     );
                 }
 
-                customerId =
-                    await db
-                        .Customers.AsNoTracking()
-                        .Where(c => c.UserId == actor.UserId && c.IsActive)
-                        .Select(c => (Guid?)c.Id)
-                        .SingleOrDefaultAsync(ct)
-                    ?? throw AppException.Forbidden(
+                customerId = await db
+                    .Customers.AsNoTracking()
+                    .Where(c => c.UserId == actor.UserId && c.IsActive)
+                    .Select(c => (Guid?)c.Id)
+                    .SingleOrDefaultAsync(ct);
+                if (customerId is null)
+                {
+                    return ActorAccess.Forbidden(
                         "Your account is not linked to an active customer contact."
                     );
+                }
                 break;
             case TenantRole.Agent:
                 if (cmd.CustomerId is not null || cmd.AssigneeMembershipIds is { Count: > 0 })
                 {
-                    throw AppException.Forbidden("Agents can only create tickets for themselves.");
+                    return ActorAccess.Forbidden("Agents can only create tickets for themselves.");
                 }
 
                 assignees = [actor.MembershipId]; // the agent-as-requester rule: self-assigned
@@ -80,32 +91,62 @@ public sealed partial class TicketService(
             default:
                 if (cmd.CustomerId is { } requested)
                 {
-                    customerId =
-                        await db
-                            .Customers.AsNoTracking()
-                            .Where(c => c.Id == requested && c.IsActive)
-                            .Select(c => (Guid?)c.Id)
-                            .SingleOrDefaultAsync(ct)
-                        ?? throw AppException.BadRequest("The customer is not available.");
+                    customerId = await db
+                        .Customers.AsNoTracking()
+                        .Where(c => c.Id == requested && c.IsActive)
+                        .Select(c => (Guid?)c.Id)
+                        .SingleOrDefaultAsync(ct);
+                    if (customerId is null)
+                    {
+                        return new BadRequestObjectResult(
+                            new ProblemDetails { Title = "The customer is not available." }
+                        );
+                    }
                 }
 
-                assignees = cmd.AssigneeMembershipIds is { Count: > 0 } ids
-                    ? await access.RequireEligibleAgentsAsync(ids, ct)
-                    : [];
+                if (cmd.AssigneeMembershipIds is { Count: > 0 } ids)
+                {
+                    if (await access.GetEligibleAgentsAsync(ids, ct) is not { } eligible)
+                    {
+                        return new BadRequestObjectResult(
+                            new ProblemDetails
+                            {
+                                Title = "Every assignee must be an active Agent of this organization.",
+                            }
+                        );
+                    }
+
+                    assignees = eligible;
+                }
+
                 break;
         }
 
-        var policy =
-            await db
-                .SlaPolicies.AsNoTracking()
-                .SingleOrDefaultAsync(p => p.Priority == priority && p.IsActive, ct)
-            ?? throw AppException.Conflict(
-                "No active SLA policy exists for this priority.",
-                "An Owner must initialize the tenant defaults."
+        var policy = await db
+            .SlaPolicies.AsNoTracking()
+            .SingleOrDefaultAsync(p => p.Priority == priority && p.IsActive, ct);
+        if (policy is null)
+        {
+            return new ConflictObjectResult(
+                new ProblemDetails
+                {
+                    Title = "No active SLA policy exists for this priority.",
+                    Detail = "An Owner must initialize the tenant defaults.",
+                }
             );
+        }
 
         var now = Now;
-        var number = await NextNumberAsync(ct);
+        if (await NextNumberAsync(ct) is not { } number)
+        {
+            return new ConflictObjectResult(
+                new ProblemDetails
+                {
+                    Title = "Ticket numbering is not initialized for this organization.",
+                    Detail = "An Owner must initialize the tenant defaults.",
+                }
+            );
+        }
         var ticket = Ticket.Create(
             tenantContext.TenantId!.Value,
             number,
@@ -217,7 +258,8 @@ public sealed partial class TicketService(
 
     // The UPDATE takes a row lock on the tenant counter that lasts until the surrounding transaction commits, so concurrent
     // creators are serialized and can never receive the same number (and a failed creation leaves no gap).
-    private async Task<long> NextNumberAsync(CancellationToken ct)
+    /// <returns>The next number, or null when numbering was never initialized for the tenant.</returns>
+    private async Task<long?> NextNumberAsync(CancellationToken ct)
     {
         var rows = await db.TicketCounters.ExecuteUpdateAsync(
             s => s.SetProperty(c => c.LastNumber, c => c.LastNumber + 1),
@@ -225,10 +267,7 @@ public sealed partial class TicketService(
         );
         if (rows != 1)
         {
-            throw AppException.Conflict(
-                "Ticket numbering is not initialized for this organization.",
-                "An Owner must initialize the tenant defaults."
-            );
+            return null;
         }
 
         return await db.TicketCounters.Select(c => c.LastNumber).SingleAsync(ct);
@@ -467,28 +506,36 @@ public sealed partial class TicketService(
     /// Edits only the allowed fields (title, description, priority, category); ownership, requester, number and status can never be
     /// changed here. A priority change re-applies the new policy to the ACTIVE SLA cycle only.
     /// </summary>
-    public async Task<TicketDetailDto> UpdateAsync(
+    public async Task<ActionResult<TicketDetailDto>> UpdateAsync(
         Guid id,
         UpdateTicketCommand cmd,
         CancellationToken ct
     )
     {
-        var (transaction, actor) = await access.BeginAuthorizedAsync(null, ct); // edits also run in an authorized transaction
+        // Edits also run in an authorized transaction.
+        if (await access.TryBeginAuthorizedAsync(null, ct) is not { } begun)
+        {
+            return ActorAccess.AccessNoLongerValid();
+        }
+
+        var (transaction, actor) = begun;
         await using var _ = transaction;
-        var ticket =
-            await access.Visible(actor).Where(t => t.Id == id).SingleOrDefaultAsync(ct)
-            ?? throw NotFound();
+        var ticket = await access.Visible(actor).Where(t => t.Id == id).SingleOrDefaultAsync(ct);
+        if (ticket is null)
+        {
+            return new NotFoundObjectResult(new ProblemDetails { Title = "Ticket not found." });
+        }
+
         if (cmd.Version is { } expected && expected != ticket.Version)
         {
-            throw AppException.Conflict(
-                "The ticket was changed by someone else.",
-                "Reload the ticket and retry."
-            );
+            return ChangedByOthers();
         }
 
         if (ticket.Status == TicketStatus.Closed)
         {
-            throw AppException.Conflict("A closed ticket cannot be edited; reopen it first.");
+            return new ConflictObjectResult(
+                new ProblemDetails { Title = "A closed ticket cannot be edited; reopen it first." }
+            );
         }
 
         if (
@@ -500,7 +547,7 @@ public sealed partial class TicketService(
             )
         )
         {
-            throw AppException.Forbidden(
+            return ActorAccess.Forbidden(
                 "Customers can only edit the title and description of their open tickets."
             );
         }
@@ -544,7 +591,11 @@ public sealed partial class TicketService(
                     priority.ToString()
                 )
             );
-            await ReapplyPolicyAsync(ticket.Id, priority, ct);
+            if (await ReapplyPolicyAsync(ticket.Id, priority, ct) is { } policyFailure)
+            {
+                return policyFailure;
+            }
+
             changed = true;
         }
 
@@ -552,7 +603,7 @@ public sealed partial class TicketService(
         {
             if (!await db.TicketCategories.AnyAsync(c => c.Id == categoryId && c.IsActive, ct))
             {
-                throw AppException.BadRequest("The category is not available.");
+                return CategoryUnavailable();
             }
 
             var old = ticket.CategoryId;
@@ -578,32 +629,24 @@ public sealed partial class TicketService(
             }
             catch (DbUpdateConcurrencyException)
             {
-                throw AppException.Conflict(
-                    "The ticket was changed by someone else.",
-                    "Reload the ticket and retry."
-                );
+                return ChangedByOthers();
             }
             catch (DbUpdateException ex)
                 when (db.IsUniqueViolation(ex, UniqueConstraintKind.ActivitySequence))
             {
-                throw AppException.Conflict(
-                    "The ticket was changed by someone else.",
-                    "Reload the ticket and retry."
-                );
+                return ChangedByOthers();
             }
             catch (Exception ex) when (db.IsDeadlock(ex)) // a deadlock victim is a conflict too
             {
-                throw AppException.Conflict(
-                    "The ticket was changed by someone else.",
-                    "Reload the ticket and retry."
-                );
+                return ChangedByOthers();
             }
         }
 
         return await GetAsync(id, ct);
     }
 
-    private async Task ReapplyPolicyAsync(
+    /// <returns>Null when applied; the 409 when the new priority has no active SLA policy.</returns>
+    private async Task<ObjectResult?> ReapplyPolicyAsync(
         Guid ticketId,
         TicketPriority priority,
         CancellationToken ct
@@ -615,15 +658,21 @@ public sealed partial class TicketService(
         );
         if (cycle is null)
         {
-            return;
+            return null;
         }
 
-        var policy =
-            await db
-                .SlaPolicies.AsNoTracking()
-                .SingleOrDefaultAsync(p => p.Priority == priority && p.IsActive, ct)
-            ?? throw AppException.Conflict("No active SLA policy exists for this priority.");
+        var policy = await db
+            .SlaPolicies.AsNoTracking()
+            .SingleOrDefaultAsync(p => p.Priority == priority && p.IsActive, ct);
+        if (policy is null)
+        {
+            return new ConflictObjectResult(
+                new ProblemDetails { Title = "No active SLA policy exists for this priority." }
+            );
+        }
+
         cycle.ReapplyPolicy(policy);
+        return null;
     }
 
     // ---------------------------------------------------------------- projections
@@ -785,6 +834,18 @@ public sealed partial class TicketService(
     private static partial Regex NumberPattern();
 
     private static AppException NotFound() => AppException.NotFound("Ticket not found.");
+
+    private static BadRequestObjectResult CategoryUnavailable() =>
+        new(new ProblemDetails { Title = "The category is not available." });
+
+    private static ConflictObjectResult ChangedByOthers() =>
+        new(
+            new ProblemDetails
+            {
+                Title = "The ticket was changed by someone else.",
+                Detail = "Reload the ticket and retry.",
+            }
+        );
 
     [LoggerMessage(
         Level = LogLevel.Information,

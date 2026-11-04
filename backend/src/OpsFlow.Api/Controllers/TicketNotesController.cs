@@ -26,7 +26,8 @@ public sealed class TicketNotesController(TicketNoteService notes) : ControllerB
         int pageSize = 50
     )
     {
-        return Ok(await notes.ListAsync(ticketId, page, pageSize, ct));
+        var result = await notes.ListAsync(ticketId, page, pageSize, ct);
+        return result.Result is ObjectResult failure ? this.Answer(failure) : Ok(result.Value);
     }
 
     [HttpPost(Name = "CreateTicketNote")]
@@ -52,8 +53,14 @@ public sealed class TicketNotesController(TicketNoteService notes) : ControllerB
             new CreateNoteCommand(request.Content, request.ClientNoteId!.Value),
             ct
         );
-        return result.Created
-            ? Created($"/api/v1/tenants/{tenantId}/tickets/{ticketId}/notes", result.Value)
-            : Ok(result.Value);
+        if (result.Result is ObjectResult failure)
+        {
+            return this.Answer(failure);
+        }
+
+        var written = result.Value!;
+        return written.Created
+            ? Created($"/api/v1/tenants/{tenantId}/tickets/{ticketId}/notes", written.Value)
+            : Ok(written.Value);
     }
 }

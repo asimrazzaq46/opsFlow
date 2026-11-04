@@ -23,7 +23,13 @@ public sealed class TicketCategoriesController(TicketCategoryService categories)
         bool includeInactive = false
     )
     {
-        return Ok(await categories.ListAsync(includeInactive, ct));
+        var list = await categories.ListAsync(includeInactive, ct);
+        return list is null
+            ? Problem(
+                statusCode: StatusCodes.Status403Forbidden,
+                title: "Your access to this organization is no longer valid."
+            )
+            : Ok(list);
     }
 
     [HttpPost(Name = "CreateTicketCategory")]
@@ -43,7 +49,13 @@ public sealed class TicketCategoriesController(TicketCategoryService categories)
         CancellationToken ct
     )
     {
-        var category = await categories.CreateAsync(request.Name, ct);
+        var result = await categories.CreateAsync(request.Name, ct);
+        if (result.Result is ObjectResult failure)
+        {
+            return this.Answer(failure);
+        }
+
+        var category = result.Value!;
         return Created($"/api/v1/tenants/{tenantId}/ticket-categories/{category.Id}", category);
     }
 
@@ -64,7 +76,8 @@ public sealed class TicketCategoriesController(TicketCategoryService categories)
         CancellationToken ct
     )
     {
-        return Ok(await categories.RenameAsync(categoryId, request.Name, ct));
+        var result = await categories.RenameAsync(categoryId, request.Name, ct);
+        return result.Result is ObjectResult failure ? this.Answer(failure) : Ok(result.Value);
     }
 
     [HttpPut("{categoryId:guid}/status", Name = "SetTicketCategoryStatus")]
@@ -80,7 +93,8 @@ public sealed class TicketCategoriesController(TicketCategoryService categories)
         CancellationToken ct
     )
     {
-        await categories.SetActiveAsync(categoryId, request.IsActive, ct);
-        return NoContent();
+        return await categories.SetActiveAsync(categoryId, request.IsActive, ct) is { } failure
+            ? this.Answer(failure)
+            : NoContent();
     }
 }

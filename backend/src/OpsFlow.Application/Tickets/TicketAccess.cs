@@ -29,13 +29,47 @@ public sealed class TicketAccess(
     IOpsFlowDbContext db
 )
 {
-    public async Task<TicketActor> ResolveAsync(CancellationToken ct)
+    /// <summary>Throwing form for callers shared with GraphQL; request handlers use <see cref="TryResolveAsync"/>.</summary>
+    public async Task<TicketActor> ResolveAsync(CancellationToken ct) =>
+        await TryResolveAsync(ct)
+        ?? throw AppException.Forbidden("Your access to this organization is no longer valid.");
+
+    /// <returns>The caller as the database sees them now, or null when their access is no longer valid.</returns>
+    public async Task<TicketActor?> TryResolveAsync(CancellationToken ct) =>
+        await actorAccess.GetActiveRoleAsync(ct) is { } role
+            ? new TicketActor(currentUser.UserId, tenantContext.MembershipId!.Value, role)
+            : null;
+
+    /// <summary>
+    /// Authorized mutation transaction (see <see cref="ActorAccess.TryBeginAuthorizedAsync"/>); extra memberships (e.g. assignees) are locked
+    /// and re-validated too. Null when the actor's access is no longer valid (nothing was written).
+    /// </summary>
+    public async Task<(IDbContextTransaction Transaction, TicketActor Actor)?> TryBeginAuthorizedAsync(
+        IReadOnlyCollection<Guid>? alsoLock,
+        CancellationToken ct
+    )
     {
-        var role = await actorAccess.RequireActiveRoleAsync(ct);
-        return new TicketActor(currentUser.UserId, tenantContext.MembershipId!.Value, role);
+        if (await actorAccess.TryBeginAuthorizedAsync(alsoLock, ct) is not { } begun)
+        {
+            return null;
+        }
+
+        var (transaction, role) = begun;
+        try
+        {
+            return (
+                transaction,
+                new TicketActor(currentUser.UserId, tenantContext.MembershipId!.Value, role)
+            );
+        }
+        catch
+        {
+            await transaction.DisposeAsync();
+            throw;
+        }
     }
 
-    /// <summary>Authorized mutation transaction (see <see cref="ActorAccess.BeginAuthorizedAsync"/>); extra memberships (e.g. assignees) are locked and re-validated too.</summary>
+    /// <summary>Throwing form of <see cref="TryBeginAuthorizedAsync"/> for callers that have not been migrated.</summary>
     public async Task<(IDbContextTransaction Transaction, TicketActor Actor)> BeginAuthorizedAsync(
         IReadOnlyCollection<Guid>? alsoLock,
         CancellationToken ct
@@ -127,22 +161,17 @@ public sealed class TicketAccess(
     /// Takes the ticket row lock until commit without changing any value. Child-task writes and agent unassignment serialize on it,
     /// so "agent removed from the ticket" and "task given to that agent" can never both commit.
     /// </summary>
-    public async Task LockTicketAsync(Guid ticketId, CancellationToken ct)
-    {
-        var rows = await db
+    /// <returns>False when the ticket does not exist in this tenant.</returns>
+    public async Task<bool> TryLockTicketAsync(Guid ticketId, CancellationToken ct) =>
+        await db
             .Tickets.Where(t => t.Id == ticketId)
             .ExecuteUpdateAsync(
                 s => s.SetProperty(t => t.ActivitySequence, t => t.ActivitySequence),
                 ct
-            );
-        if (rows != 1)
-        {
-            throw AppException.NotFound("Ticket not found.");
-        }
-    }
+            ) == 1;
 
-    /// <summary>Every agent must be an ACTIVE Agent membership of THIS tenant whose user account is active.</summary>
-    public async Task<List<Guid>> RequireEligibleAgentsAsync(
+    /// <returns>The distinct ids when EVERY one is eligible (and at least one was given); otherwise null.</returns>
+    public async Task<List<Guid>?> GetEligibleAgentsAsync(
         IReadOnlyCollection<Guid> membershipIds,
         CancellationToken ct
     )
@@ -158,10 +187,6 @@ public sealed class TicketAccess(
             )
             .Select(m => m.Id)
             .ToListAsync(ct);
-        return eligible.Count == distinct.Count && distinct.Count > 0
-            ? eligible
-            : throw AppException.BadRequest(
-                "Every assignee must be an active Agent of this organization."
-            );
+        return eligible.Count == distinct.Count && distinct.Count > 0 ? eligible : null;
     }
 }

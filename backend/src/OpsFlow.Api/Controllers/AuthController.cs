@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using OpsFlow.Api.Contracts;
 using OpsFlow.Api.Infrastructure;
+using OpsFlow.Api.Infrastructure.Errors;
 using OpsFlow.Api.Infrastructure.OpenApi;
 using OpsFlow.Application.Abstractions;
 using OpsFlow.Application.Auth;
@@ -30,6 +31,11 @@ public sealed class AuthController(
     [ProducesResponseType(StatusCodes.Status202Accepted)]
     public async Task<IActionResult> Register(RegisterRequest request, CancellationToken ct)
     {
+        if (PasswordPolicy.Validate(request.Password) is { Count: > 0 } violations)
+        {
+            return PolicyProblem("password", violations);
+        }
+
         await accounts.RegisterAsync(request.Email, request.DisplayName, request.Password, ct);
         return Accepted();
     }
@@ -43,8 +49,9 @@ public sealed class AuthController(
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> ConfirmEmail(ConfirmEmailRequest request, CancellationToken ct)
     {
-        await accounts.ConfirmEmailAsync(request.UserId, request.Token, ct);
-        return NoContent();
+        return await accounts.ConfirmEmailAsync(request.UserId, request.Token, ct)
+            ? NoContent()
+            : InvalidLink();
     }
 
     [HttpPost("resend-confirmation", Name = "ResendConfirmation")]
@@ -68,13 +75,18 @@ public sealed class AuthController(
     )]
     public async Task<ActionResult<AuthResponse>> Login(LoginRequest request, CancellationToken ct)
     {
-        var (tokens, user) = await sessions.LoginAsync(
-            request.Email,
-            request.Password,
-            UserAgent,
-            ct
-        );
-        return TokenResponse(tokens, user);
+        var login = await sessions.LoginAsync(request.Email, request.Password, UserAgent, ct);
+        if (login is not { } session)
+        {
+            // The stable code is picked up by the existing ProblemDetails customization (traceId, type, default detail).
+            HttpContext.Items[ProblemDetailsSetup.CodeItem] = "AUTH_INVALID_CREDENTIALS";
+            return Problem(
+                statusCode: StatusCodes.Status401Unauthorized,
+                title: "Invalid credentials or the account is not available."
+            );
+        }
+
+        return TokenResponse(session.Tokens, session.User);
     }
 
     [HttpPost("refresh", Name = "RefreshSession")]
@@ -93,7 +105,13 @@ public sealed class AuthController(
         CancellationToken ct
     )
     {
-        var (tokens, user) = await sessions.RefreshAsync(request.RefreshToken, UserAgent, ct);
+        var result = await sessions.RefreshAsync(request.RefreshToken, UserAgent, ct);
+        if (result.Result is ObjectResult failure)
+        {
+            return this.Answer(failure);
+        }
+
+        var (tokens, user) = result.Value;
         return TokenResponse(tokens, user);
     }
 
@@ -135,8 +153,14 @@ public sealed class AuthController(
         CancellationToken ct
     )
     {
-        await accounts.ResetPasswordAsync(request.Email, request.Token, request.NewPassword, ct);
-        return NoContent();
+        if (PasswordPolicy.Validate(request.NewPassword) is { Count: > 0 } violations)
+        {
+            return PolicyProblem("newPassword", violations);
+        }
+
+        return await accounts.ResetPasswordAsync(request.Email, request.Token, request.NewPassword, ct)
+            ? NoContent()
+            : InvalidLink();
     }
 
     [HttpGet("me", Name = "GetCurrentUser")]
@@ -147,7 +171,10 @@ public sealed class AuthController(
     )]
     public async Task<ActionResult<UserProfileDto>> GetCurrentUser(CancellationToken ct)
     {
-        return Ok(await accounts.GetProfileAsync(current.UserId, ct));
+        var profile = await accounts.GetProfileAsync(current.UserId, ct);
+        return profile is null
+            ? Problem(statusCode: StatusCodes.Status404NotFound, title: "User not found.")
+            : Ok(profile);
     }
 
     [HttpPut("me", Name = "UpdateCurrentUser")]
@@ -162,7 +189,8 @@ public sealed class AuthController(
         CancellationToken ct
     )
     {
-        return Ok(await accounts.UpdateDisplayNameAsync(current.UserId, request.DisplayName, ct));
+        var result = await accounts.UpdateDisplayNameAsync(current.UserId, request.DisplayName, ct);
+        return result.Result is ObjectResult failure ? this.Answer(failure) : Ok(result.Value);
     }
 
     [HttpPost("google/challenge", Name = "CreateGoogleChallenge")]
@@ -176,7 +204,8 @@ public sealed class AuthController(
     public async Task<ActionResult<GoogleChallenge>> CreateGoogleChallenge(CancellationToken ct)
     {
         NoStore();
-        return Ok(await google.CreateSignInChallengeAsync(ct));
+        var result = await google.CreateSignInChallengeAsync(ct);
+        return result.Result is ObjectResult failure ? this.Answer(failure) : Ok(result.Value);
     }
 
     [HttpPost("google", Name = "SignInWithGoogle")]
@@ -199,7 +228,13 @@ public sealed class AuthController(
         CancellationToken ct
     )
     {
-        var result = await google.SignInAsync(request.Credential, request.ChallengeId, UserAgent, ct);
+        var outcome = await google.SignInAsync(request.Credential, request.ChallengeId, UserAgent, ct);
+        if (outcome.Result is ObjectResult failure)
+        {
+            return this.Answer(failure);
+        }
+
+        var result = outcome.Value!;
         return result.Tokens is { } tokens ? TokenResponse(tokens, result.User) : Accepted();
     }
 
@@ -217,7 +252,8 @@ public sealed class AuthController(
     )
     {
         NoStore();
-        return Ok(await google.CreateLinkChallengeAsync(current.UserId, request.Password, ct));
+        var result = await google.CreateLinkChallengeAsync(current.UserId, request.Password, ct);
+        return result.Result is ObjectResult failure ? this.Answer(failure) : Ok(result.Value);
     }
 
     [HttpPost("google/link", Name = "LinkGoogleAccount")]
@@ -232,8 +268,9 @@ public sealed class AuthController(
     [ProducesResponseType<ProblemResponse>(StatusCodes.Status503ServiceUnavailable, "application/problem+json")]
     public async Task<IActionResult> LinkGoogleAccount(GoogleCredentialRequest request, CancellationToken ct)
     {
-        await google.LinkAsync(current.UserId, request.Credential, request.ChallengeId, ct);
-        return NoContent();
+        return await google.LinkAsync(current.UserId, request.Credential, request.ChallengeId, ct) is { } failure
+            ? this.Answer(failure)
+            : NoContent();
     }
 
     [HttpPost("logout-all", Name = "LogoutAll")]
@@ -275,8 +312,9 @@ public sealed class AuthController(
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> RevokeSession(Guid sessionId, CancellationToken ct)
     {
-        await sessions.RevokeAsync(current.UserId, sessionId, ct);
-        return NoContent();
+        return await sessions.RevokeAsync(current.UserId, sessionId, ct)
+            ? NoContent()
+            : Problem(statusCode: StatusCodes.Status404NotFound, title: "Session not found.");
     }
 
     [HttpPost("change-password", Name = "ChangePassword")]
@@ -290,6 +328,11 @@ public sealed class AuthController(
         CancellationToken ct
     )
     {
+        if (PasswordPolicy.Validate(request.NewPassword) is { Count: > 0 } violations)
+        {
+            return PolicyProblem("newPassword", violations);
+        }
+
         // Every session is revoked; the caller immediately gets a brand-new one so the SPA stays signed in on this device.
         var user = await accounts.ChangePasswordAsync(
             current.UserId,
@@ -297,6 +340,12 @@ public sealed class AuthController(
             request.NewPassword,
             ct
         );
+        if (user is null)
+        {
+            ModelState.AddModelError("currentPassword", "The current password is incorrect.");
+            return ValidationProblem();
+        }
+
         return TokenResponse(await sessions.StartAsync(user, UserAgent, ct), user);
     }
 
@@ -316,9 +365,23 @@ public sealed class AuthController(
         CancellationToken ct
     )
     {
-        await accounts.DeactivateAsync(current.UserId, request.Password, ct);
-        return NoContent();
+        return await accounts.DeactivateAsync(current.UserId, request.Password, ct) is { } failure
+            ? this.Answer(failure)
+            : NoContent();
     }
+
+    private ActionResult PolicyProblem(string field, IReadOnlyList<string> violations)
+    {
+        foreach (var violation in violations)
+        {
+            ModelState.AddModelError(field, violation);
+        }
+
+        return ValidationProblem();
+    }
+
+    private ObjectResult InvalidLink() =>
+        Problem(statusCode: StatusCodes.Status400BadRequest, title: "The link is invalid or has expired.");
 
     private string? UserAgent =>
         Request.Headers.UserAgent.ToString() is { Length: > 0 } ua ? ua : null;

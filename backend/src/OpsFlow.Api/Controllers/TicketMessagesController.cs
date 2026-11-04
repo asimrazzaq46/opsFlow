@@ -27,7 +27,8 @@ public sealed class TicketMessagesController(TicketMessageService messages) : Co
         int pageSize = 50
     )
     {
-        return Ok(await messages.ListAsync(ticketId, afterSequence, page, pageSize, ct));
+        var result = await messages.ListAsync(ticketId, afterSequence, page, pageSize, ct);
+        return result.Result is ObjectResult failure ? this.Answer(failure) : Ok(result.Value);
     }
 
     [HttpPost(Name = "SendTicketMessage")]
@@ -53,11 +54,17 @@ public sealed class TicketMessagesController(TicketMessageService messages) : Co
             new SendMessageCommand(request.Content, request.ClientMessageId!.Value),
             ct
         );
-        return result.Created
+        if (result.Result is ObjectResult failure)
+        {
+            return this.Answer(failure);
+        }
+
+        var sent = result.Value!;
+        return sent.Created
             ? Created(
-                $"/api/v1/tenants/{tenantId}/tickets/{ticketId}/messages?afterSequence={result.Value.Sequence - 1}",
-                result.Value
+                $"/api/v1/tenants/{tenantId}/tickets/{ticketId}/messages?afterSequence={sent.Value.Sequence - 1}",
+                sent.Value
             )
-            : Ok(result.Value);
+            : Ok(sent.Value);
     }
 }

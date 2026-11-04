@@ -24,7 +24,8 @@ public sealed class TicketAttachmentsController(TicketAttachmentService attachme
         CancellationToken ct
     )
     {
-        return Ok(await attachments.ListAsync(ticketId, ct));
+        var result = await attachments.ListAsync(ticketId, ct);
+        return result.Result is ObjectResult failure ? this.Answer(failure) : Ok(result.Value);
     }
 
     [HttpPost(Name = "UploadTicketAttachment")]
@@ -47,13 +48,19 @@ public sealed class TicketAttachmentsController(TicketAttachmentService attachme
     )
     {
         await using var content = request.File.OpenReadStream();
-        var created = await attachments.UploadAsync(
+        var result = await attachments.UploadAsync(
             ticketId,
             request.File.FileName,
             content,
             request.Internal,
             ct
         );
+        if (result.Result is ObjectResult failure)
+        {
+            return this.Answer(failure);
+        }
+
+        var created = result.Value!;
         return Created(
             $"/api/v1/tenants/{tenantId}/tickets/{ticketId}/attachments/{created.Id}",
             created
@@ -72,7 +79,13 @@ public sealed class TicketAttachmentsController(TicketAttachmentService attachme
         CancellationToken ct
     )
     {
-        var file = await attachments.DownloadAsync(ticketId, attachmentId, ct);
+        var result = await attachments.DownloadAsync(ticketId, attachmentId, ct);
+        if (result.Result is ObjectResult failure)
+        {
+            return this.Answer(failure);
+        }
+
+        var file = result.Value!;
         Response.Headers.XContentTypeOptions = "nosniff";
         Response.Headers.CacheControl = "private, no-store";
         return File(file.Content, file.ContentType, file.FileName); // attachment disposition with a safely encoded file name

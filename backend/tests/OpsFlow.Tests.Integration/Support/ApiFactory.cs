@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Data.Common;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -283,7 +284,7 @@ public sealed class FakeGoogleValidator : IGoogleIdTokenValidator
         return credential;
     }
 
-    public Task<GoogleIdentity> ValidateAsync(string idToken, CancellationToken cancellationToken)
+    public Task<GoogleIdentity?> ValidateAsync(string idToken, CancellationToken cancellationToken)
     {
         Interlocked.Increment(ref _calls);
         if (Unavailable)
@@ -291,9 +292,7 @@ public sealed class FakeGoogleValidator : IGoogleIdTokenValidator
             throw new AppException(503, "Google sign-in is temporarily unavailable.").WithCode("AUTH_GOOGLE_UNAVAILABLE");
         }
 
-        return _tokens.TryGetValue(idToken, out var identity)
-            ? Task.FromResult(identity)
-            : throw AppException.Unauthorized("The Google credential is invalid.").WithCode("AUTH_GOOGLE_TOKEN_INVALID");
+        return Task.FromResult(_tokens.GetValueOrDefault(idToken));
     }
 }
 
@@ -421,4 +420,14 @@ public sealed class RateLimitedApiFactory : ApiFactory
 public sealed class GoogleDisabledApiFactory : ApiFactory
 {
     protected override string GoogleClientId => string.Empty;
+}
+
+/// <summary>Migrated services return their expected failures instead of throwing; this reads the failure of such a call.</summary>
+public static class ServiceOutcome
+{
+    public static async Task<ObjectResult> FailureAsync<T>(Task<ActionResult<T>> call) =>
+        (await call).Result as ObjectResult ?? throw new Xunit.Sdk.XunitException("Expected the service to return a failure.");
+
+    public static async Task<ObjectResult> FailureAsync(Task<ObjectResult?> call) =>
+        await call ?? throw new Xunit.Sdk.XunitException("Expected the service to return a failure.");
 }

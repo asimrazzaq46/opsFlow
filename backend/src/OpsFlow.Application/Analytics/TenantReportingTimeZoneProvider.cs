@@ -55,25 +55,29 @@ public static partial class ReportingTimeZoneId
     [GeneratedRegex(@"^(UTC|[A-Za-z]+(/[A-Za-z0-9_+\-]+)+)$", RegexOptions.CultureInvariant)]
     private static partial Regex Shape();
 
-    /// <summary>Returns the id when it is a valid, exactly-spelled IANA id known to this host; otherwise throws a field validation error.</summary>
-    public static string Validate(string? id, string field)
+    /// <summary>True with the trimmed id when it is a valid, exactly-spelled IANA id known to this host; otherwise false with a client-safe message.</summary>
+    public static bool TryValidate(string? id, out string value, out string error)
     {
-        var value = id?.Trim();
-        if (string.IsNullOrEmpty(value) || value.Length > TenantSettings.MaxReportingTimeZoneLength || !Shape().IsMatch(value))
+        value = id?.Trim() ?? string.Empty;
+        error = string.Empty;
+        if (value.Length == 0 || value.Length > TenantSettings.MaxReportingTimeZoneLength || !Shape().IsMatch(value))
         {
-            throw AppException.Validation(field, "Use an IANA timezone id such as 'Europe/Rome' or 'UTC'.");
+            error = "Use an IANA timezone id such as 'Europe/Rome' or 'UTC'.";
+            return false;
         }
 
-        TimeZoneInfo zone;
-        try
+        if (!TimeZoneInfo.TryFindSystemTimeZoneById(value, out var zone))
         {
-            zone = ReportingCalendar.Resolve(value);
-        }
-        catch (ArgumentException)
-        {
-            throw AppException.Validation(field, $"'{value}' is not a known IANA timezone.");
+            error = $"'{value}' is not a known IANA timezone.";
+            return false;
         }
 
-        return string.Equals(zone.Id, value, StringComparison.Ordinal) ? value : throw AppException.Validation(field, $"Use the exact IANA spelling '{zone.Id}'.");
+        if (!string.Equals(zone.Id, value, StringComparison.Ordinal))
+        {
+            error = $"Use the exact IANA spelling '{zone.Id}'.";
+            return false;
+        }
+
+        return true;
     }
 }

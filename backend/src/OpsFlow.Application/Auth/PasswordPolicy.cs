@@ -1,5 +1,3 @@
-using OpsFlow.Application.Common;
-
 namespace OpsFlow.Application.Auth;
 
 public static class PasswordPolicy
@@ -44,14 +42,5 @@ public static class PasswordPolicy
         }
 
         return errors;
-    }
-
-    public static void EnsureValid(string? password, string field = "password")
-    {
-        var errors = Validate(password);
-        if (errors.Count > 0)
-        {
-            throw AppException.Validation(field, [.. errors]);
-        }
     }
 }

@@ -267,7 +267,7 @@ public class InvitationTests(ApiFactory factory) : IClassFixture<ApiFactory>
             await demoter.ChangeRoleAsync(managerMembership, TenantRole.Agent, CancellationToken.None);
             factory.SaveGate.Resume();
 
-            Assert.Equal(403, (await Assert.ThrowsAsync<AppException>(() => inviting.WaitAsync(QueryGate.Timeout))).StatusCode);
+            Assert.Equal(403, (await ServiceOutcome.FailureAsync(inviting.WaitAsync(QueryGate.Timeout))).StatusCode);
             Assert.Equal(0, await InvitationRowsAsync(email));
         }
     }
@@ -294,7 +294,7 @@ public class InvitationTests(ApiFactory factory) : IClassFixture<ApiFactory>
             await demoter.ChangeRoleAsync(m2, TenantRole.Manager, CancellationToken.None); // now only allowed to invite Agents
             factory.SaveGate.Resume();
 
-            Assert.Equal(403, (await Assert.ThrowsAsync<AppException>(() => inviting.WaitAsync(QueryGate.Timeout))).StatusCode);
+            Assert.Equal(403, (await ServiceOutcome.FailureAsync(inviting.WaitAsync(QueryGate.Timeout))).StatusCode);
             Assert.Equal(0, await InvitationRowsAsync(email));
         }
     }
@@ -320,7 +320,7 @@ public class InvitationTests(ApiFactory factory) : IClassFixture<ApiFactory>
             await suspender.SetActiveAsync(managerMembership, false, CancellationToken.None);
             factory.SaveGate.Resume();
 
-            Assert.Equal(403, (await Assert.ThrowsAsync<AppException>(() => revoking.WaitAsync(QueryGate.Timeout))).StatusCode);
+            Assert.Equal(403, (await ServiceOutcome.FailureAsync(revoking.WaitAsync(QueryGate.Timeout))).StatusCode);
             Assert.Single(await owner.ReadAsync<List<Invite>>(await owner.GetAsync($"/api/v1/tenants/{org.Id}/invitations"))); // still pending
         }
     }
@@ -513,7 +513,7 @@ public class InvitationTests(ApiFactory factory) : IClassFixture<ApiFactory>
             Assert.Equal(HttpStatusCode.OK, (await invitee.PostAsync("/api/v1/invitations/accept", new { token })).StatusCode);
             factory.Gate.Resume();
 
-            var error = await Assert.ThrowsAsync<AppException>(() => resending.WaitAsync(QueryGate.Timeout));
+            var error = await ServiceOutcome.FailureAsync(resending.WaitAsync(QueryGate.Timeout));
             Assert.Equal(409, error.StatusCode);
         }
 

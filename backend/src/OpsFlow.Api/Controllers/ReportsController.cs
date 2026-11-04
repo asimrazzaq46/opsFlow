@@ -18,7 +18,7 @@ public sealed class ReportsController(AnalyticsService analytics) : ControllerBa
     )]
     [Produces("text/csv")]
     [ProducesResponseType<string>(StatusCodes.Status200OK, "text/csv")]
-    public async Task ExportReportCsv(
+    public async Task<IActionResult> ExportReportCsv(
         CancellationToken ct,
         ReportExportKind kind = ReportExportKind.Tickets,
         DateOnly? from = null,
@@ -30,14 +30,22 @@ public sealed class ReportsController(AnalyticsService analytics) : ControllerBa
         Guid? customerId = null
     )
     {
+        if (
+            !TryParse<TicketPriority>(priority, nameof(priority), out var parsedPriority)
+            || !TryParse<TicketStatus>(status, nameof(status), out var parsedStatus)
+        )
+        {
+            return ValidationProblem(ModelState);
+        }
+
         var csv = await analytics.ExportAsync(
             kind,
             new AnalyticsFilter(
                 from,
                 to,
-                Parse<TicketPriority>(priority, nameof(priority)),
+                parsedPriority,
                 categoryId,
-                Parse<TicketStatus>(status, nameof(status)),
+                parsedStatus,
                 agentMembershipId,
                 customerId
             ),
@@ -49,15 +57,26 @@ public sealed class ReportsController(AnalyticsService analytics) : ControllerBa
         Response.ContentType = "text/csv; charset=utf-8";
         Response.Headers.ContentDisposition = new System.Net.Mime.ContentDisposition { FileName = csv.FileName }.ToString();
         await csv.WriteAsync(Response.Body, ct);
+        return new EmptyResult();
     }
 
     // Strings (not nullable enums) keep the shared TicketStatus/TicketPriority OpenAPI schemas non-nullable for the generated client.
-    private static T? Parse<T>(string? value, string field)
-        where T : struct, Enum =>
-        string.IsNullOrWhiteSpace(value) ? null
-        : Enum.TryParse<T>(value, true, out var parsed) && Enum.IsDefined(parsed) ? parsed
-        : throw OpsFlow.Application.Common.AppException.Validation(
-            field,
-            $"'{value}' is not a valid value."
-        );
+    private bool TryParse<T>(string? value, string field, out T? parsed)
+        where T : struct, Enum
+    {
+        parsed = null;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return true;
+        }
+
+        if (Enum.TryParse<T>(value, true, out var result) && Enum.IsDefined(result))
+        {
+            parsed = result;
+            return true;
+        }
+
+        ModelState.AddModelError(field, $"'{value}' is not a valid value.");
+        return false;
+    }
 }
