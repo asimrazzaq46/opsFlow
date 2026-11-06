@@ -19,8 +19,8 @@ public sealed record TicketActor(Guid UserId, Guid MembershipId, TenantRole Role
 
 /// <summary>
 /// Who may see which tickets. Authorization is part of the QUERY (never filter-after-fetch):
-/// Owner/Manager see the whole tenant; an Agent sees tickets assigned to them or created by them; a Customer sees only tickets
-/// of the contact that is explicitly linked to their user account.
+/// Owner, Manager and Agent see the whole tenant (an Agent needs an open assignment to work on a ticket, see <see cref="MayWorkOnAsync"/>);
+/// a Customer sees only tickets of the contact that is explicitly linked to their user account.
 /// </summary>
 public sealed class TicketAccess(
     ActorAccess actorAccess,

@@ -93,6 +93,9 @@ public sealed class RealtimeOutboxHandler(
                 case OutboxEvents.TicketChanged:
                     await PublishTicketChangedAsync(Read<TicketChangedEvent>(message), ct);
                     break;
+                case OutboxEvents.TicketAttachmentAdded:
+                    await PublishAttachmentAsync(Read<TicketAttachmentEvent>(message), ct);
+                    break;
                 case OutboxEvents.CustomerEligibilityChanged:
                     await PublishCustomerEligibilityAsync(Read<CustomerEligibilityEvent>(message), ct);
                     break;
@@ -236,6 +239,34 @@ public sealed class RealtimeOutboxHandler(
             new Memberships.MembershipChanged(tenantContext.TenantId!.Value, ev.MembershipId),
             ct
         );
+
+    // Same audience as the attachment list endpoint: staff who may work on the ticket, plus the linked customer only for a customer-visible file.
+    // Internal files have no customer delivery path, so neither their metadata nor their existence reaches a Customer.
+    private async Task PublishAttachmentAsync(TicketAttachmentEvent ev, CancellationToken ct)
+    {
+        var row = await (
+            from a in db.TicketAttachments.AsNoTracking()
+            join t in db.Tickets on a.TicketId equals t.Id
+            where a.Id == ev.AttachmentId && a.TicketId == ev.TicketId
+            select new { a.IsInternal, t.CustomerId }
+        ).SingleOrDefaultAsync(ct);
+        if (row is null)
+        {
+            return;
+        }
+
+        var recipients = await audience.TaskStaffAsync(ev.TicketId, ct);
+        if (!row.IsInternal && await audience.CustomerAsync(row.CustomerId, ct) is { } customer)
+        {
+            recipients.Add(customer);
+        }
+
+        await publisher.NotifyUsersAsync(
+            recipients.ConvertAll(u => u.ToString()),
+            new TicketAttachmentAdded(tenantContext.TenantId!.Value, ev.TicketId),
+            ct
+        );
+    }
 
     // Recipients are computed at delivery time from the internal task audience (no customer path); the payload carries no task content.
     private async Task PublishTaskAsync(TicketTaskEvent ev, CancellationToken ct)

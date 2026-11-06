@@ -4,6 +4,7 @@ import { firstValueFrom } from 'rxjs';
 import { AuthService } from './auth.service';
 import { PendingInvitation } from './pending-invitation';
 import { safeReturnUrl } from './return-url';
+import { RouteAccess, canAccess } from './route-access';
 import { TenantService } from './tenant.service';
 
 /** Signed-out users go to sign-in and come back to the requested page afterwards (validated there by `safeReturnUrl`). */
@@ -44,13 +45,15 @@ export const workspaceGuard: CanActivateFn = async () => {
 };
 
 /**
- * Owner/Manager-only pages: runs the workspace guard first (guards of one route start together), then redirects other roles.
+ * Role-gated workspace pages: runs the workspace guard first (guards of one route start together), then checks the route's
+ * `data.access` against the active role and sends other roles to the dashboard, which every member may open (no redirect loop).
  * Dependencies are injected before the first await because the injection context ends there.
  */
-export const managerGuard: CanActivateFn = async (route, state) => {
+export const accessGuard: CanActivateFn = async (route, state) => {
   const tenant = inject(TenantService);
   const router = inject(Router);
   const allowed = await (workspaceGuard(route, state) as Promise<GuardResult>); // workspaceGuard is async
   if (allowed !== true) return allowed;
-  return tenant.isManager() || router.createUrlTree(['/dashboard']);
+  const access = (route.data['access'] as RouteAccess | undefined) ?? 'member';
+  return canAccess(access, tenant.role()) || router.createUrlTree(['/dashboard']);
 };

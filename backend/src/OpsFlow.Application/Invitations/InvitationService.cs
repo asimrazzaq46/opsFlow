@@ -582,7 +582,7 @@ public sealed partial class InvitationService(
             : await db.Tenants.AsNoTracking().SingleOrDefaultAsync(ct);
         return tenant is null
             ? null
-            : new OrganizationDto(tenant.Id, tenant.Name, tenant.Slug, membership!.Role);
+            : new OrganizationDto(tenant.Id, tenant.Name, tenant.Slug, membership!.Role, membership.Id);
     }
 
     private static BadRequestObjectResult InvalidInvitation() =>

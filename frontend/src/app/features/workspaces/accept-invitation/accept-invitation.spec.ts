@@ -67,7 +67,7 @@ describe('AcceptInvitation', () => {
     expect(api.acceptInvitation).not.toHaveBeenCalled();
 
     api.acceptInvitation.mockReturnValue(
-      of({ id: 't1', name: 'Acme', slug: 'acme', role: 'Agent' }),
+      of({ id: 't1', name: 'Acme', slug: 'acme', role: 'Agent', membershipId: 'm1' }),
     );
     fixture.componentInstance['accept']();
     await fixture.whenStable();
@@ -101,7 +101,7 @@ describe('AcceptInvitation', () => {
     expect(TestBed.inject(PendingInvitation).token()).toBe('tok');
 
     api.acceptInvitation.mockReturnValue(
-      of({ id: 't1', name: 'Acme', slug: 'acme', role: 'Agent' }),
+      of({ id: 't1', name: 'Acme', slug: 'acme', role: 'Agent', membershipId: 'm1' }),
     );
     fixture.componentInstance['accept']();
     await fixture.whenStable();

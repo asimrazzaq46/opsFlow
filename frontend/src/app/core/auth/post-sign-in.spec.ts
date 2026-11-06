@@ -6,7 +6,7 @@ import { PendingInvitation } from './pending-invitation';
 import { PostSignIn } from './post-sign-in';
 import { TenantService } from './tenant.service';
 
-const org = (id: string): OrganizationDto => ({ id, name: id, slug: id, role: 'Agent' });
+const org = (id: string): OrganizationDto => ({ id, name: id, slug: id, role: 'Agent', membershipId: 'm-' + id });
 
 describe('PostSignIn', () => {
   const tenant = { load: vi.fn() };

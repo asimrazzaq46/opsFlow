@@ -81,6 +81,8 @@ export class TicketDetail {
   protected readonly error = signal<string | null>(null);
   protected readonly editing = signal(false);
   protected readonly tab = signal<DetailTab>('conversation');
+  /** Audited changes that leave `version` untouched (child tasks, attachments) and reconnects re-read the activity timeline. */
+  protected readonly activityTick = signal(0);
   /** Tabs are mounted on first visit and then kept, so their realtime subscriptions and drafts survive tab switches. */
   protected readonly visited = signal<ReadonlySet<DetailTab>>(new Set(['conversation']));
   protected readonly tabs = computed<{ key: DetailTab; icon: string; label: string }[]>(() => [
@@ -139,6 +141,22 @@ export class TicketDetail {
     )
       .pipe(debounceTime(500), takeUntilDestroyed())
       .subscribe(() => this.refresh());
+    // Content-free signals scoped to this ticket of the active workspace; the server sends them only to people who may read it.
+    merge(
+      activeWorkspaceEvents<{ tenantId: string; ticketId: string }>('ticket.task.changed'),
+      activeWorkspaceEvents<{ tenantId: string; ticketId: string }>('ticket.attachment.added'),
+    )
+      .pipe(
+        filter((e) => e.ticketId === this.id()),
+        debounceTime(500),
+        takeUntilDestroyed(),
+      )
+      .subscribe(() => this.refreshActivity());
+    realtime.reconnected.pipe(takeUntilDestroyed()).subscribe(() => this.refreshActivity());
+  }
+
+  protected refreshActivity(): void {
+    this.activityTick.update((n) => n + 1);
   }
 
   protected select(tab: DetailTab): void {

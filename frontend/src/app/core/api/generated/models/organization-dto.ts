@@ -4,6 +4,7 @@
 import { TenantRole } from '../models/tenant-role';
 export interface OrganizationDto {
   id: string;
+  membershipId: string;
   name: string;
   role: TenantRole;
   slug: string;

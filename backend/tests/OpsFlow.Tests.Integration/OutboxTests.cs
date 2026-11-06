@@ -211,6 +211,28 @@ public sealed class OutboxTests : IDisposable
     }
 
     [Fact]
+    public async Task Attachment_signals_reach_the_customer_only_for_customer_visible_files()
+    {
+        var w = await TicketWorld.CreateAsync(factory);
+        var ticket = await w.AssignAsync((await w.CreateTicketAsync(w.Customer)).Id, w.Agent1Membership);
+        await using var customerHub = HubClient.Create(factory, w.Customer.AccessToken);
+        await using var managerHub = HubClient.Create(factory, w.Manager.AccessToken);
+        await customerHub.StartAsync();
+        await managerHub.StartAsync();
+
+        var hidden = await w.UploadAsync(w.Agent1, ticket.Id, "internal.png", ConversationExtensions.Png, internalOnly: true);
+        Assert.Equal(HttpStatusCode.Created, hidden.StatusCode);
+        await factory.DrainOutboxAsync();
+        Assert.True(await managerHub.WaitForAsync(e => e.Name == "ticket.attachment.added"));
+        Assert.DoesNotContain(customerHub.Events, e => e.Name == "ticket.attachment.added"); // not even the existence of an internal file
+
+        var visible = await w.UploadAsync(w.Agent1, ticket.Id, "public.png", ConversationExtensions.Png);
+        Assert.Equal(HttpStatusCode.Created, visible.StatusCode);
+        await factory.DrainOutboxAsync();
+        Assert.True(await customerHub.WaitForAsync(e => e.Name == "ticket.attachment.added"));
+    }
+
+    [Fact]
     public async Task A_slow_delivery_never_leaves_later_events_of_the_batch_with_an_already_expired_lease()
     {
         var w = await TicketWorld.CreateAsync(factory);

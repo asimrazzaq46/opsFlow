@@ -8150,7 +8150,8 @@
           "id",
           "name",
           "slug",
-          "role"
+          "role",
+          "membershipId"
         ],
         "type": "object",
         "properties": {
@@ -8166,6 +8167,10 @@
           },
           "role": {
             "$ref": "#/components/schemas/TenantRole"
+          },
+          "membershipId": {
+            "type": "string",
+            "format": "uuid"
           }
         }
       },

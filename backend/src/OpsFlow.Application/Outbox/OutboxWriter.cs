@@ -13,6 +13,7 @@ public static class OutboxEvents
     public const string CacheInvalidated = "cache.invalidated";
     public const string TicketTaskChanged = "ticket.task.changed";
     public const string TicketChanged = "ticket.changed";
+    public const string TicketAttachmentAdded = "ticket.attachment.added";
     public const string CustomerEligibilityChanged = "customer.eligibility.changed";
     public const string MembershipChanged = "membership.changed";
 }
@@ -30,6 +31,9 @@ public sealed record TicketTaskEvent(Guid TicketId, Guid? TaskId, string Change,
 
 /// <summary>Id-only change signal for the whole staff of a workspace; clients reload through their own authorized queries. <c>Change</c> is a <see cref="TicketChanges"/> value.</summary>
 public sealed record TicketChangedEvent(Guid TicketId, string Change);
+
+/// <summary>Id-only signal; the internal flag is re-read at delivery time, so the payload never decides who may learn about the file.</summary>
+public sealed record TicketAttachmentEvent(Guid TicketId, Guid AttachmentId);
 
 /// <summary>Staged with the affected portal user decided by the server; the delivered state is re-read from the database at publish time.</summary>
 public sealed record CustomerEligibilityEvent(Guid CustomerId, Guid UserId);

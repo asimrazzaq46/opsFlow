@@ -10,7 +10,7 @@ namespace OpsFlow.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/tenants/{tenantId:guid}/tickets/{ticketId:guid}/messages")]
-[Authorize(Policy = AuthPolicies.TenantMember)] // visibility (Customer = own tickets, Agent = assigned/created) is decided from DB state by the service
+[Authorize(Policy = AuthPolicies.TenantMember)] // access (Customer = own tickets, Agent = open assignment) is decided from DB state by the service
 [Tags("Ticket messages")]
 public sealed class TicketMessagesController(TicketMessageService messages, TicketChatCursorService cursors)
     : ControllerBase

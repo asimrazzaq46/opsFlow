@@ -70,6 +70,20 @@ export class TicketActions {
     if (!this.tenant.isStaff()) return status === 'Resolved';
     return !!assignedToMe;
   });
+  /**
+   * An active Agent may claim a ticket they are not assigned to while it is still workable (the server rejects finished tickets and
+   * re-checks eligibility). The own membership id comes from the server-listed workspace, never from user input.
+   */
+  protected readonly canClaim = computed(() => {
+    const { status, assignedToMe } = this.ticket().summary;
+    return (
+      this.tenant.role() === 'Agent' &&
+      !!this.tenant.current()?.membershipId &&
+      assignedToMe === false &&
+      status !== 'Resolved' &&
+      status !== 'Closed'
+    );
+  });
   protected readonly assignable = computed(() => {
     const taken = new Set(this.ticket().assignees?.map((a) => a.membershipId));
     return this.members().filter((m) => m.role === 'Agent' && m.isActive && !taken.has(m.id));
@@ -119,6 +133,11 @@ export class TicketActions {
       );
   }
 
+  protected claim(): void {
+    const me = this.tenant.current()?.membershipId;
+    if (me) this.run(this.api.assign(this.ticket().summary.id, [me], Number(this.ticket().summary.version)));
+  }
+
   protected unassign(membershipId: string): void {
     this.run(
       this.api.unassign(
@@ -150,9 +169,11 @@ export class TicketActions {
               ? 'tickets.errors.conflict'
               : status === 403
                 ? 'common.forbidden'
-                : status === 400
-                  ? 'tickets.errors.invalid'
-                  : 'tickets.errors.generic',
+                : status === 404
+                  ? 'tickets.detail.notFound'
+                  : status === 400
+                    ? 'tickets.errors.invalid'
+                    : 'tickets.errors.generic',
         );
         this.busy.set(false);
         this.changed.emit(); // reload the authoritative state (never retry automatically)

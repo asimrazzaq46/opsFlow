@@ -14,7 +14,6 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { debounceTime, distinctUntilChanged, map } from 'rxjs';
 import { TenantService } from '../../core/auth/tenant.service';
 import { ConfirmDialog } from '../../shared/components/confirm-dialog/confirm-dialog';
-import { redirectUnlessManager } from '../../core/auth/manager-access';
 import { isForbidden } from '../tickets/ticket-ui';
 import { CustomerListQuery, CustomerRow, CustomerSort, CustomersApi } from './customers-api';
 
@@ -101,7 +100,6 @@ export class Customers {
   });
 
   constructor() {
-    redirectUnlessManager();
     this.search.valueChanges
       .pipe(
         debounceTime(350),

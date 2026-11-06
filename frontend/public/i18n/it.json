@@ -98,6 +98,7 @@
     "actions": {
       "status": "Cambia stato",
       "reopen": "Riapri ticket",
+      "claim": "Assegna a me",
       "assign": "Aggiungi un agente",
       "unassign": "Rimuovi",
       "chooseAgent": "Scegli un agente",
@@ -205,7 +206,8 @@
       "title": "Attività",
       "empty": "Nessuna attività registrata.",
       "error": "Impossibile caricare l'attività.",
-      "truncated": "Sono mostrate solo le prime 100 voci.",
+      "loadEarlier": "Carica attività precedenti",
+      "earlierError": "Impossibile caricare le attività precedenti. Riprova.",
       "type": {
         "Created": "Ticket creato",
         "DetailsUpdated": "Dettagli aggiornati",
@@ -236,7 +238,6 @@
         "PriorityChanged": "ha cambiato la priorità da {{from}} a {{to}}",
         "CategoryChanged": "ha cambiato la categoria",
         "AgentAssigned": "ha assegnato {{agent}} al ticket",
-        "Claimed": "ha preso in carico il ticket",
         "AgentUnassigned": "ha rimosso {{agent}} dal ticket",
         "StatusChanged": "ha cambiato lo stato da {{from}} a {{to}}",
         "Resolved": "ha risolto il ticket",
@@ -392,7 +393,14 @@
     "badType": "Questo tipo di file non è consentito.",
     "tooLarge": "Il file supera i 10 MB.",
     "uploadError": "Caricamento non riuscito.",
-    "downloadError": "Download non riuscito."
+    "downloadError": "Download non riuscito.",
+    "invalid": "Il file non può essere accettato. Verifica che non sia vuoto.",
+    "forbidden": "Non hai il permesso di aggiungere o aprire file su questo ticket.",
+    "notFound": "Il ticket o il file non è più disponibile.",
+    "conflict": "Il ticket è stato modificato o chiuso nel frattempo. È stato ricaricato; riprova se è ancora aperto.",
+    "network": "Impossibile raggiungere il server. Controlla la connessione e riprova.",
+    "closed": "I ticket chiusi non accettano nuovi file. Riapri il ticket per aggiungerne uno.",
+    "uploading": "Caricamento in corso…"
   },
   "notifications": {
     "title": "Notifiche",

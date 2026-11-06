@@ -1,5 +1,9 @@
 import { Routes } from '@angular/router';
-import { authGuard, emailLinkGuard, guestGuard, managerGuard, workspaceGuard } from './core/auth/auth.guard';
+import { accessGuard, authGuard, emailLinkGuard, guestGuard } from './core/auth/auth.guard';
+import { RouteAccess } from './core/auth/route-access';
+
+/** `data.access` of a workspace page; the guard, the sidebar and the shell's live revalidation all read it through `canAccess`. */
+const access = (level: RouteAccess) => ({ access: level });
 
 export const routes: Routes = [
   {
@@ -60,54 +64,64 @@ export const routes: Routes = [
   },
   {
     path: 'tickets',
-    canActivate: [authGuard, workspaceGuard],
+    canActivate: [authGuard, accessGuard],
+    data: access('member'),
     loadComponent: () => import('./features/tickets/ticket-list').then((m) => m.TicketList),
   },
   {
     path: 'tickets/new',
-    canActivate: [authGuard, workspaceGuard],
+    canActivate: [authGuard, accessGuard],
+    data: access('member'),
     loadComponent: () => import('./features/tickets/ticket-create').then((m) => m.TicketCreate),
   },
   {
     path: 'tickets/:id',
-    canActivate: [authGuard, workspaceGuard],
+    canActivate: [authGuard, accessGuard],
+    data: access('member'),
     loadComponent: () => import('./features/tickets/ticket-detail').then((m) => m.TicketDetail),
   },
   {
     path: 'dashboard',
-    canActivate: [authGuard, workspaceGuard],
+    canActivate: [authGuard, accessGuard],
+    data: access('member'),
     loadComponent: () => import('./features/dashboard/dashboard').then((m) => m.Dashboard),
   },
   {
     path: 'kanban',
-    canActivate: [authGuard, workspaceGuard],
+    canActivate: [authGuard, accessGuard],
+    data: access('staff'),
     loadComponent: () => import('./features/kanban/kanban').then((m) => m.Kanban),
   },
   {
     path: 'reports',
-    canActivate: [authGuard, workspaceGuard],
+    canActivate: [authGuard, accessGuard],
+    data: access('manager'),
     loadComponent: () => import('./features/reports/reports').then((m) => m.Reports),
   },
   {
     path: 'customers',
-    canActivate: [authGuard, managerGuard],
+    canActivate: [authGuard, accessGuard],
+    data: access('manager'),
     loadComponent: () => import('./features/customers/customers').then((m) => m.Customers),
   },
   {
     path: 'customers/new',
-    canActivate: [authGuard, managerGuard],
+    canActivate: [authGuard, accessGuard],
+    data: access('manager'),
     loadComponent: () =>
       import('./features/customers/customer-form').then((m) => m.CustomerForm),
   },
   {
     path: 'customers/:id',
-    canActivate: [authGuard, managerGuard],
+    canActivate: [authGuard, accessGuard],
+    data: access('manager'),
     loadComponent: () =>
       import('./features/customers/customer-detail').then((m) => m.CustomerDetail),
   },
   {
     path: 'customers/:id/edit',
-    canActivate: [authGuard, managerGuard],
+    canActivate: [authGuard, accessGuard],
+    data: access('manager'),
     loadComponent: () =>
       import('./features/customers/customer-form').then((m) => m.CustomerForm),
   },
@@ -119,12 +133,14 @@ export const routes: Routes = [
   },
   {
     path: 'team',
-    canActivate: [authGuard, workspaceGuard],
+    canActivate: [authGuard, accessGuard],
+    data: access('staff'),
     loadComponent: () => import('./features/team/team').then((m) => m.Team),
   },
   {
     path: 'team/:membershipId',
-    canActivate: [authGuard, workspaceGuard],
+    canActivate: [authGuard, accessGuard],
+    data: access('staff'),
     loadComponent: () =>
       import('./features/team/member-detail/member-detail').then((m) => m.MemberDetail),
   },

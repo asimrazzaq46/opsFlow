@@ -4,16 +4,27 @@ import {
   Component,
   ElementRef,
   computed,
+  effect,
   inject,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import {
+  NavigationCancel,
+  NavigationEnd,
+  NavigationError,
+  Router,
+  RouterLink,
+  RouterLinkActive,
+  RouterOutlet,
+} from '@angular/router';
 import { TranslatePipe } from '@ngx-translate/core';
 import { filter } from 'rxjs';
 import { AuthService } from '../core/auth/auth.service';
 import { ChatUnreadService, compactCount, unreadKey } from '../core/chat/chat-unread.service';
+import { RouteAccess, canAccess, routeAccess } from '../core/auth/route-access';
 import { TenantService } from '../core/auth/tenant.service';
 import { RealtimeService } from '../core/realtime/realtime.service';
 import { ThemeService } from '../core/services/theme.service';
@@ -55,19 +66,18 @@ export class Shell {
   private readonly menuButton = viewChild<ElementRef<HTMLButtonElement>>('menuButton');
   private readonly closeButton = viewChild<ElementRef<HTMLButtonElement>>('closeButton');
 
-  // Role-aware navigation shapes the UX only; the backend authorizes every request.
+  // Role-aware navigation shapes the UX only; the backend authorizes every request. Same rule as the route guard (`canAccess`).
   protected readonly navItems = computed(() => {
     const role = this.tenant.role();
-    const staff = role !== null && role !== 'Customer';
-    const manager = role === 'TenantOwner' || role === 'Manager';
-    return [
-      { link: '/dashboard', label: 'nav.dashboard', icon: 'dashboard' },
-      { link: '/tickets', label: 'nav.tickets', icon: 'confirmation_number' },
-      ...(staff ? [{ link: '/kanban', label: 'nav.kanban', icon: 'view_kanban' }] : []),
-      ...(manager ? [{ link: '/customers', label: 'nav.customers', icon: 'apartment' }] : []),
-      ...(staff ? [{ link: '/team', label: 'nav.team', icon: 'group' }] : []),
-      ...(manager ? [{ link: '/reports', label: 'nav.reports', icon: 'query_stats' }] : []),
+    const items: { link: string; label: string; icon: string; access: RouteAccess }[] = [
+      { link: '/dashboard', label: 'nav.dashboard', icon: 'dashboard', access: 'member' },
+      { link: '/tickets', label: 'nav.tickets', icon: 'confirmation_number', access: 'member' },
+      { link: '/kanban', label: 'nav.kanban', icon: 'view_kanban', access: 'staff' },
+      { link: '/customers', label: 'nav.customers', icon: 'apartment', access: 'manager' },
+      { link: '/team', label: 'nav.team', icon: 'group', access: 'staff' },
+      { link: '/reports', label: 'nav.reports', icon: 'query_stats', access: 'manager' },
     ];
+    return items.filter((i) => canAccess(i.access, role));
   });
 
   /** Routes flagged `publicLayout` (one-time e-mail links) never use the signed-in shell, even with a session open. */
@@ -75,6 +85,31 @@ export class Shell {
 
   constructor() {
     const router = inject(Router);
+    // Guards run only on navigation, but the active workspace, the role or the membership itself can change while a page stays open
+    // (switcher, membership.changed, reconnect). Re-check the open page whenever that state settles and again whenever a navigation
+    // settles, because a change that lands during a navigation may postdate that navigation's guard run. Nothing happens while the
+    // memberships are loading, while a navigation is under way, or for pages outside a workspace; both targets are always allowed
+    // (`/dashboard` for every member, `/workspaces` without access data), so this cannot loop.
+    const revalidate = () => {
+      if (!this.auth.isAuthenticated() || this.tenant.loading() || router.getCurrentNavigation()) return;
+      const access = routeAccess(router.routerState.snapshot.root);
+      if (!access) return;
+      if (!this.tenant.tenantId()) void router.navigateByUrl('/workspaces');
+      else if (!canAccess(access, this.tenant.role())) void router.navigateByUrl('/dashboard');
+    };
+    effect(() => {
+      this.tenant.tenantId();
+      this.tenant.role();
+      this.tenant.loading();
+      this.auth.isAuthenticated();
+      untracked(revalidate);
+    });
+    router.events
+      .pipe(
+        filter((e) => e instanceof NavigationEnd || e instanceof NavigationCancel || e instanceof NavigationError),
+        takeUntilDestroyed(),
+      )
+      .subscribe(() => setTimeout(revalidate)); // after the router has finished the navigation (getCurrentNavigation() is null)
     router.events
       .pipe(
         filter((e) => e instanceof NavigationEnd),

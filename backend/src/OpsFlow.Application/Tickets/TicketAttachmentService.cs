@@ -6,6 +6,8 @@ using Microsoft.Extensions.Options;
 using OpsFlow.Application.Abstractions;
 using OpsFlow.Application.Common;
 using OpsFlow.Application.Memberships;
+using OpsFlow.Application.Outbox;
+using OpsFlow.Domain.Outbox;
 using OpsFlow.Domain.Tickets;
 
 namespace OpsFlow.Application.Tickets;
@@ -20,6 +22,7 @@ public sealed partial class TicketAttachmentService(
     TicketAccess access,
     IAttachmentStorage storage,
     IOptions<AttachmentOptions> options,
+    OutboxWriter outbox,
     TimeProvider clock,
     ILogger<TicketAttachmentService> logger
 )
@@ -170,6 +173,15 @@ public sealed partial class TicketAttachmentService(
                 newValue: isInternal ? "internal" : "visible",
                 relatedId: attachment.Id
             )
+        );
+        // Staged in the same commit as the metadata: the live signal exists only if the attachment does.
+        outbox.Stage(
+            ticket.TenantId,
+            OutboxEvents.TicketAttachmentAdded,
+            ticketId,
+            new TicketAttachmentEvent(ticketId, attachment.Id),
+            $"attachment:{attachment.Id:N}",
+            OutboxChannels.Realtime
         );
         try
         {

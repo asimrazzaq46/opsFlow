@@ -98,6 +98,7 @@
     "actions": {
       "status": "Change status",
       "reopen": "Reopen ticket",
+      "claim": "Assign to me",
       "assign": "Add an agent",
       "unassign": "Remove",
       "chooseAgent": "Choose an agent",
@@ -205,7 +206,8 @@
       "title": "Activity",
       "empty": "No activity recorded yet.",
       "error": "Could not load the activity.",
-      "truncated": "Only the first 100 entries are shown.",
+      "loadEarlier": "Load earlier activity",
+      "earlierError": "Earlier activity could not be loaded. Try again.",
       "type": {
         "Created": "Ticket created",
         "DetailsUpdated": "Details updated",
@@ -236,7 +238,6 @@
         "PriorityChanged": "changed the priority from {{from}} to {{to}}",
         "CategoryChanged": "changed the category",
         "AgentAssigned": "assigned {{agent}} to the ticket",
-        "Claimed": "claimed the ticket",
         "AgentUnassigned": "removed {{agent}} from the ticket",
         "StatusChanged": "changed the status from {{from}} to {{to}}",
         "Resolved": "resolved the ticket",
@@ -392,7 +393,14 @@
     "badType": "This file type is not allowed.",
     "tooLarge": "The file is larger than 10 MB.",
     "uploadError": "The upload failed.",
-    "downloadError": "The download failed."
+    "downloadError": "The download failed.",
+    "invalid": "The file could not be accepted. Check that it is not empty.",
+    "forbidden": "You are not allowed to add or open files on this ticket.",
+    "notFound": "The ticket or file is no longer available to you.",
+    "conflict": "The ticket changed or was closed meanwhile. It has been reloaded; try again if it is still open.",
+    "network": "The server could not be reached. Check your connection and try again.",
+    "closed": "Closed tickets do not accept new files. Reopen the ticket to add one.",
+    "uploading": "Uploading…"
   },
   "notifications": {
     "title": "Notifications",

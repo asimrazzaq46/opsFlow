@@ -16,7 +16,6 @@ import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { TranslatePipe } from '@ngx-translate/core';
 import { debounceTime, filter, merge } from 'rxjs';
-import { AuthService } from '../../core/auth/auth.service';
 import { TenantService } from '../../core/auth/tenant.service';
 import { GraphqlClient } from '../../core/graphql/graphql-client';
 import {
@@ -61,7 +60,6 @@ export class Kanban {
   private readonly destroyRef = inject(DestroyRef);
   protected readonly tenant = inject(TenantService);
   private readonly route = inject(ActivatedRoute);
-  private readonly auth = inject(AuthService);
 
   protected readonly pascal = pascal;
   protected readonly priorities = ['Low', 'Medium', 'High', 'Urgent'];
@@ -83,9 +81,8 @@ export class Kanban {
       .filter((m) => m.role === 'AGENT' && m.isActive)
       .map((m) => ({ id: m.id, userId: m.userId, displayName: m.displayName, email: m.email })),
   );
-  protected readonly meMembership = computed(
-    () => this.members().find((m) => m.userId === this.auth.user()?.id)?.id ?? null,
-  );
+  // Server-listed membership of the active workspace: correct even when the member list is truncated to one page.
+  protected readonly meMembership = computed(() => this.tenant.current()?.membershipId ?? null);
   private membersSeq = 0;
   protected readonly progress = signal<
     ReadonlyMap<string, { totalTasks: number; completedTasks: number }>

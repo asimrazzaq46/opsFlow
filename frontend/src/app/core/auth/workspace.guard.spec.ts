@@ -5,10 +5,11 @@ import { of, throwError } from 'rxjs';
 import { Api } from '../api/generated/api';
 import { OrganizationDto } from '../api/generated/models';
 import { AuthService } from './auth.service';
-import { workspaceGuard } from './auth.guard';
+import { accessGuard, workspaceGuard } from './auth.guard';
+import { RouteAccess, canAccess } from './route-access';
 import { TenantService, WORKSPACE_STORAGE_KEY } from './tenant.service';
 
-const org = (id: string): OrganizationDto => ({ id, name: id, role: 'Agent', slug: id });
+const org = (id: string): OrganizationDto => ({ id, name: id, role: 'Agent', slug: id, membershipId: 'm-' + id });
 
 describe('TenantService selection', () => {
   let invoke: ReturnType<typeof vi.fn>;
@@ -90,5 +91,47 @@ describe('workspaceGuard', () => {
     authenticated.set(false);
     expect(await run()).toBe(true);
     expect(load).not.toHaveBeenCalled();
+  });
+});
+
+describe('route access', () => {
+  it('matches the approved role matrix', () => {
+    const roles = ['TenantOwner', 'Manager', 'Agent', 'Customer'] as const;
+    const allowed = (access: RouteAccess) => roles.filter((r) => canAccess(access, r));
+    expect(allowed('member')).toEqual(['TenantOwner', 'Manager', 'Agent', 'Customer']);
+    expect(allowed('staff')).toEqual(['TenantOwner', 'Manager', 'Agent']);
+    expect(allowed('manager')).toEqual(['TenantOwner', 'Manager']);
+    expect(canAccess('member', null)).toBe(false);
+  });
+
+  describe('accessGuard', () => {
+    const role = signal<string | null>('Agent');
+
+    const run = (access: RouteAccess) =>
+      TestBed.runInInjectionContext(() =>
+        accessGuard({ data: { access } } as unknown as ActivatedRouteSnapshot, {} as RouterStateSnapshot),
+      ) as Promise<boolean | UrlTree>;
+
+    beforeEach(() => {
+      TestBed.configureTestingModule({
+        providers: [
+          provideRouter([]),
+          { provide: AuthService, useValue: { isAuthenticated: signal(true) } },
+          { provide: TenantService, useValue: { tenantId: signal('A'), role, load: vi.fn() } },
+        ],
+      });
+    });
+
+    it('opens eligible pages and sends other roles to the dashboard', async () => {
+      const dashboard = String(TestBed.inject(Router).createUrlTree(['/dashboard']));
+      role.set('Agent');
+      expect(await run('staff')).toBe(true);
+      expect(String(await run('manager'))).toBe(dashboard);
+      role.set('Customer');
+      expect(String(await run('staff'))).toBe(dashboard);
+      expect(await run('member')).toBe(true);
+      role.set('Manager');
+      expect(await run('manager')).toBe(true);
+    });
   });
 });

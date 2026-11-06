@@ -27,7 +27,8 @@ public sealed partial class OrganizationService(
 
         using var scope = tenantContext.Begin(tenantId);
         db.Tenants.Add(Tenant.Create(tenantId, name, slug, now));
-        db.Memberships.Add(Membership.Create(tenantId, userId, TenantRole.TenantOwner, now));
+        var membership = Membership.Create(tenantId, userId, TenantRole.TenantOwner, now);
+        db.Memberships.Add(membership);
         TenantDefaults.AddAll(db, tenantId, now); // settings, ticket counter, default categories and SLA policies in the same atomic SaveChanges
         try
         {
@@ -41,7 +42,7 @@ public sealed partial class OrganizationService(
         }
 
         LogCreated(logger, tenantId, userId);
-        return new OrganizationDto(tenantId, name, slug, TenantRole.TenantOwner);
+        return new OrganizationDto(tenantId, name, slug, TenantRole.TenantOwner, membership.Id);
     }
 
     public async Task<IReadOnlyList<OrganizationDto>> ListMineAsync(
@@ -53,7 +54,7 @@ public sealed partial class OrganizationService(
             join t in db.Tenants.IgnoreQueryFilters() on m.TenantId equals t.Id
             where m.UserId == userId && m.Status == MembershipStatus.Active
             orderby t.Name
-            select new OrganizationDto(t.Id, t.Name, t.Slug, m.Role)
+            select new OrganizationDto(t.Id, t.Name, t.Slug, m.Role, m.Id)
         ).ToListAsync(ct);
 
     /// <returns>Null when the tenant does not exist.</returns>
@@ -62,7 +63,13 @@ public sealed partial class OrganizationService(
         var tenant = await db.Tenants.SingleOrDefaultAsync(ct);
         return tenant is null
             ? null
-            : new OrganizationDto(tenant.Id, tenant.Name, tenant.Slug, tenantContext.Role!.Value);
+            : new OrganizationDto(
+                tenant.Id,
+                tenant.Name,
+                tenant.Slug,
+                tenantContext.Role!.Value,
+                tenantContext.MembershipId!.Value
+            );
     }
 
     private async Task<string> UniqueSlugAsync(string name, CancellationToken ct)

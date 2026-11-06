@@ -178,13 +178,23 @@
                     <app-ticket-notes [ticketId]="id()" />
                   }
                   @case ('attachments') {
-                    <app-ticket-attachments [ticketId]="id()" [staff]="tenant.isStaff()" />
+                    <app-ticket-attachments
+                      [ticketId]="id()"
+                      [staff]="tenant.isStaff()"
+                      [closed]="t.summary.status === 'Closed'"
+                      (uploaded)="refreshActivity()"
+                      (stale)="refresh()"
+                    />
                   }
                   @case ('tasks') {
                     <app-ticket-tasks [ticket]="t" />
                   }
                   @case ('activity') {
-                    <app-ticket-activity [ticketId]="id()" [version]="t.summary.version" />
+                    <app-ticket-activity
+                      [ticketId]="id()"
+                      [version]="t.summary.version"
+                      [refresh]="activityTick()"
+                    />
                   }
                 }
               }

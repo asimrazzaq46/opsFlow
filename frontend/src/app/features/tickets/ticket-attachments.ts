@@ -1,20 +1,40 @@
 import { DatePipe } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
+  ElementRef,
   effect,
   inject,
   input,
+  output,
   signal,
   untracked,
+  viewChild,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslatePipe } from '@ngx-translate/core';
+import { Subscription, debounceTime, filter, merge } from 'rxjs';
 import { AttachmentDto } from '../../core/api/generated/models';
 import { TenantService } from '../../core/auth/tenant.service';
+import { RealtimeService } from '../../core/realtime/realtime.service';
+import { activeWorkspaceEvents } from '../../core/realtime/workspace-events';
 import { TicketsApi } from './tickets-api';
 
 export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 export const ALLOWED_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'pdf', 'txt', 'docx', 'xlsx'];
+
+export type AttachmentProblem =
+  | 'badType'
+  | 'tooLarge'
+  | 'invalid'
+  | 'forbidden'
+  | 'notFound'
+  | 'conflict'
+  | 'network'
+  | 'uploadError'
+  | 'downloadError';
 
 /** Client-side pre-check for UX only; the server validates size, extension AND file signature. */
 export function attachmentProblem(file: {
@@ -26,84 +46,47 @@ export function attachmentProblem(file: {
   return file.size > MAX_ATTACHMENT_BYTES ? 'tooLarge' : null;
 }
 
+/** Maps a failed request to a message key: the server's stable file codes first, then the HTTP status. */
+export function attachmentErrorKey(
+  e: unknown,
+  fallback: 'uploadError' | 'downloadError',
+): AttachmentProblem {
+  if (!(e instanceof HttpErrorResponse)) return fallback;
+  const code = (e.error as { code?: string } | null)?.code;
+  if (code === 'ATTACHMENT_TOO_LARGE' || e.status === 413) return 'tooLarge';
+  if (code === 'ATTACHMENT_TYPE_NOT_ALLOWED') return 'badType';
+  switch (e.status) {
+    case 0:
+      return 'network';
+    case 400:
+      return 'invalid';
+    case 403:
+      return 'forbidden';
+    case 404:
+      return 'notFound';
+    case 409:
+      return 'conflict';
+    default:
+      return fallback;
+  }
+}
+
 @Component({
   selector: 'app-ticket-attachments',
   imports: [TranslatePipe, DatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <section class="rounded-xl border border-border bg-card p-4" aria-labelledby="att-title">
-      <h2 id="att-title" class="text-lg font-semibold">{{ 'attachments.title' | translate }}</h2>
-      <div aria-live="polite" class="mt-3">
-        @if (loading()) {
-          <p class="text-muted">{{ 'common.loading' | translate }}</p>
-        } @else if (error()) {
-          <p role="alert" class="text-danger">
-            {{ 'attachments.error' | translate }}
-            <button type="button" class="ml-2 underline" (click)="load()">
-              {{ 'common.retry' | translate }}
-            </button>
-          </p>
-        } @else if (!items().length) {
-          <p class="text-muted">{{ 'attachments.empty' | translate }}</p>
-        } @else {
-          <ul class="divide-y divide-border">
-            @for (a of items(); track a.id) {
-              <li class="flex flex-wrap items-center justify-between gap-2 py-2">
-                <span class="break-all"
-                  >{{ a.fileName }}
-                  @if (a.isInternal) {
-                    <span class="ml-1 rounded bg-amber-500/20 px-1.5 py-0.5 text-xs">{{
-                      'attachments.internalBadge' | translate
-                    }}</span>
-                  }
-                  <span class="ml-2 text-xs text-muted"
-                    >{{ size(a) }} · {{ a.createdAtUtc | date: 'short' }}</span
-                  >
-                </span>
-                <button
-                  type="button"
-                  class="rounded-lg border border-border px-3 py-1 text-sm focus-visible:outline-2 focus-visible:outline-brand"
-                  (click)="download(a)"
-                >
-                  {{ 'attachments.download' | translate }}
-                </button>
-              </li>
-            }
-          </ul>
-        }
-      </div>
-      @if (actionError()) {
-        <p role="alert" class="mt-2 text-sm text-danger">
-          {{ 'attachments.' + actionError() | translate }}
-        </p>
-      }
-
-      <div class="mt-4">
-        <label for="att-file" class="block text-sm font-medium">{{
-          'attachments.upload' | translate
-        }}</label>
-        <input
-          id="att-file"
-          type="file"
-          [accept]="accept"
-          [disabled]="uploading()"
-          (change)="pick($event)"
-          class="mt-1 block w-full text-sm focus-visible:outline-2 focus-visible:outline-brand"
-        />
-        <p class="mt-1 text-xs text-muted">{{ 'attachments.allowed' | translate }}</p>
-        @if (staff()) {
-          <label class="mt-2 flex items-center gap-2 text-sm">
-            <input type="checkbox" [checked]="internal()" (change)="internal.set(!internal())" />
-            {{ 'attachments.internal' | translate }}
-          </label>
-        }
-      </div>
-    </section>
-  `,
+  templateUrl: './ticket-attachments.html',
+  styleUrl: './ticket-attachments.css',
 })
 export class TicketAttachments {
   readonly ticketId = input.required<string>();
   readonly staff = input(false);
+  /** A closed ticket accepts no files (the server answers 409); reopening makes it writable again. */
+  readonly closed = input(false);
+  /** A file of this ticket was stored; the parent refreshes the activity timeline. */
+  readonly uploaded = output<void>();
+  /** The server reported a conflict (e.g. the ticket was closed meanwhile); the parent reloads the ticket. */
+  readonly stale = output<void>();
 
   private readonly api = inject(TicketsApi);
   private readonly tenant = inject(TenantService);
@@ -112,17 +95,38 @@ export class TicketAttachments {
   protected readonly items = signal<AttachmentDto[]>([]);
   protected readonly loading = signal(false);
   protected readonly error = signal(false);
+  /** Indeterminate: the app's Fetch-based HttpClient cannot report upload progress. */
   protected readonly uploading = signal(false);
-  protected readonly actionError = signal<
-    'badType' | 'tooLarge' | 'uploadError' | 'downloadError' | null
-  >(null);
+  protected readonly actionError = signal<AttachmentProblem | null>(null);
   protected readonly internal = signal(false);
+
+  private readonly fileInput = viewChild<ElementRef<HTMLInputElement>>('fileInput');
+
+  /** Only the newest list request may write state, so a slow answer for a previous ticket or workspace is dropped. */
+  private seq = 0;
+  private upload?: Subscription;
 
   constructor() {
     effect(() => {
       this.ticketId();
-      untracked(() => this.load());
+      this.tenant.tenantId();
+      untracked(() => {
+        this.cancelUpload();
+        this.items.set([]);
+        this.actionError.set(null);
+        this.load();
+      });
     });
+    inject(DestroyRef).onDestroy(() => this.upload?.unsubscribe());
+    // Content-free signal: the server targets only people allowed to list this ticket's files; internal ones never reach customers.
+    merge(
+      activeWorkspaceEvents<{ tenantId: string; ticketId: string }>('ticket.attachment.added').pipe(
+        filter((e) => e.ticketId === this.ticketId()),
+      ),
+      inject(RealtimeService).reconnected,
+    )
+      .pipe(debounceTime(300), takeUntilDestroyed())
+      .subscribe(() => this.load(true));
   }
 
   protected size(a: AttachmentDto): string {
@@ -132,17 +136,19 @@ export class TicketAttachments {
       : `${Math.max(1, Math.round(bytes / 1024))} KB`;
   }
 
-  protected load(): void {
-    const tenantId = this.tenant.tenantId();
-    this.loading.set(true);
+  /** `quiet` keeps the current list on screen while refreshing after an upload or a live event. */
+  protected load(quiet = false): void {
+    const id = ++this.seq;
+    if (!quiet || !this.items().length) this.loading.set(true);
     this.error.set(false);
     this.api.attachments(this.ticketId()).subscribe({
       next: (r) => {
-        if (this.tenant.tenantId() !== tenantId) return;
+        if (id !== this.seq) return;
         this.items.set(r);
         this.loading.set(false);
       },
       error: () => {
+        if (id !== this.seq) return;
         this.error.set(true);
         this.loading.set(false);
       },
@@ -153,7 +159,7 @@ export class TicketAttachments {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     this.actionError.set(null);
-    if (!file) return;
+    if (!file || this.uploading() || this.closed()) return;
     const problem = attachmentProblem(file);
     if (problem) {
       this.actionError.set(problem);
@@ -161,18 +167,35 @@ export class TicketAttachments {
       return;
     }
     this.uploading.set(true);
-    this.api.upload(this.ticketId(), file, this.staff() && this.internal()).subscribe({
-      next: (a) => {
-        this.items.update((list) => [...list, a]);
-        this.uploading.set(false);
-        input.value = '';
+    // Leaving the ticket or workspace unsubscribes (see cancelUpload), so these callbacks only ever touch the ticket that started it.
+    this.upload = this.api.upload(this.ticketId(), file, this.staff() && this.internal()).subscribe({
+      next: () => {
+        this.finishUpload();
+        this.uploaded.emit();
+        this.load(true); // authoritative metadata (server-sanitized name, detected type)
       },
-      error: () => {
-        this.actionError.set('uploadError');
-        this.uploading.set(false);
-        input.value = '';
+      error: (e: unknown) => {
+        this.finishUpload();
+        this.actionError.set(attachmentErrorKey(e, 'uploadError'));
+        if (e instanceof HttpErrorResponse && e.status === 409) this.stale.emit();
       },
     });
+  }
+
+  /**
+   * Stops waiting for an upload when the ticket or workspace changes. The server may already have stored the file; it then appears
+   * through the reloaded list or the live signal of that ticket, never in the newly shown one.
+   */
+  private cancelUpload(): void {
+    this.upload?.unsubscribe();
+    this.finishUpload();
+  }
+
+  private finishUpload(): void {
+    this.upload = undefined;
+    this.uploading.set(false);
+    const input = this.fileInput()?.nativeElement;
+    if (input) input.value = '';
   }
 
   protected download(a: AttachmentDto): void {
@@ -186,7 +209,7 @@ export class TicketAttachments {
         link.click();
         setTimeout(() => URL.revokeObjectURL(url));
       },
-      error: () => this.actionError.set('downloadError'),
+      error: (e: unknown) => this.actionError.set(attachmentErrorKey(e, 'downloadError')),
     });
   }
 }

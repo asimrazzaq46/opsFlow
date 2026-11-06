@@ -16,6 +16,10 @@ public static class TicketChanges
 [RealtimeEvent("ticket.changed")]
 public sealed record TicketChanged(Guid TenantId, Guid TicketId, string Change);
 
+/// <summary>Content-free signal to the people who may list this ticket's attachments; clients reload <c>GET .../attachments</c>.</summary>
+[RealtimeEvent("ticket.attachment.added")]
+public sealed record TicketAttachmentAdded(Guid TenantId, Guid TicketId);
+
 /// <summary>Sent only to the affected portal user: whether new tickets may be opened in this workspace changed. Clients re-read the authoritative state.</summary>
 [RealtimeEvent("customer.eligibility.changed")]
 public sealed record CustomerEligibilityChanged(Guid TenantId, bool CanCreateTickets);

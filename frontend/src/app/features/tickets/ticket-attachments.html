@@ -1,0 +1,91 @@
+<section class="rounded-xl border border-border bg-card p-4" aria-labelledby="att-title">
+  <h2 id="att-title" class="text-lg font-semibold">{{ 'attachments.title' | translate }}</h2>
+  <div aria-live="polite" class="mt-3">
+    @if (loading()) {
+      <p role="status" class="text-muted">{{ 'common.loading' | translate }}</p>
+    } @else if (error()) {
+      <p role="alert" class="text-danger">
+        {{ 'attachments.error' | translate }}
+        <button
+          type="button"
+          class="ml-2 underline focus-visible:outline-2 focus-visible:outline-brand"
+          (click)="load()"
+        >
+          {{ 'common.retry' | translate }}
+        </button>
+      </p>
+    } @else if (!items().length) {
+      <p class="text-muted">{{ 'attachments.empty' | translate }}</p>
+    } @else {
+      <ul class="divide-y divide-border">
+        @for (a of items(); track a.id) {
+          <li class="flex flex-wrap items-center justify-between gap-2 py-2">
+            <span class="break-all"
+              >{{ a.fileName }}
+              @if (a.isInternal) {
+                <span class="ml-1 rounded bg-amber-500/20 px-1.5 py-0.5 text-xs">{{
+                  'attachments.internalBadge' | translate
+                }}</span>
+              }
+              <span class="ml-2 text-xs text-muted"
+                >{{ size(a) }} · {{ a.createdAtUtc | date: 'short' }}</span
+              >
+            </span>
+            <button
+              type="button"
+              class="rounded-lg border border-border px-3 py-1 text-sm focus-visible:outline-2 focus-visible:outline-brand"
+              [attr.aria-label]="('attachments.download' | translate) + ' ' + a.fileName"
+              (click)="download(a)"
+            >
+              {{ 'attachments.download' | translate }}
+            </button>
+          </li>
+        }
+      </ul>
+    }
+  </div>
+  @if (actionError(); as problem) {
+    <p role="alert" class="mt-2 text-sm text-danger">
+      {{ 'attachments.' + problem | translate }}
+    </p>
+  }
+
+  @if (closed()) {
+    <p class="mt-4 text-sm text-muted">{{ 'attachments.closed' | translate }}</p>
+  } @else {
+    <div class="mt-4">
+      <label for="att-file" class="block text-sm font-medium">{{
+        'attachments.upload' | translate
+      }}</label>
+      <input
+        #fileInput
+        id="att-file"
+        type="file"
+        [attr.aria-busy]="uploading()"
+        [accept]="accept"
+        [disabled]="uploading()"
+        aria-describedby="att-allowed"
+        (change)="pick($event)"
+        class="mt-1 block w-full text-sm focus-visible:outline-2 focus-visible:outline-brand"
+      />
+      <p id="att-allowed" class="mt-1 text-xs text-muted">{{ 'attachments.allowed' | translate }}</p>
+      @if (uploading()) {
+        <p role="status" class="mt-2 flex items-center gap-1.5 text-xs text-muted">
+          <span class="ms text-[16px] motion-safe:animate-spin" aria-hidden="true">progress_activity</span
+          >{{ 'attachments.uploading' | translate }}
+        </p>
+      }
+      @if (staff()) {
+        <label class="mt-2 flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            [checked]="internal()"
+            [disabled]="uploading()"
+            (change)="internal.set(!internal())"
+          />
+          {{ 'attachments.internal' | translate }}
+        </label>
+      }
+    </div>
+  }
+</section>

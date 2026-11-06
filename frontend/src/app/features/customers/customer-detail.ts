@@ -14,7 +14,6 @@ import { Observable, map } from 'rxjs';
 import { TicketPriority, TicketStatus } from '../../core/api/generated/models';
 import { TenantService } from '../../core/auth/tenant.service';
 import { ConfirmDialog } from '../../shared/components/confirm-dialog/confirm-dialog';
-import { redirectUnlessManager } from '../../core/auth/manager-access';
 import { PRIORITY_BADGE, STATUS_BADGE, httpStatus, isForbidden, isNotFound } from '../tickets/ticket-ui';
 import { TicketsApi } from '../tickets/tickets-api';
 import { CustomersApi } from './customers-api';
@@ -107,10 +106,6 @@ export class CustomerDetail {
     const n = this.notice();
     return n === 'created' || n === 'saved' ? { key: n === 'created' ? 'customers.noticeCreated' : 'customers.noticeSaved', error: false } : null;
   });
-
-  constructor() {
-    redirectUnlessManager();
-  }
 
   protected openDeactivate(): void {
     this.deactivateDialog()?.open();

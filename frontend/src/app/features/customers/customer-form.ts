@@ -6,7 +6,6 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { TranslatePipe } from '@ngx-translate/core';
 import { map } from 'rxjs';
 import { TenantService } from '../../core/auth/tenant.service';
-import { redirectUnlessManager } from '../../core/auth/manager-access';
 import { fieldErrors, httpStatus, isForbidden, isNotFound } from '../tickets/ticket-ui';
 import { CustomersApi } from './customers-api';
 import { PortalUserPicker } from './portal-user-picker/portal-user-picker';
@@ -88,7 +87,6 @@ export class CustomerForm {
   protected readonly picker = viewChild<PortalUserPicker>('picker');
 
   constructor() {
-    redirectUnlessManager();
     effect(() => {
       const c = this.loaded();
       if (!c || this.populatedFor === c.id) return;
