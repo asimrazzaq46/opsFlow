@@ -3473,7 +3473,7 @@
           "Tenants"
         ],
         "summary": "Activate or suspend member",
-        "description": "Activates or suspends a staff membership in this workspace only. A tenant always keeps at least one usable Owner. Suspension takes effect immediately; an Agent's open assignments then show as unstaffed for reassignment. A stale expectedRole is refused (409 MEMBER_CHANGED). The change is audited and the member is told to reload. Requires the Owner role in the tenant.",
+        "description": "Activates or suspends a staff membership in this workspace only. A tenant always keeps at least one usable Owner. Suspending an active Agent who holds open work is refused once with 409 MEMBER_HAS_OPEN_WORK listing that work (canAcknowledge = true); repeating with acknowledgeOpenWork suspends immediately and the work shows as unstaffed for reassignment. A stale expectedRole is refused (409 MEMBER_CHANGED). The change is audited and the member is told to reload. Requires the Owner role in the tenant.",
         "operationId": "SetMemberStatus",
         "parameters": [
           {
@@ -8064,7 +8064,10 @@
             "format": "uuid"
           },
           "email": {
-            "type": "string"
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "displayName": {
             "type": "string"
@@ -8679,6 +8682,16 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          "expectedSkillIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         }
       },
@@ -8700,6 +8713,10 @@
                 "$ref": "#/components/schemas/TenantRole"
               }
             ]
+          },
+          "acknowledgeOpenWork": {
+            "type": "boolean",
+            "default": false
           }
         }
       },
@@ -9682,6 +9699,17 @@
               "null",
               "string"
             ]
+          },
+          "checkVersion": {
+            "type": "boolean",
+            "default": false
+          },
+          "expectedUpdatedAtUtc": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
           }
         }
       },

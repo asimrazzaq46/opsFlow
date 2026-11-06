@@ -1,0 +1,231 @@
+<nav class="mb-4 text-body-sm" [attr.aria-label]="'team.breadcrumb' | translate">
+  <a class="ops-link" routerLink="/team">‹ {{ 'team.title' | translate }}</a>
+</nav>
+
+@if (loadError(); as err) {
+  <div role="alert" class="ops-card flex flex-col items-center gap-3 p-8 text-center">
+    <p class="text-on-surface">{{ err | translate }}</p>
+    @if (err === 'team.detailError') {
+      <button type="button" class="ops-btn-secondary" (click)="load()">{{ 'common.retry' | translate }}</button>
+    }
+  </div>
+} @else if (detail(); as d) {
+  <header class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+    <div class="min-w-0">
+      <h1 class="text-headline-lg wrap-break-word text-on-surface">{{ d.member.displayName }}</h1>
+      <div class="mt-2 flex flex-wrap items-center gap-2">
+        <span class="ops-badge bg-primary-fixed text-on-primary-fixed">{{ 'roles.' + pascal(d.member.role) | translate }}</span>
+        <span
+          class="ops-badge"
+          [class.bg-secondary-container]="d.member.isActive"
+          [class.text-on-secondary-container]="d.member.isActive"
+          [class.bg-surface-container-high]="!d.member.isActive"
+          [class.text-on-surface-variant]="!d.member.isActive"
+          >{{ (d.member.isActive ? 'common.active' : 'team.suspended') | translate }}</span
+        >
+      </div>
+    </div>
+    @if (d.canChangeRoleAndStatus) {
+      <app-member-actions class="md:max-w-md" [member]="d.member" (changed)="load()" />
+    }
+  </header>
+
+  <div class="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
+    <!-- Overview and profile -->
+    <section class="ops-card p-4 lg:col-span-1" aria-labelledby="overview-title">
+      <h2 id="overview-title" class="ops-label mb-3">{{ 'team.overview' | translate }}</h2>
+      @if (d.canEditProfileAndSkills) {
+        <form class="flex flex-col gap-3" [formGroup]="profile" (ngSubmit)="saveProfile()" novalidate>
+          <label class="flex flex-col gap-1">
+            <span class="text-body-sm font-semibold text-on-surface">{{ 'team.jobTitle' | translate }}</span>
+            <input class="ops-input" formControlName="jobTitle" maxlength="100" autocomplete="organization-title" />
+          </label>
+          <label class="flex flex-col gap-1">
+            <span class="text-body-sm font-semibold text-on-surface">{{ 'team.department' | translate }}</span>
+            <input class="ops-input" formControlName="department" maxlength="100" />
+          </label>
+          <label class="flex flex-col gap-1">
+            <span class="text-body-sm font-semibold text-on-surface">{{ 'team.phone' | translate }}</span>
+            <input class="ops-input" type="tel" formControlName="phone" maxlength="40" autocomplete="tel" />
+          </label>
+          @if (profileMessage(); as msg) {
+            <p class="text-body-sm" [class.text-error]="msg.error" [attr.role]="msg.error ? 'alert' : 'status'">{{ msg.key | translate }}</p>
+          }
+          <button type="submit" class="ops-btn-primary h-10 self-start px-5" [disabled]="savingProfile() || profile.pristine || profile.invalid">
+            {{ (savingProfile() ? 'common.saving' : 'team.saveProfile') | translate }}
+          </button>
+        </form>
+      } @else {
+        <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-body-sm">
+          <dt class="text-on-surface-variant">{{ 'team.jobTitle' | translate }}</dt>
+          <dd class="text-on-surface">{{ d.member.jobTitle || '—' }}</dd>
+          <dt class="text-on-surface-variant">{{ 'team.department' | translate }}</dt>
+          <dd class="text-on-surface">{{ d.member.department || '—' }}</dd>
+          <dt class="text-on-surface-variant">{{ 'team.phone' | translate }}</dt>
+          <dd class="text-on-surface">{{ d.phone || '—' }}</dd>
+        </dl>
+      }
+      <dl class="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 border-t border-outline-variant/40 pt-4 text-body-sm">
+        <dt class="text-on-surface-variant">{{ 'customers.email' | translate }}</dt>
+        <dd class="wrap-break-word text-on-surface">{{ d.member.email || '—' }}</dd>
+        <dt class="text-on-surface-variant">{{ 'team.joined' | translate }}</dt>
+        <dd class="text-on-surface">
+          <time [attr.datetime]="d.member.joinedAtUtc">{{ d.member.joinedAtUtc | date: 'mediumDate' }}</time>
+        </dd>
+      </dl>
+    </section>
+
+    <div class="flex min-w-0 flex-col gap-4 lg:col-span-2">
+      <!-- Statistics: persisted data only -->
+      <section class="ops-card p-4" aria-labelledby="stats-title">
+        <h2 id="stats-title" class="ops-label mb-3">{{ 'team.stats.title' | translate }}</h2>
+        <dl class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div class="rounded-lg bg-surface-container-low p-3">
+            <dt class="text-body-sm text-on-surface-variant">{{ 'team.stats.assigned' | translate }}</dt>
+            <dd class="text-headline-md text-on-surface">{{ d.stats.openAssignmentCount }}</dd>
+          </div>
+          <div class="rounded-lg bg-surface-container-low p-3">
+            <dt class="text-body-sm text-on-surface-variant">{{ 'team.stats.tasks' | translate }}</dt>
+            <dd class="text-headline-md text-on-surface">{{ d.stats.openTaskCount }}</dd>
+          </div>
+          <div class="rounded-lg bg-surface-container-low p-3">
+            <dt class="text-body-sm text-on-surface-variant">{{ 'team.stats.resolvedTickets' | translate }}</dt>
+            <dd class="text-headline-md text-on-surface">{{ d.stats.resolvedTicketsDistinct }}</dd>
+          </div>
+          <div class="rounded-lg bg-surface-container-low p-3">
+            <dt class="text-body-sm text-on-surface-variant">{{ 'team.stats.resolveActions' | translate }}</dt>
+            <dd class="text-headline-md text-on-surface">{{ d.stats.resolveActions }}</dd>
+          </div>
+        </dl>
+        <p class="mt-3 text-body-sm text-on-surface-variant">{{ 'team.stats.note' | translate }}</p>
+      </section>
+
+      <!-- Skills -->
+      <section class="ops-card p-4" aria-labelledby="skills-title">
+        <h2 id="skills-title" class="ops-label mb-3">{{ 'team.skills' | translate }}</h2>
+        <ul class="flex flex-wrap gap-2" [attr.aria-label]="'team.skills' | translate">
+          @for (s of selectedSkills(); track s.id) {
+            <li class="ops-badge bg-surface-container text-on-surface">
+              {{ s.name }}
+              @if (!s.isActive) {
+                <span class="text-on-surface-variant">({{ 'common.inactive' | translate }})</span>
+              }
+              @if (d.canEditProfileAndSkills) {
+                <button
+                  type="button"
+                  class="ml-1 rounded-xs px-1 hover:bg-surface-container-high focus-visible:outline-2 focus-visible:outline-primary-container"
+                  [attr.aria-label]="'team.removeSkill' | translate: { name: s.name }"
+                  (click)="removeSkill(s.id)"
+                >
+                  ×
+                </button>
+              }
+            </li>
+          } @empty {
+            <li class="text-body-sm text-on-surface-variant">{{ 'team.noSkills' | translate }}</li>
+          }
+        </ul>
+
+        @if (d.canEditProfileAndSkills) {
+          <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+            @if (addable().length) {
+              <label class="flex flex-col gap-1">
+                <span class="text-body-sm font-semibold text-on-surface">{{ 'team.addSkill' | translate }}</span>
+                <select class="ops-select h-10" (change)="addSkill($any($event.target).value); $any($event.target).value = ''">
+                  <option value="">—</option>
+                  @for (s of addable(); track s.id) {
+                    <option [value]="s.id">{{ s.name }}</option>
+                  }
+                </select>
+              </label>
+            }
+            <form class="flex items-end gap-2" (submit)="$event.preventDefault(); createSkill()">
+              <label class="flex flex-col gap-1">
+                <span class="text-body-sm font-semibold text-on-surface">{{ 'team.newSkill' | translate }}</span>
+                <input class="ops-input" [formControl]="newSkill" [attr.maxlength]="skillNameMax" />
+              </label>
+              <button type="submit" class="ops-btn-secondary h-10 px-3" [disabled]="savingSkills() || !newSkill.value.trim()">
+                {{ 'team.createSkill' | translate }}
+              </button>
+            </form>
+          </div>
+          @if (skillsMessage(); as msg) {
+            <p class="mt-2 text-body-sm" [class.text-error]="msg.error" [attr.role]="msg.error ? 'alert' : 'status'">{{ msg.key | translate }}</p>
+          }
+          <div class="mt-3 flex flex-wrap gap-2">
+            <button type="button" class="ops-btn-primary h-10 px-5" [disabled]="savingSkills() || !skillsDirty()" (click)="saveSkills()">
+              {{ (savingSkills() ? 'common.saving' : 'team.saveSkills') | translate }}
+            </button>
+            @if (skillsDirty()) {
+              <button type="button" class="ops-btn-secondary h-10 px-4" [disabled]="savingSkills()" (click)="resetSkills()">
+                {{ 'team.discardChanges' | translate }}
+              </button>
+            }
+          </div>
+        }
+      </section>
+
+      <!-- Current assignments -->
+      <section class="ops-card p-4" aria-labelledby="assigned-title">
+        <h2 id="assigned-title" class="ops-label mb-3">{{ 'team.assignedTickets' | translate }}</h2>
+        <ul class="divide-y divide-outline-variant/40">
+          @for (t of d.assignedTickets; track t.ticketId) {
+            <li class="flex flex-wrap items-center justify-between gap-2 py-2 text-body-sm">
+              <a class="ops-link min-w-0 wrap-break-word" [routerLink]="['/tickets', t.ticketId]">
+                <span class="font-mono font-semibold">{{ t.displayNumber }}</span> · {{ t.title }}
+              </a>
+              <span class="flex gap-2">
+                <span class="ops-badge bg-surface-container text-on-surface-variant">{{ 'tickets.priority.' + pascal(t.priority) | translate }}</span>
+                <span class="ops-badge bg-surface-container-high text-on-surface">{{ 'tickets.status.' + pascal(t.status) | translate }}</span>
+              </span>
+            </li>
+          } @empty {
+            <li class="py-2 text-body-sm text-on-surface-variant">{{ 'team.noAssigned' | translate }}</li>
+          }
+        </ul>
+      </section>
+
+      <!-- Recent activity -->
+      <section class="ops-card p-4" aria-labelledby="activity-title">
+        <h2 id="activity-title" class="ops-label mb-3">{{ 'team.recentActivity' | translate }}</h2>
+        <ol class="flex flex-col gap-2">
+          @for (a of d.recentActivity; track $index) {
+            <li class="flex flex-wrap items-baseline justify-between gap-2 text-body-sm">
+              <span class="text-on-surface">
+                {{ 'tickets.activity.type.' + pascal(a.type) | translate }} ·
+                <a class="ops-link font-mono" [routerLink]="['/tickets', a.ticketId]">{{ a.displayNumber }}</a>
+              </span>
+              <time class="text-on-surface-variant" [attr.datetime]="a.occurredAtUtc">{{ a.occurredAtUtc | date: 'short' }}</time>
+            </li>
+          } @empty {
+            <li class="text-body-sm text-on-surface-variant">{{ 'team.noActivity' | translate }}</li>
+          }
+        </ol>
+      </section>
+
+      @if (d.adminHistory; as history) {
+        <section class="ops-card p-4" aria-labelledby="history-title">
+          <h2 id="history-title" class="ops-label mb-3">{{ 'team.adminHistory' | translate }}</h2>
+          <ol class="flex flex-col gap-2">
+            @for (h of history; track $index) {
+              <li class="flex flex-wrap items-baseline justify-between gap-2 text-body-sm">
+                <span class="min-w-0 wrap-break-word text-on-surface">
+                  {{ 'team.audit.' + pascal(h.action) | translate }}
+                  @if (h.detail) {
+                    <span class="text-on-surface-variant">· {{ h.detail }}</span>
+                  }
+                  <span class="text-on-surface-variant">· {{ h.actorDisplayName ?? '—' }}</span>
+                </span>
+                <time class="text-on-surface-variant" [attr.datetime]="h.occurredAtUtc">{{ h.occurredAtUtc | date: 'short' }}</time>
+              </li>
+            } @empty {
+              <li class="text-body-sm text-on-surface-variant">{{ 'team.noHistory' | translate }}</li>
+            }
+          </ol>
+        </section>
+      }
+    </div>
+  </div>
+} @else {
+  <p class="text-on-surface-variant" role="status">{{ 'common.loading' | translate }}</p>
+}

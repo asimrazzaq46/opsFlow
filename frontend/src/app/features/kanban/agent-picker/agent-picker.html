@@ -71,7 +71,9 @@
                     }
                   </span>
                   @if (ambiguous().has(a.displayName)) {
-                    <span class="truncate text-xs text-muted">{{ a.email }}</span>
+                    @if (a.email) {
+                      <span class="truncate text-xs text-muted">{{ a.email }}</span>
+                    }
                   }
                 </span>
                 @if (assignedIds().has(a.id)) {

@@ -138,7 +138,7 @@ public class ConversationTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(HttpStatusCode.Forbidden, (await w.Agent1.GetAsync(w.Url($"tickets/{t.Id}/messages"))).StatusCode);
         await HttpAssert.StatusAsync(HttpStatusCode.Created, await w.SendMessageAsync(w.Agent2, t.Id, "taking over"));
 
-        (await w.Owner.PutAsync(w.Url($"members/{w.Agent2Membership}/status"), new { isActive = false })).EnsureSuccessStatusCode();
+        (await w.Owner.PutAsync(w.Url($"members/{w.Agent2Membership}/status"), new { isActive = false, acknowledgeOpenWork = true })).EnsureSuccessStatusCode();
         Assert.Equal(HttpStatusCode.Forbidden, (await w.SendMessageAsync(w.Agent2, t.Id, "while suspended")).StatusCode);
     }
 

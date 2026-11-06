@@ -49,10 +49,14 @@ public sealed record MemberActivityDto(
 
 public sealed record AuditEntryDto(AuditAction Action, string? ActorDisplayName, string? Detail, DateTime OccurredAtUtc);
 
-/// <summary>Permissions are the server's decision for THIS caller; the client only uses them to shape the screen.</summary>
+/// <summary>
+/// Permissions are the server's decision for THIS caller; the client only uses them to shape the screen. ProfileUpdatedAtUtc is sent back
+/// on a profile edit so a concurrent change by another administrator is not overwritten.
+/// </summary>
 public sealed record TeamMemberDetailDto(
     TeamMemberRowDto Member,
     string? Phone,
+    DateTime? ProfileUpdatedAtUtc,
     bool CanEditProfileAndSkills,
     bool CanChangeRoleAndStatus,
     TeamMemberStatsDto Stats,
@@ -61,4 +65,11 @@ public sealed record TeamMemberDetailDto(
     IReadOnlyList<AuditEntryDto>? AdminHistory
 );
 
-public sealed record UpdateMemberProfileCommand(string? JobTitle, string? Department, string? Phone);
+/// <summary>ExpectedUpdatedAtUtc: the profile version the editor saw (null = no profile yet); omitted by callers that accept last-write-wins.</summary>
+public sealed record UpdateMemberProfileCommand(
+    string? JobTitle,
+    string? Department,
+    string? Phone,
+    bool CheckVersion = false,
+    DateTime? ExpectedUpdatedAtUtc = null
+);

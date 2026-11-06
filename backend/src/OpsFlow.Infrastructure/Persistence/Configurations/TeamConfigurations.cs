@@ -30,7 +30,14 @@ internal sealed class SkillConfiguration : IEntityTypeConfiguration<Skill>
 {
     public void Configure(EntityTypeBuilder<Skill> b)
     {
-        b.ToTable("Skills", t => t.HasCheckConstraint("CK_Skills_Name", "length(trim(\"Name\")) > 0"));
+        b.ToTable(
+            "Skills",
+            t =>
+            {
+                t.HasCheckConstraint("CK_Skills_Name", "length(trim(\"Name\")) > 0");
+                t.HasCheckConstraint("CK_Skills_NormalizedName", "length(trim(\"NormalizedName\")) > 0"); // the uniqueness key is never blank
+            }
+        );
         b.HasKey(s => s.Id);
         b.Property(s => s.Id).ValueGeneratedNever();
         b.Property(s => s.Name).HasMaxLength(Skill.MaxNameLength).IsRequired();
@@ -76,6 +83,12 @@ internal sealed class AuditEventConfiguration : IEntityTypeConfiguration<AuditEv
             .WithMany()
             .HasForeignKey(e => new { e.TenantId, e.TargetMembershipId })
             .HasPrincipalKey(m => new { m.TenantId, m.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        // Composite like every tenant-owned reference: an audit entry can only point at a skill of its own tenant.
+        b.HasOne<Skill>()
+            .WithMany()
+            .HasForeignKey(e => new { e.TenantId, e.TargetSkillId })
+            .HasPrincipalKey(k => new { k.TenantId, k.Id })
             .OnDelete(DeleteBehavior.Restrict);
         b.HasIndex(e => new { e.TenantId, e.TargetMembershipId, e.OccurredAtUtc });
     }

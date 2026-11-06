@@ -186,6 +186,7 @@ public sealed class TeamService(
         return new TeamMemberDetailDto(
             row,
             profile?.Phone,
+            profile?.UpdatedAtUtc,
             MayAdminister(caller, m.Role),
             caller == TenantRole.TenantOwner,
             stats,
@@ -239,6 +240,11 @@ public sealed class TeamService(
 
         var now = clock.GetUtcNow().UtcDateTime;
         var profile = await db.MemberProfiles.SingleOrDefaultAsync(p => p.MembershipId == target.Id, ct);
+        if (cmd.CheckVersion && !SameVersion(profile?.UpdatedAtUtc, cmd.ExpectedUpdatedAtUtc))
+        {
+            return Stale();
+        }
+
         if (profile is null)
         {
             profile = MemberProfile.Create(target.TenantId, target.Id, now);
@@ -250,9 +256,11 @@ public sealed class TeamService(
         return await CommitAsync(transaction, UniqueConstraintKind.MemberProfile, ct);
     }
 
+    /// <param name="expectedSkillIds">The set the editor saw; when given and no longer current, the replacement is refused.</param>
     public async Task<ObjectResult?> SetMemberSkillsAsync(
         Guid membershipId,
         IReadOnlyCollection<Guid> skillIds,
+        IReadOnlyCollection<Guid>? expectedSkillIds,
         CancellationToken ct
     )
     {
@@ -275,6 +283,10 @@ public sealed class TeamService(
         }
 
         var current = await db.MemberSkills.Where(s => s.MembershipId == target.Id).ToListAsync(ct);
+        if (expectedSkillIds is not null && !current.Select(s => s.SkillId).ToHashSet().SetEquals(expectedSkillIds))
+        {
+            return Stale();
+        }
         var added = wanted.Except(current.Select(s => s.SkillId)).ToList();
         // A deactivated tag may stay on a member but cannot be newly given.
         var assignable = await db.Skills.CountAsync(s => added.Contains(s.Id) && s.IsActive, ct);
@@ -299,6 +311,11 @@ public sealed class TeamService(
 
     public async Task<ActionResult<SkillDto>> CreateSkillAsync(string name, CancellationToken ct)
     {
+        if (InvalidSkillName(name) is { } invalid)
+        {
+            return invalid;
+        }
+
         if (await BeginCatalogWriteAsync(ct) is not { } transaction)
         {
             return ActorAccess.Forbidden("Only Owners and Managers can manage skills.");
@@ -321,6 +338,11 @@ public sealed class TeamService(
         CancellationToken ct
     )
     {
+        if (InvalidSkillName(name) is { } invalid)
+        {
+            return invalid;
+        }
+
         if (await BeginCatalogWriteAsync(ct) is not { } transaction)
         {
             return ActorAccess.Forbidden("Only Owners and Managers can manage skills.");
@@ -350,6 +372,23 @@ public sealed class TeamService(
     }
 
     // ---------------------------------------------------------------- internals
+
+    // PostgreSQL keeps microseconds, so a value read back can differ from .NET ticks by less than one microsecond.
+    private static bool SameVersion(DateTime? stored, DateTime? expected) =>
+        stored is null ? expected is null : expected is { } e && Math.Abs((stored.Value - e).Ticks) < 10;
+
+    private static ConflictObjectResult Stale()
+    {
+        var details = new ProblemDetails { Title = "The member was changed by someone else.", Detail = "Reload and try again." };
+        details.Extensions["code"] = MembershipService.StaleCode;
+        return new ConflictObjectResult(details);
+    }
+
+    // A blank name would give a blank uniqueness key; the database rejects it too (CK_Skills_NormalizedName).
+    private static BadRequestObjectResult? InvalidSkillName(string? name) =>
+        string.IsNullOrWhiteSpace(name) || name.Trim().Length > Skill.MaxNameLength
+            ? new BadRequestObjectResult(new ProblemDetails { Title = $"A skill name needs 1 to {Skill.MaxNameLength} characters." })
+            : null;
 
     private static bool IsAdmin(TenantRole role) => role is TenantRole.TenantOwner or TenantRole.Manager;
 

@@ -168,7 +168,7 @@ public class RealtimeRevocationTests(FastPathOnlyApiFactory factory) : IClassFix
         Assert.True(await hub.WaitForAsync(e => e.Name == "ticket.message.created"));
         var before = Delivered();
 
-        (await a.Owner.PutAsync(a.Url($"members/{membershipInA}/status"), new { isActive = false })).EnsureSuccessStatusCode();
+        (await a.Owner.PutAsync(a.Url($"members/{membershipInA}/status"), new { isActive = false, acknowledgeOpenWork = true })).EnsureSuccessStatusCode();
         await factory.Services.GetRequiredService<OpsFlow.Realtime.IRealtimeConnectionRevalidation>().RequestAsync();
         await a.SendMessageAsync(a.Manager, ticketA.Id, "a-2");
         await factory.DrainOutboxAsync();

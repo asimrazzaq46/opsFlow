@@ -1,0 +1,26 @@
+query TeamDirectory($search: String, $role: TenantRole, $isActive: Boolean, $skillId: UUID, $sortBy: String, $descending: Boolean!, $page: Int!, $pageSize: Int!) {
+  teamDirectory(search: $search, role: $role, isActive: $isActive, skillId: $skillId, sortBy: $sortBy, descending: $descending, page: $page, pageSize: $pageSize) {
+    page
+    pageSize
+    totalCount
+    items { membershipId userId displayName email role isActive jobTitle department openAssignmentCount joinedAtUtc skills { id name isActive } }
+  }
+}
+
+query TeamMember($membershipId: UUID!) {
+  teamMember(membershipId: $membershipId) {
+    phone
+    profileUpdatedAtUtc
+    canEditProfileAndSkills
+    canChangeRoleAndStatus
+    member { membershipId userId displayName email role isActive jobTitle department openAssignmentCount joinedAtUtc skills { id name isActive } }
+    stats { openAssignmentCount openTaskCount resolveActions resolvedTicketsDistinct }
+    assignedTickets { ticketId displayNumber title status priority }
+    recentActivity { ticketId displayNumber type occurredAtUtc }
+    adminHistory { action actorDisplayName detail occurredAtUtc }
+  }
+}
+
+query Skills($includeInactive: Boolean!) {
+  skills(includeInactive: $includeInactive) { id name isActive }
+}

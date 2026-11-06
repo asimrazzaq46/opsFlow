@@ -672,7 +672,9 @@
     "openWork": {
       "title": "{{name}} ha ancora lavoro aperto",
       "text": "Riassegna {{assignments}} assegnazioni di ticket aperte e {{tasks}} attività non completate prima di cambiare il ruolo.",
-      "dismiss": "Chiudi"
+      "dismiss": "Chiudi",
+      "suspendText": "La sospensione rimuove subito l'accesso. {{assignments}} assegnazioni di ticket aperte e {{tasks}} attività non completate risulteranno senza personale finché non le riassegni.",
+      "suspendAnyway": "Sospendi comunque"
     },
     "errors": {
       "failed": "Impossibile salvare la modifica.",
@@ -680,7 +682,61 @@
       "invalid": "Questa modifica non è consentita.",
       "notFound": "Questo membro non esiste più.",
       "conflict": "La modifica è in conflitto con il team attuale, ad esempio l'ultimo titolare attivo."
-    }
+    },
+    "searchPlaceholder": "Cerca per nome",
+    "searchPlaceholderAdmin": "Cerca per nome o email",
+    "suspended": "Sospeso",
+    "skills": "Competenze",
+    "empty": "Nessun membro corrisponde a questi filtri.",
+    "caption": "Membri del team di questo workspace",
+    "assignedShort": "Ticket aperti",
+    "viewEdit": "Apri / modifica",
+    "view": "Apri",
+    "assignedCount": "{{n}} ticket aperti",
+    "pagination": "Pagine del team",
+    "pageOf": "Pagina {{page}} di {{pages}} · {{total}} membri",
+    "breadcrumb": "Percorso",
+    "overview": "Panoramica",
+    "jobTitle": "Ruolo aziendale",
+    "department": "Reparto",
+    "phone": "Telefono",
+    "joined": "Iscritto dal",
+    "saveProfile": "Salva profilo",
+    "profileSaved": "Profilo salvato.",
+    "stats": {
+      "title": "Statistiche di lavoro",
+      "assigned": "Ticket aperti",
+      "tasks": "Attività aperte",
+      "resolvedTickets": "Ticket risolti",
+      "resolveActions": "Risoluzioni",
+      "note": "Calcolato dall'attività registrata in questo workspace: un ticket risulta risolto da chi lo ha risolto, non da ogni assegnatario. Un ticket riaperto e risolto di nuovo conta come un'ulteriore risoluzione."
+    },
+    "removeSkill": "Rimuovi competenza {{name}}",
+    "noSkills": "Ancora nessuna competenza.",
+    "addSkill": "Aggiungi una competenza",
+    "newSkill": "Nuova competenza",
+    "createSkill": "Crea e aggiungi",
+    "skillInactive": "Questa competenza è disattivata e non può essere aggiunta.",
+    "skillDuplicate": "Esiste già una competenza con questo nome; è stata ricaricata per poterla selezionare.",
+    "saveSkills": "Salva competenze",
+    "skillsSaved": "Competenze salvate.",
+    "discardChanges": "Annulla modifiche",
+    "assignedTickets": "Ticket assegnati ora",
+    "noAssigned": "Nessuna assegnazione di ticket aperta.",
+    "recentActivity": "Attività recente",
+    "noActivity": "Nessuna attività registrata.",
+    "adminHistory": "Modifiche amministrative",
+    "noHistory": "Nessuna modifica amministrativa.",
+    "audit": {
+      "MemberRoleChanged": "Ruolo modificato",
+      "MemberStatusChanged": "Stato modificato",
+      "MemberProfileUpdated": "Profilo aggiornato",
+      "MemberSkillsChanged": "Competenze modificate",
+      "SkillCreated": "Competenza creata",
+      "SkillUpdated": "Competenza aggiornata"
+    },
+    "detailForbidden": "Puoi aprire solo il tuo profilo.",
+    "detailError": "Impossibile caricare questo membro."
   },
   "invitations": {
     "title": "Inviti",

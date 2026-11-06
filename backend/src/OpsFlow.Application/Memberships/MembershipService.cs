@@ -15,6 +15,7 @@ public sealed partial class MembershipService(
     IOpsFlowDbContext db,
     ActorAccess actor,
     IUserDirectory users,
+    ITenantContext tenantContext,
     ICurrentUser currentUser,
     OutboxWriter outbox,
     IOutboxSignal outboxSignal,
@@ -35,10 +36,14 @@ public sealed partial class MembershipService(
     )
     {
         // Shared with GraphQL, whose policy admits Customers: the staff directory is for staff only.
-        if (await actor.RequireActiveRoleAsync(ct) == TenantRole.Customer)
+        var callerRole = await actor.RequireActiveRoleAsync(ct);
+        if (callerRole == TenantRole.Customer)
         {
             throw AppException.Forbidden("The team directory is not available to customers.");
         }
+
+        // Same rule as the GraphQL team directory: only Owners and Managers see colleagues' email addresses.
+        var seesEmails = callerRole is TenantRole.TenantOwner or TenantRole.Manager;
 
         (page, pageSize, var skip) = Paging.Normalize(page, pageSize, MaxPageSize); // overflow-safe paging
 
@@ -58,7 +63,7 @@ public sealed partial class MembershipService(
             return new MemberDto(
                 m.Id,
                 m.UserId,
-                u?.Email ?? string.Empty,
+                seesEmails || m.Id == tenantContext.MembershipId ? u?.Email ?? string.Empty : null,
                 u?.DisplayName ?? string.Empty,
                 m.Role,
                 m.Status == MembershipStatus.Active,
@@ -86,6 +91,7 @@ public sealed partial class MembershipService(
         return UpdateAsync(
             membershipId,
             expectedRole,
+            false,
             AuditAction.MemberRoleChanged,
             m => m.ChangeRole(role, clock.GetUtcNow().UtcDateTime),
             ct
@@ -96,11 +102,13 @@ public sealed partial class MembershipService(
         Guid membershipId,
         bool isActive,
         CancellationToken ct,
-        TenantRole? expectedRole = null
+        TenantRole? expectedRole = null,
+        bool acknowledgeOpenWork = false
     ) =>
         UpdateAsync(
             membershipId,
             expectedRole,
+            acknowledgeOpenWork,
             AuditAction.MemberStatusChanged,
             m => m.SetActive(isActive, clock.GetUtcNow().UtcDateTime),
             ct
@@ -112,11 +120,13 @@ public sealed partial class MembershipService(
     /// actor's or an Owner's authorization (demotion, suspension, deactivation) makes this commit fail; the retry then
     /// re-reads the actor's CURRENT authorization and the Owner count against fresh data. Rejected attempts roll back fully.
     /// An active Agent cannot move to another role while holding open work: the assignments and tasks would silently stop counting.
-    /// Suspension stays possible (it must work immediately, e.g. for a compromised account); the work then shows as unstaffed.
+    /// Suspension stays possible immediately (e.g. for a compromised account) but only once the administrator has seen the affected work
+    /// and acknowledged it; the work then shows as unstaffed for reassignment.
     /// </summary>
     private async Task<ObjectResult?> UpdateAsync(
         Guid membershipId,
         TenantRole? expectedRole,
+        bool acknowledgeOpenWork,
         AuditAction action,
         Action<Membership> change,
         CancellationToken ct
@@ -210,7 +220,10 @@ public sealed partial class MembershipService(
 
             // Counted AFTER the membership UPDATE: it waits for task and assignment writers holding this membership's row lock, so work
             // they commit is seen here, and later writers re-read the new role. Checking before the write would leave a race.
-            if (wasWorkingAgent && member.Role != TenantRole.Agent && await OpenWorkAsync(member.Id, ct) is { } openWork)
+            var leavesAgentRole = member.Role != TenantRole.Agent;
+            var suspendsAgent = member.Role == TenantRole.Agent && member.Status != MembershipStatus.Active;
+            if (wasWorkingAgent && (leavesAgentRole || (suspendsAgent && !acknowledgeOpenWork))
+                && await OpenWorkAsync(member.Id, canAcknowledge: !leavesAgentRole, ct) is { } openWork)
             {
                 return openWork;
             }
@@ -236,7 +249,7 @@ public sealed partial class MembershipService(
     /// The member's responsibilities that would stop counting: open assignments and unfinished tasks on tickets that are not yet resolved
     /// or closed. Null when there are none; otherwise a 409 listing them so the administrator can reassign first.
     /// </summary>
-    private async Task<ObjectResult?> OpenWorkAsync(Guid membershipId, CancellationToken ct)
+    private async Task<ObjectResult?> OpenWorkAsync(Guid membershipId, bool canAcknowledge, CancellationToken ct)
     {
         var activeTickets = db.Tickets.Where(t =>
             t.Status != TicketStatus.Resolved && t.Status != TicketStatus.Closed
@@ -270,12 +283,15 @@ public sealed partial class MembershipService(
         var problem = Problem(
             StatusCodesConflict,
             "The member still has open work.",
-            "Reassign their tickets and tasks before changing their role.",
+            canAcknowledge
+                ? "Suspending makes this work unstaffed until it is reassigned; repeat with acknowledgeOpenWork to confirm."
+                : "Reassign their tickets and tasks before changing their role.",
             OpenWorkCode
         );
         var details = (ProblemDetails)problem.Value!;
         details.Extensions["openAssignmentCount"] = assignmentCount;
         details.Extensions["openTaskCount"] = taskCount;
+        details.Extensions["canAcknowledge"] = canAcknowledge;
         details.Extensions["tickets"] = tickets.ConvertAll(t => new OpenWorkTicketDto(
             t.Id,
             TenantSettings.FormatNumber(prefix, t.Number),

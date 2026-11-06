@@ -3,6 +3,7 @@
 
 import { TenantRole } from '../models/tenant-role';
 export interface SetMemberStatusRequest {
+  acknowledgeOpenWork?: boolean;
   expectedRole?: (null | TenantRole);
   isActive: boolean;
 }

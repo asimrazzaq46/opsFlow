@@ -1,0 +1,72 @@
+<div class="flex flex-wrap items-center justify-end gap-2">
+  <label class="sr-only" [for]="'role-' + member().membershipId">{{
+    'team.changeRoleFor' | translate: { name: member().displayName }
+  }}</label>
+  <select
+    [id]="'role-' + member().membershipId"
+    class="ops-select"
+    [disabled]="busy()"
+    (change)="proposeRole($event)"
+  >
+    @for (r of staffRoles; track r) {
+      <option [value]="r" [selected]="r === restRole(member().role)">{{ 'roles.' + r | translate }}</option>
+    }
+  </select>
+  <button type="button" class="ops-btn-secondary h-9 px-3 text-body-sm" [disabled]="busy()" (click)="proposeStatus()">
+    {{ (member().isActive ? 'team.suspend' : 'team.reactivate') | translate }}
+    <span class="sr-only">{{ member().displayName }}</span>
+  </button>
+</div>
+
+@if (message(); as msg) {
+  <p class="mt-2 text-right text-body-sm" [class.text-error]="msg.error" [attr.role]="msg.error ? 'alert' : 'status'">
+    {{ msg.key | translate }}
+  </p>
+}
+
+@if (openWork(); as w) {
+  <section
+    role="alert"
+    class="mt-3 rounded-lg bg-error-container p-3 text-left text-body-sm text-on-error-container"
+    [attr.aria-label]="'team.openWork.title' | translate: { name: member().displayName }"
+  >
+    <p class="font-semibold">{{ 'team.openWork.title' | translate: { name: member().displayName } }}</p>
+    <p class="mt-1">
+      {{
+        (w.canAcknowledge ? 'team.openWork.suspendText' : 'team.openWork.text')
+          | translate: { assignments: w.assignments, tasks: w.tasks }
+      }}
+    </p>
+    @if (w.tickets.length) {
+      <ul class="mt-2 list-disc space-y-1 pl-5">
+        @for (t of w.tickets; track t.ticketId) {
+          <li>
+            <a class="font-semibold underline" [routerLink]="['/tickets', t.ticketId]">{{ t.displayNumber }}</a>
+            · {{ t.title }}
+          </li>
+        }
+      </ul>
+    }
+    <div class="mt-3 flex flex-wrap gap-3">
+      @if (w.canAcknowledge) {
+        <button type="button" class="ops-btn-secondary h-9 px-3 text-body-sm" [disabled]="busy()" (click)="suspendAnyway()">
+          {{ 'team.openWork.suspendAnyway' | translate }}
+        </button>
+      }
+      <button type="button" class="underline" (click)="openWork.set(null)">{{ 'team.openWork.dismiss' | translate }}</button>
+    </div>
+  </section>
+}
+
+<app-confirm-dialog
+  #dialog
+  [title]="(pending()?.role ? 'team.confirmRoleTitle' : pending()?.isActive ? 'team.confirmReactivateTitle' : 'team.confirmSuspendTitle') | translate"
+  [message]="
+    (pending()?.role ? 'team.confirmRole' : pending()?.isActive ? 'team.confirmReactivate' : 'team.confirmSuspend')
+      | translate: { name: member().displayName, role: pending()?.role ? ('roles.' + pending()!.role | translate) : '' }
+  "
+  [confirmLabel]="'team.confirm' | translate"
+  [busy]="busy()"
+  (confirmed)="confirm()"
+  (closed)="closed()"
+/>

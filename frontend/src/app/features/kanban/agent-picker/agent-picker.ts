@@ -15,7 +15,8 @@ export interface PickerAgent {
   id: string;
   userId: string;
   displayName: string;
-  email: string;
+  /** Null when the caller may not see it (Agents see only their own address). */
+  email: string | null;
 }
 
 export interface PickerAssignee {
@@ -65,7 +66,7 @@ export class AgentPicker {
     const q = this.query().trim().toLowerCase();
     const agents = this.agents();
     return q
-      ? agents.filter((a) => a.displayName.toLowerCase().includes(q) || a.email.toLowerCase().includes(q))
+      ? agents.filter((a) => a.displayName.toLowerCase().includes(q) || (a.email ?? '').toLowerCase().includes(q))
       : agents;
   });
   /** Duplicate display names are told apart by e-mail. */

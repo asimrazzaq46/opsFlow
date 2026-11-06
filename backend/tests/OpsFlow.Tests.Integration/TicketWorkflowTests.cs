@@ -55,7 +55,7 @@ public class TicketWorkflowTests(ApiFactory factory) : IClassFixture<ApiFactory>
     {
         var (w, ticket) = await AssignedTicketAsync(); // unassigned
         var other = await TicketWorld.CreateAsync(factory);
-        (await w.Owner.PutAsync(w.Url($"members/{w.Agent2Membership}/status"), new { isActive = false })).EnsureSuccessStatusCode();
+        (await w.Owner.PutAsync(w.Url($"members/{w.Agent2Membership}/status"), new { isActive = false, acknowledgeOpenWork = true })).EnsureSuccessStatusCode();
         await w.AssignAsync(ticket.Id, w.Agent1Membership);
         string Path() => w.Url($"tickets/{ticket.Id}/assignments");
 
@@ -75,7 +75,7 @@ public class TicketWorkflowTests(ApiFactory factory) : IClassFixture<ApiFactory>
     {
         var (w, ticket) = await AssignedTicketAsync();
         await w.AssignAsync(ticket.Id, w.Agent1Membership);
-        (await w.Owner.PutAsync(w.Url($"members/{w.Agent1Membership}/status"), new { isActive = false })).EnsureSuccessStatusCode();
+        (await w.Owner.PutAsync(w.Url($"members/{w.Agent1Membership}/status"), new { isActive = false, acknowledgeOpenWork = true })).EnsureSuccessStatusCode();
 
         var detail = await w.GetTicketAsync(w.Manager, ticket.Id);
         var history = await w.Manager.ReadAsync<List<AssignmentJson>>(await w.Manager.GetAsync(w.Url($"tickets/{ticket.Id}/assignments?includeHistory=true")));
@@ -483,7 +483,7 @@ public class TicketWorkflowTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var w = await TicketWorld.CreateAsync(factory);
         var ticket = await w.CreateTicketAsync(w.Customer);
         await w.AssignAsync(ticket.Id, w.Agent1Membership, w.Agent2Membership);
-        (await w.Owner.PutAsync(w.Url($"members/{w.Agent1Membership}/status"), new { isActive = false })).EnsureSuccessStatusCode();
+        (await w.Owner.PutAsync(w.Url($"members/{w.Agent1Membership}/status"), new { isActive = false, acknowledgeOpenWork = true })).EnsureSuccessStatusCode();
 
         var detail = await w.GetTicketAsync(w.Manager, ticket.Id);
 
@@ -507,7 +507,7 @@ public class TicketWorkflowTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var ticket = await w.CreateTicketAsync(w.Manager, new { title = "Orphan soon", description = "d", categoryId = w.CategoryId, assigneeMembershipIds = new[] { w.Agent1Membership } });
         await w.MoveAsync(w.Agent1, ticket.Id, "InProgress");
         var healthy = await w.CreateTicketAsync(w.Manager, new { title = "Healthy", description = "d", categoryId = w.CategoryId, assigneeMembershipIds = new[] { w.Agent2Membership } });
-        (await w.Owner.PutAsync(w.Url($"members/{w.Agent1Membership}/status"), new { isActive = false })).EnsureSuccessStatusCode();
+        (await w.Owner.PutAsync(w.Url($"members/{w.Agent1Membership}/status"), new { isActive = false, acknowledgeOpenWork = true })).EnsureSuccessStatusCode();
 
         async Task<Guid[]> UnstaffedAsync() =>
             (await w.Manager.ReadAsync<PagedDto<TicketSummaryJson>>(await w.Manager.GetAsync(w.Url("tickets?state=Unstaffed")))).Items.Select(t => t.Id).ToArray();
@@ -666,7 +666,7 @@ public class TicketWorkflowTests(ApiFactory factory) : IClassFixture<ApiFactory>
             var transition = Task.Run(() => { TicketWorld.SignInAs(serviceScope.ServiceProvider, w.Agent1); return service.TransitionAsync(ticket.Id, TicketStatus.InProgress, null, CancellationToken.None); });
             Assert.True(await factory.SaveGate.WaitUntilPausedAsync());
 
-            var suspension = w.Owner.PutAsync(w.Url($"members/{w.Agent1Membership}/status"), new { isActive = false });
+            var suspension = w.Owner.PutAsync(w.Url($"members/{w.Agent1Membership}/status"), new { isActive = false, acknowledgeOpenWork = true });
             await w.WaitForLockWaiterAsync(); // the suspension must wait for the commit boundary
             factory.SaveGate.Resume();
 

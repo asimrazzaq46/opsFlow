@@ -69,6 +69,42 @@ public class TeamTests(ApiFactory factory) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task Suspending_an_agent_with_open_work_needs_an_explicit_acknowledgement_and_then_applies_immediately()
+    {
+        var w = await TicketWorld.CreateAsync(factory);
+        var ticket = await w.AssignAsync((await w.CreateTicketAsync(w.Customer)).Id, w.Agent2Membership);
+
+        var first = await w.Owner.PutAsync(w.Url($"members/{w.Agent2Membership}/status"), new { isActive = false });
+        Assert.Equal(HttpStatusCode.Conflict, first.StatusCode);
+        using (var problem = JsonDocument.Parse(await first.Content.ReadAsStringAsync()))
+        {
+            Assert.Equal("MEMBER_HAS_OPEN_WORK", problem.RootElement.GetProperty("code").GetString());
+            Assert.True(problem.RootElement.GetProperty("canAcknowledge").GetBoolean());
+            Assert.Contains(problem.RootElement.GetProperty("tickets").EnumerateArray(), t => t.GetProperty("ticketId").GetGuid() == ticket.Id);
+        }
+
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (await w.Owner.PutAsync(w.Url($"members/{w.Agent2Membership}/status"), new { isActive = false, acknowledgeOpenWork = true })).StatusCode
+        );
+        // A role change can never be acknowledged away: the work must be reassigned first.
+        var promote = await w.Owner.PutAsync(w.Url($"members/{w.Agent2Membership}/role"), new { role = "Manager", expectedRole = "Agent" });
+        Assert.Equal(HttpStatusCode.Conflict, promote.StatusCode);
+    }
+
+    [Fact]
+    public async Task Agents_never_receive_colleagues_emails_through_the_rest_member_list()
+    {
+        var w = await TicketWorld.CreateAsync(factory);
+        using var doc = JsonDocument.Parse(await (await w.Agent1.GetAsync(w.Url("members?pageSize=50"))).Content.ReadAsStringAsync());
+        foreach (var row in doc.RootElement.GetProperty("items").EnumerateArray())
+        {
+            var mine = row.GetProperty("id").GetGuid() == w.Agent1Membership;
+            Assert.Equal(mine ? JsonValueKind.String : JsonValueKind.Null, row.GetProperty("email").ValueKind);
+        }
+    }
+
+    [Fact]
     public async Task Skills_are_managed_by_owners_for_everyone_and_by_managers_for_agents_only()
     {
         var w = await TicketWorld.CreateAsync(factory);

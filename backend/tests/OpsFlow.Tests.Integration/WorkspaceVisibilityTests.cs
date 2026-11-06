@@ -83,7 +83,7 @@ public class WorkspaceVisibilityTests(ApiFactory factory) : IClassFixture<ApiFac
         Assert.Equal(HttpStatusCode.Forbidden, (await otherTenant.Agent1.GetAsync(w.Url($"tickets/{others.Id}"))).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await otherTenant.Agent1.PostAsync($"/api/v1/tenants/{w.Org.Id}/graphql", new { query = "{ tickets { totalCount } }" })).StatusCode);
 
-        (await w.Owner.PutAsync(w.Url($"members/{w.Agent1Membership}/status"), new { isActive = false })).EnsureSuccessStatusCode();
+        (await w.Owner.PutAsync(w.Url($"members/{w.Agent1Membership}/status"), new { isActive = false, acknowledgeOpenWork = true })).EnsureSuccessStatusCode();
         Assert.Equal(HttpStatusCode.Forbidden, (await w.Agent1.GetAsync(w.Url($"tickets/{others.Id}"))).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await w.Agent1.GetAsync(w.Url("tickets"))).StatusCode);
 

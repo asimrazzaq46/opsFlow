@@ -131,7 +131,7 @@ public class RealtimeTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.True(await agent2.WaitForAsync(e => e.Name == "ticket.message.created"));
 
         (await w.Manager.DeleteAsync(w.Url($"tickets/{ticket.Id}/assignments/{w.Agent1Membership}"))).EnsureSuccessStatusCode();
-        (await w.Owner.PutAsync(w.Url($"members/{w.Agent2Membership}/status"), new { isActive = false })).EnsureSuccessStatusCode();
+        (await w.Owner.PutAsync(w.Url($"members/{w.Agent2Membership}/status"), new { isActive = false, acknowledgeOpenWork = true })).EnsureSuccessStatusCode();
         var before1 = agent1.Events.Count(e => e.Name == "ticket.message.created");
         var before2 = agent2.Events.Count(e => e.Name == "ticket.message.created");
 

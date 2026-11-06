@@ -150,7 +150,7 @@ export class TenantsService extends BaseService {
   /**
    * Activate or suspend member.
    *
-   * Activates or suspends a staff membership in this workspace only. A tenant always keeps at least one usable Owner. Suspension takes effect immediately; an Agent's open assignments then show as unstaffed for reassignment. A stale expectedRole is refused (409 MEMBER_CHANGED). The change is audited and the member is told to reload. Requires the Owner role in the tenant.
+   * Activates or suspends a staff membership in this workspace only. A tenant always keeps at least one usable Owner. Suspending an active Agent who holds open work is refused once with 409 MEMBER_HAS_OPEN_WORK listing that work (canAcknowledge = true); repeating with acknowledgeOpenWork suspends immediately and the work shows as unstaffed for reassignment. A stale expectedRole is refused (409 MEMBER_CHANGED). The change is audited and the member is told to reload. Requires the Owner role in the tenant.
    *
    * This method provides access to the full `HttpResponse`, allowing access to response headers.
    * To access only the response body, use `setMemberStatus()` instead.
@@ -165,7 +165,7 @@ export class TenantsService extends BaseService {
   /**
    * Activate or suspend member.
    *
-   * Activates or suspends a staff membership in this workspace only. A tenant always keeps at least one usable Owner. Suspension takes effect immediately; an Agent's open assignments then show as unstaffed for reassignment. A stale expectedRole is refused (409 MEMBER_CHANGED). The change is audited and the member is told to reload. Requires the Owner role in the tenant.
+   * Activates or suspends a staff membership in this workspace only. A tenant always keeps at least one usable Owner. Suspending an active Agent who holds open work is refused once with 409 MEMBER_HAS_OPEN_WORK listing that work (canAcknowledge = true); repeating with acknowledgeOpenWork suspends immediately and the work shows as unstaffed for reassignment. A stale expectedRole is refused (409 MEMBER_CHANGED). The change is audited and the member is told to reload. Requires the Owner role in the tenant.
    *
    * This method provides access only to the response body.
    * To access the full response (for headers, for example), `setMemberStatus$Response()` instead.

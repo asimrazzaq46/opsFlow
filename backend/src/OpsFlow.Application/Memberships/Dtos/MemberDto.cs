@@ -10,10 +10,11 @@ namespace OpsFlow.Application.Memberships;
 [OpsFlow.Realtime.RealtimeEvent("membership.changed")]
 public sealed record MembershipChanged(Guid TenantId, Guid MembershipId);
 
+/// <summary>Email is null when the caller may not see it: Agents see only their own address.</summary>
 public sealed record MemberDto(
     Guid Id,
     Guid UserId,
-    string Email,
+    string? Email,
     string DisplayName,
     TenantRole Role,
     bool IsActive,

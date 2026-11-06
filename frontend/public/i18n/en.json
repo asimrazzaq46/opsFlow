@@ -672,7 +672,9 @@
     "openWork": {
       "title": "{{name}} still has open work",
       "text": "Reassign {{assignments}} open ticket assignment(s) and {{tasks}} unfinished task(s) before changing the role.",
-      "dismiss": "Dismiss"
+      "dismiss": "Dismiss",
+      "suspendText": "Suspending removes their access now. {{assignments}} open ticket assignment(s) and {{tasks}} unfinished task(s) will show as unstaffed until you reassign them.",
+      "suspendAnyway": "Suspend anyway"
     },
     "errors": {
       "failed": "The change could not be saved.",
@@ -680,7 +682,61 @@
       "invalid": "This change is not allowed.",
       "notFound": "This member no longer exists.",
       "conflict": "The change conflicts with the current team, for example the last active Owner."
-    }
+    },
+    "searchPlaceholder": "Search by name",
+    "searchPlaceholderAdmin": "Search by name or email",
+    "suspended": "Suspended",
+    "skills": "Skills",
+    "empty": "No team members match these filters.",
+    "caption": "Team members of this workspace",
+    "assignedShort": "Open tickets",
+    "viewEdit": "View / edit",
+    "view": "View",
+    "assignedCount": "{{n}} open tickets",
+    "pagination": "Team pages",
+    "pageOf": "Page {{page}} of {{pages}} · {{total}} members",
+    "breadcrumb": "Breadcrumb",
+    "overview": "Overview",
+    "jobTitle": "Job title",
+    "department": "Department",
+    "phone": "Phone",
+    "joined": "Joined",
+    "saveProfile": "Save profile",
+    "profileSaved": "Profile saved.",
+    "stats": {
+      "title": "Work statistics",
+      "assigned": "Open tickets",
+      "tasks": "Open tasks",
+      "resolvedTickets": "Tickets resolved",
+      "resolveActions": "Resolve actions",
+      "note": "Counted from recorded activity in this workspace: a ticket counts as resolved by whoever resolved it, not by every assignee. A reopened ticket resolved again adds another resolve action."
+    },
+    "removeSkill": "Remove skill {{name}}",
+    "noSkills": "No skills yet.",
+    "addSkill": "Add a skill",
+    "newSkill": "New skill",
+    "createSkill": "Create and add",
+    "skillInactive": "This skill is deactivated and cannot be added.",
+    "skillDuplicate": "A skill with this name already exists; it was reloaded so you can pick it.",
+    "saveSkills": "Save skills",
+    "skillsSaved": "Skills saved.",
+    "discardChanges": "Discard changes",
+    "assignedTickets": "Currently assigned tickets",
+    "noAssigned": "No open ticket assignments.",
+    "recentActivity": "Recent activity",
+    "noActivity": "No recorded activity yet.",
+    "adminHistory": "Administrative changes",
+    "noHistory": "No administrative changes yet.",
+    "audit": {
+      "MemberRoleChanged": "Role changed",
+      "MemberStatusChanged": "Status changed",
+      "MemberProfileUpdated": "Profile updated",
+      "MemberSkillsChanged": "Skills changed",
+      "SkillCreated": "Skill created",
+      "SkillUpdated": "Skill updated"
+    },
+    "detailForbidden": "You can open only your own employee profile.",
+    "detailError": "Could not load this employee."
   },
   "invitations": {
     "title": "Invitations",

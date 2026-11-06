@@ -122,5 +122,11 @@ export const routes: Routes = [
     canActivate: [authGuard, workspaceGuard],
     loadComponent: () => import('./features/team/team').then((m) => m.Team),
   },
+  {
+    path: 'team/:membershipId',
+    canActivate: [authGuard, workspaceGuard],
+    loadComponent: () =>
+      import('./features/team/member-detail/member-detail').then((m) => m.MemberDetail),
+  },
   { path: '**', redirectTo: '' },
 ];

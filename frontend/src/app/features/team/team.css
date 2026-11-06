@@ -1,3 +1,26 @@
 :host {
   display: block;
 }
+
+.team-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 0.125rem;
+  text-transform: inherit;
+  letter-spacing: inherit;
+}
+
+.team-sort:focus-visible {
+  outline: 2px solid var(--ops-primary-container);
+  outline-offset: 2px;
+}
+
+/* The sorted column is announced through aria-sort; the arrow is a visual hint only. */
+th[aria-sort='ascending'] .team-sort::after {
+  content: '↑';
+}
+
+th[aria-sort='descending'] .team-sort::after {
+  content: '↓';
+}

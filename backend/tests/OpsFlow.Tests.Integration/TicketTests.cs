@@ -161,7 +161,7 @@ public class TicketTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var other = await TicketWorld.CreateAsync(factory);
         var inactive = await w.Owner.ReadAsync<CategoryJson>(await w.Owner.PostAsync(w.Url("ticket-categories"), new { name = "Retired" }));
         (await w.Owner.PutAsync(w.Url($"ticket-categories/{inactive.Id}/status"), new { isActive = false })).EnsureSuccessStatusCode();
-        (await w.Owner.PutAsync(w.Url($"members/{w.Agent2Membership}/status"), new { isActive = false })).EnsureSuccessStatusCode();
+        (await w.Owner.PutAsync(w.Url($"members/{w.Agent2Membership}/status"), new { isActive = false, acknowledgeOpenWork = true })).EnsureSuccessStatusCode();
         object Body(Guid category, Guid[]? agents = null, string priority = "Low") => new { title = "Check refs", description = "d", categoryId = category, priority, assigneeMembershipIds = agents };
 
         Assert.Equal(HttpStatusCode.BadRequest, (await w.TryCreateTicketAsync(w.Manager, Body(inactive.Id))).StatusCode); // inactive category
@@ -271,7 +271,7 @@ public class TicketTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(HttpStatusCode.OK, (await w.Manager.GetAsync(w.Url($"tickets/{ticket.Id}"))).StatusCode); // an Agent discovers workspace tickets...
         Assert.Equal(HttpStatusCode.Forbidden, (await w.Manager.PutAsync(w.Url($"tickets/{ticket.Id}"), new { title = "Not mine" })).StatusCode); // ...but is not responsible for them
 
-        (await w.Owner.PutAsync(w.Url($"members/{w.Agent1Membership}/status"), new { isActive = false })).EnsureSuccessStatusCode();
+        (await w.Owner.PutAsync(w.Url($"members/{w.Agent1Membership}/status"), new { isActive = false, acknowledgeOpenWork = true })).EnsureSuccessStatusCode();
         Assert.Equal(HttpStatusCode.Forbidden, (await w.Agent1.GetAsync(w.Url("tickets"))).StatusCode);
     }
 

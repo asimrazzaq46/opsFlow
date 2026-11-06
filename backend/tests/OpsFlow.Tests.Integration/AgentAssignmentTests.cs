@@ -67,7 +67,7 @@ public class AgentAssignmentTests(ApiFactory factory) : IClassFixture<ApiFactory
         Assert.Equal(HttpStatusCode.BadRequest, (await w.Agent1.PostAsync(Assignments(w, t.Id), new { membershipIds = new[] { Guid.NewGuid() } })).StatusCode); // unknown
         Assert.Equal(HttpStatusCode.Forbidden, (await w.Customer.PostAsync(Assignments(w, t.Id), new { membershipIds = new[] { w.Agent1Membership } })).StatusCode);
 
-        (await w.Owner.PutAsync(w.Url($"members/{w.Agent2Membership}/status"), new { isActive = false })).EnsureSuccessStatusCode();
+        (await w.Owner.PutAsync(w.Url($"members/{w.Agent2Membership}/status"), new { isActive = false, acknowledgeOpenWork = true })).EnsureSuccessStatusCode();
         var inactive = await w.Agent1.PostAsync(Assignments(w, (await w.CreateTicketAsync(w.Customer)).Id), new { membershipIds = new[] { w.Agent2Membership } });
         Assert.Equal(HttpStatusCode.BadRequest, inactive.StatusCode); // suspended members are not assignable
 

@@ -7,86 +7,66 @@ import {
   inject,
   signal,
   untracked,
-  viewChild,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { TranslatePipe } from '@ngx-translate/core';
-import { TimeoutError, timeout } from 'rxjs';
+import { Subscription, TimeoutError, debounceTime, distinctUntilChanged, map, timeout } from 'rxjs';
 import { InvitationsService } from '../../core/api/generated/services/invitations.service';
-import { TenantsService } from '../../core/api/generated/services/tenants.service';
 import { InvitationDto, TenantRole } from '../../core/api/generated/models';
+import { AuthService } from '../../core/auth/auth.service';
 import { TenantService } from '../../core/auth/tenant.service';
-import { GraphqlClient } from '../../core/graphql/graphql-client';
-import { TeamMembersDocument, TeamMembersQuery } from '../../core/graphql/generated';
-import { ConfirmDialog } from '../../shared/components/confirm-dialog/confirm-dialog';
+import { TenantRole as GqlTenantRole } from '../../core/graphql/generated';
 import { pascal } from '../../shared/format';
-
-type MemberRow = TeamMembersQuery['teamMembers']['items'][number];
-
-/** Staff roles an Owner can give through the existing role endpoint. */
-const STAFF_ROLES: readonly TenantRole[] = ['Agent', 'Manager', 'TenantOwner'];
-
-/** A role or status change waiting for the Owner's confirmation. */
-interface PendingChange {
-  member: MemberRow;
-  role?: TenantRole;
-  isActive?: boolean;
-}
-
-/** Work that blocks moving an Agent to another role, as reported by the server. */
-interface OpenWork {
-  member: string;
-  assignments: number;
-  tasks: number;
-  tickets: { ticketId: string; displayNumber: string; title: string }[];
-}
+import { MemberActions } from './member-actions/member-actions';
+import { Skill, TeamApi, TeamPage, TeamQuery, TeamRow, TeamSort } from './team-api';
 
 const PAGE_SIZE = 20;
+const SKILLS_SHOWN = 3;
 /** A request that has not answered by then ends in a retryable error instead of an endless spinner. */
 const REQUEST_TIMEOUT_MS = 20_000;
+const FILTER_ROLES: readonly GqlTenantRole[] = ['TENANT_OWNER', 'MANAGER', 'AGENT'];
 
 /**
- * The team directory is visible to staff (read-only for Agents). Invitations are managed by Owners and Managers only; what each role may
- * invite follows the server's rules, which remain the real authorization: the UI only avoids offering actions that would be rejected.
+ * The workspace's employee directory. Search, filters, sorting and paging run on the server, which also decides what each caller may see
+ * (Agents get no colleagues' emails and open only their own profile). Role and status changes are Owner-only; invitations are managed by
+ * Owners and Managers.
  */
 @Component({
   selector: 'app-team',
-  imports: [ReactiveFormsModule, TranslatePipe, ConfirmDialog, RouterLink],
+  imports: [ReactiveFormsModule, TranslatePipe, RouterLink, MemberActions],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './team.html',
   styleUrl: './team.css',
 })
 export class Team {
-  private readonly gql = inject(GraphqlClient);
+  private readonly api = inject(TeamApi);
   private readonly invitationsService = inject(InvitationsService);
-  private readonly tenantsService = inject(TenantsService);
+  private readonly auth = inject(AuthService);
   protected readonly tenant = inject(TenantService);
   protected readonly pascal = pascal;
-  protected readonly staffRoles = STAFF_ROLES;
-  private readonly changeDialog = viewChild<ConfirmDialog>('changeDialog');
-
-  /** Only Owners change roles and statuses (server-enforced); other staff get a read-only list. */
-  protected readonly canManageMembers = computed(() => this.tenant.role() === 'TenantOwner');
-  protected readonly pending = signal<PendingChange | null>(null);
-  protected readonly changing = signal(false);
-  protected readonly openWork = signal<OpenWork | null>(null);
-  protected readonly changeMessage = signal<{ key: string; error: boolean } | null>(null);
+  protected readonly filterRoles = FILTER_ROLES;
+  protected readonly skillsShown = SKILLS_SHOWN;
 
   protected readonly canView = computed(() => this.tenant.isStaff());
-  protected readonly canInvite = computed(() => {
-    const role = this.tenant.role();
-    return role === 'TenantOwner' || role === 'Manager';
-  });
+  protected readonly isAdmin = computed(() => this.tenant.isManager());
+  /** Only Owners change roles and statuses (server-enforced). */
+  protected readonly canManageMembers = computed(() => this.tenant.isOwner());
+  protected readonly canInvite = computed(() => this.tenant.isManager());
   /** Owners may invite any role; Managers only Agents and Customers. */
   protected readonly roles = computed<TenantRole[]>(() =>
-    this.tenant.role() === 'TenantOwner'
-      ? ['Manager', 'Agent', 'Customer', 'TenantOwner']
-      : ['Agent', 'Customer'],
+    this.tenant.isOwner() ? ['Manager', 'Agent', 'Customer', 'TenantOwner'] : ['Agent', 'Customer'],
   );
 
-  protected readonly data = signal<TeamMembersQuery['teamMembers'] | null>(null);
+  protected readonly query = signal<TeamQuery>(initialQuery());
+  protected readonly data = signal<TeamPage | null>(null);
+  protected readonly loading = signal(false);
   protected readonly error = signal(false);
+  protected readonly skills = signal<Skill[]>([]);
+  protected readonly pages = computed(() => Math.max(1, Math.ceil((this.data()?.totalCount ?? 0) / PAGE_SIZE)));
+  protected readonly search = new FormControl('', { nonNullable: true });
+
   protected readonly invitations = signal<InvitationDto[]>([]);
   protected readonly invitationsError = signal(false);
   protected readonly busy = signal(false);
@@ -98,7 +78,7 @@ export class Team {
     }),
     role: new FormControl<TenantRole>('Agent', { nonNullable: true }),
   });
-  private page = 1;
+  private request?: Subscription;
 
   constructor() {
     // Workspace or role changes reset everything that belonged to the previous one.
@@ -109,38 +89,97 @@ export class Team {
       untracked(() => {
         this.data.set(null);
         this.error.set(false);
+        this.skills.set([]);
         this.invitations.set([]);
         this.invitationsError.set(false);
         this.message.set(null);
-        this.openWork.set(null);
-        this.pending.set(null);
-        this.changeMessage.set(null);
         this.invite.reset({ email: '', role: 'Agent' });
+        this.search.setValue('', { emitEvent: false });
+        this.query.set(initialQuery());
         if (!tenantId || !canView) return;
-        this.go(1);
+        this.loadSkills();
         if (canInvite) this.loadInvitations();
       });
     });
+    effect(() => {
+      const q = this.query();
+      if (this.tenant.tenantId() && this.canView()) untracked(() => this.load(q));
+    });
+    this.search.valueChanges
+      .pipe(
+        debounceTime(350),
+        map((v) => v.trim()),
+        distinctUntilChanged(),
+        takeUntilDestroyed(),
+      )
+      .subscribe((search) => this.update({ search }));
   }
 
-  protected pages = (d: NonNullable<TeamMembersQuery['teamMembers']>) =>
-    Math.max(1, Math.ceil(d.totalCount / PAGE_SIZE));
+  protected update(change: Partial<TeamQuery>): void {
+    this.query.update((q) => ({ ...q, page: 1, ...change }));
+  }
 
   protected go(page: number): void {
-    this.page = page;
-    this.load();
+    this.query.update((q) => ({ ...q, page }));
   }
 
-  protected load(): void {
+  protected sort(by: TeamSort): void {
+    const q = this.query();
+    this.update({ sortBy: by, descending: q.sortBy === by ? !q.descending : false });
+  }
+
+  protected ariaSort(by: TeamSort): 'ascending' | 'descending' | 'none' {
+    const q = this.query();
+    return q.sortBy !== by ? 'none' : q.descending ? 'descending' : 'ascending';
+  }
+
+  protected onRole(value: string): void {
+    this.update({ role: (value || null) as GqlTenantRole | null });
+  }
+
+  protected onStatus(value: string): void {
+    this.update({ isActive: value === '' ? null : value === 'active' });
+  }
+
+  protected onSkill(value: string): void {
+    this.update({ skillId: value || null });
+  }
+
+  /** Administrators open every profile; other staff only their own (the server enforces the same rule). */
+  protected canOpen(row: TeamRow): boolean {
+    return this.isAdmin() || row.userId === this.auth.user()?.id;
+  }
+
+  protected reload(): void {
+    this.load(this.query());
+  }
+
+  private load(q: TeamQuery): void {
     const tenantId = this.tenant.tenantId();
+    this.request?.unsubscribe();
+    this.loading.set(true);
     this.error.set(false);
-    this.gql.query(TeamMembersDocument, { page: this.page, pageSize: PAGE_SIZE }).subscribe({
-      next: (r) => {
-        if (tenantId === this.tenant.tenantId()) this.data.set(r.teamMembers);
+    this.request = this.api.directory(q).subscribe({
+      next: (page) => {
+        if (tenantId !== this.tenant.tenantId()) return;
+        this.data.set(page);
+        this.loading.set(false);
       },
       error: () => {
-        if (tenantId === this.tenant.tenantId()) this.error.set(true);
+        if (tenantId !== this.tenant.tenantId()) return;
+        this.error.set(true);
+        this.loading.set(false);
       },
+    });
+  }
+
+  private loadSkills(): void {
+    const tenantId = this.tenant.tenantId();
+    this.api.skills(true).subscribe({
+      next: (s) => {
+        if (tenantId === this.tenant.tenantId()) this.skills.set(s);
+      },
+      error: () => undefined, // the skill filter is optional; the directory itself reports its own errors
     });
   }
 
@@ -205,89 +244,14 @@ export class Team {
       });
   }
 
-  protected roleOf(m: MemberRow): TenantRole {
-    return pascal(m.role) as TenantRole;
-  }
-
-  /** Changing the role select only proposes the change; nothing is sent before confirmation. */
-  protected proposeRole(m: MemberRow, event: Event): void {
-    const select = event.target as HTMLSelectElement;
-    const role = select.value as TenantRole;
-    select.value = this.roleOf(m); // the list keeps showing the server's value until the change succeeds
-    if (role === this.roleOf(m)) return;
-    this.pending.set({ member: m, role });
-    this.changeDialog()?.open();
-  }
-
-  protected proposeStatus(m: MemberRow): void {
-    this.pending.set({ member: m, isActive: !m.isActive });
-    this.changeDialog()?.open();
-  }
-
-  protected confirmChange(): void {
-    const change = this.pending();
-    const tenantId = this.tenant.tenantId();
-    if (!change || !tenantId || this.changing()) return;
-    const membershipId = change.member.id;
-    // The role the Owner saw: a concurrent change by another administrator is refused instead of overwritten.
-    const expectedRole = this.roleOf(change.member);
-    const request =
-      change.role !== undefined
-        ? this.tenantsService.changeMemberRole({ tenantId, membershipId, body: { role: change.role, expectedRole } })
-        : this.tenantsService.setMemberStatus({ tenantId, membershipId, body: { isActive: !!change.isActive, expectedRole } });
-    this.changing.set(true);
-    this.changeMessage.set(null);
-    this.openWork.set(null);
-    request.pipe(timeout(REQUEST_TIMEOUT_MS)).subscribe({
-      next: () => {
-        this.changing.set(false);
-        this.changeDialog()?.close();
-        if (tenantId !== this.tenant.tenantId()) return;
-        this.changeMessage.set({ key: 'team.changed', error: false });
-        this.load();
-      },
-      error: (e: unknown) => {
-        this.changing.set(false);
-        this.changeDialog()?.close();
-        if (tenantId !== this.tenant.tenantId()) return;
-        const problem = e instanceof HttpErrorResponse ? (e.error as Record<string, unknown> | null) : null;
-        if (problem?.['code'] === 'MEMBER_HAS_OPEN_WORK') {
-          this.openWork.set({
-            member: change.member.displayName,
-            assignments: Number(problem['openAssignmentCount'] ?? 0),
-            tasks: Number(problem['openTaskCount'] ?? 0),
-            tickets: (problem['tickets'] as OpenWork['tickets'] | undefined) ?? [],
-          });
-          return;
-        }
-        this.changeMessage.set({ key: this.changeErrorKey(e, problem?.['code']), error: true });
-        if (problem?.['code'] === 'MEMBER_CHANGED') this.load();
-      },
-    });
-  }
-
-  private changeErrorKey(e: unknown, code: unknown): string {
-    if (e instanceof TimeoutError) return 'invitations.timeout';
-    if (!(e instanceof HttpErrorResponse)) return 'team.errors.failed';
-    if (code === 'MEMBER_CHANGED') return 'team.errors.stale';
-    switch (e.status) {
-      case 400:
-        return 'team.errors.invalid';
-      case 403:
-        return 'common.forbidden';
-      case 404:
-        return 'team.errors.notFound';
-      case 409:
-        return 'team.errors.conflict'; // e.g. the last active Owner, or a concurrent change
-      default:
-        return 'team.errors.failed';
-    }
-  }
-
   private errorKey(e: unknown): string {
     if (e instanceof TimeoutError) return 'invitations.timeout';
     if (e instanceof HttpErrorResponse && e.status === 403) return 'common.forbidden';
     if (e instanceof HttpErrorResponse && e.status === 409) return 'invitations.duplicate';
     return 'invitations.error';
   }
+}
+
+function initialQuery(): TeamQuery {
+  return { search: '', role: null, isActive: null, skillId: null, sortBy: 'name', descending: false, page: 1, pageSize: PAGE_SIZE };
 }

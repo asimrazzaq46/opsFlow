@@ -112,7 +112,7 @@ public class TenantIsolationTests(ApiFactory factory) : IClassFixture<ApiFactory
         var agent = await ApiClient.AddMemberAsync(factory, owner, org.Id, "Agent");
         var agentMembership = (await owner.MembersAsync(org.Id)).Single(m => m.UserId == agent.UserId);
 
-        (await owner.PutAsync($"/api/v1/tenants/{org.Id}/members/{agentMembership.Id}/status", new { isActive = false })).EnsureSuccessStatusCode();
+        (await owner.PutAsync($"/api/v1/tenants/{org.Id}/members/{agentMembership.Id}/status", new { isActive = false, acknowledgeOpenWork = true })).EnsureSuccessStatusCode();
 
         Assert.Equal(HttpStatusCode.Forbidden, (await agent.GetAsync($"/api/v1/tenants/{org.Id}/members")).StatusCode);
         Assert.Empty(await agent.ReadAsync<List<OrgDto>>(await agent.GetAsync("/api/v1/organizations")));

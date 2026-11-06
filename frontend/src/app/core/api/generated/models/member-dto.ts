@@ -5,7 +5,7 @@ import { TenantRole } from '../models/tenant-role';
 export interface MemberDto {
   createdAtUtc: string;
   displayName: string;
-  email: string;
+  email: (string | null);
   id: string;
   isActive: boolean;
   role: TenantRole;

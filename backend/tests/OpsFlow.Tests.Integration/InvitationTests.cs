@@ -47,7 +47,7 @@ public class InvitationTests(ApiFactory factory) : IClassFixture<ApiFactory>
             Assert.Equal(HttpStatusCode.Forbidden, (await user.PostAsync(Resend(org.Id, pending.Id))).StatusCode);
             Assert.Equal(HttpStatusCode.Forbidden, (await user.DeleteAsync($"{tenant}/invitations/{pending.Id}")).StatusCode);
             Assert.Equal(HttpStatusCode.Forbidden, (await user.PutAsync($"{tenant}/members/{target}/role", new { role = "Manager" })).StatusCode);
-            Assert.Equal(HttpStatusCode.Forbidden, (await user.PutAsync($"{tenant}/members/{target}/status", new { isActive = false })).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await user.PutAsync($"{tenant}/members/{target}/status", new { isActive = false, acknowledgeOpenWork = true })).StatusCode);
         }
 
         Assert.Equal(HttpStatusCode.Forbidden, (await customer.GetAsync($"{tenant}/members")).StatusCode);

@@ -21,6 +21,18 @@ type Query {
   ): PagedResultOfCustomerDto! @cost(weight: "10")
   linkableCustomerUsers(search: String): [LinkableUserDto!]! @cost(weight: "10")
   customer(id: UUID!): CustomerDto! @cost(weight: "5")
+  teamDirectory(
+    search: String
+    role: TenantRole
+    isActive: Boolean
+    skillId: UUID
+    sortBy: String
+    descending: Boolean! = false
+    page: Int! = 1
+    pageSize: Int! = 20
+  ): PagedResultOfTeamMemberRowDto! @cost(weight: "10")
+  teamMember(membershipId: UUID!): TeamMemberDetailDto! @cost(weight: "10")
+  skills(includeInactive: Boolean! = false): [SkillDto!]! @cost(weight: "5")
   teamMembers(page: Int! = 1, pageSize: Int! = 20): PagedResultOfMemberDto!
     @cost(weight: "10")
   dashboard(filter: AnalyticsFilterInput): DashboardDto! @cost(weight: "30")
@@ -38,12 +50,27 @@ type AgentPerformanceDto {
   resolvedInPeriod: Int!
 }
 
+type AssignedTicketDto {
+  ticketId: UUID!
+  displayNumber: String!
+  title: String!
+  status: TicketStatus!
+  priority: TicketPriority!
+}
+
 type AssigneeDto {
   membershipId: UUID!
   userId: UUID!
   displayName: String!
   assignedAtUtc: DateTime!
   isAgentActive: Boolean!
+}
+
+type AuditEntryDto {
+  action: AuditAction!
+  actorDisplayName: String
+  detail: String
+  occurredAtUtc: DateTime!
 }
 
 type CategoryShareDto {
@@ -122,10 +149,17 @@ type LinkableUserDto {
   displayName: String!
 }
 
+type MemberActivityDto {
+  ticketId: UUID!
+  displayNumber: String!
+  type: TicketActivityType!
+  occurredAtUtc: DateTime!
+}
+
 type MemberDto {
   id: UUID!
   userId: UUID!
-  email: String!
+  email: String
   displayName: String!
   role: TenantRole!
   isActive: Boolean!
@@ -141,6 +175,13 @@ type PagedResultOfCustomerDto {
 
 type PagedResultOfMemberDto {
   items: [MemberDto!]!
+  page: Int!
+  pageSize: Int!
+  totalCount: Int!
+}
+
+type PagedResultOfTeamMemberRowDto {
+  items: [TeamMemberRowDto!]!
   page: Int!
   pageSize: Int!
   totalCount: Int!
@@ -192,6 +233,12 @@ type ResolutionReportDto {
   medianMinutes: Float
 }
 
+type SkillDto {
+  id: UUID!
+  name: String!
+  isActive: Boolean!
+}
+
 type SlaComplianceDto {
   eligibleCycles: Int!
   met: Int!
@@ -213,6 +260,39 @@ type SlaCycleDto {
   responseState: SlaState!
   resolutionState: SlaState!
   remainingResolutionMinutes: Float
+}
+
+type TeamMemberDetailDto {
+  member: TeamMemberRowDto!
+  phone: String
+  profileUpdatedAtUtc: DateTime
+  canEditProfileAndSkills: Boolean!
+  canChangeRoleAndStatus: Boolean!
+  stats: TeamMemberStatsDto!
+  assignedTickets: [AssignedTicketDto!]!
+  recentActivity: [MemberActivityDto!]!
+  adminHistory: [AuditEntryDto!]
+}
+
+type TeamMemberRowDto {
+  membershipId: UUID!
+  userId: UUID!
+  displayName: String!
+  email: String
+  role: TenantRole!
+  isActive: Boolean!
+  jobTitle: String
+  department: String
+  skills: [SkillDto!]!
+  openAssignmentCount: Int!
+  joinedAtUtc: DateTime!
+}
+
+type TeamMemberStatsDto {
+  openAssignmentCount: Int!
+  openTaskCount: Int!
+  resolveActions: Int!
+  resolvedTicketsDistinct: Int!
 }
 
 type TicketActivityDto {
@@ -324,6 +404,15 @@ input TicketFilterInput {
   page: Int! = 1
   pageSize: Int! = 20
   assignedToMe: Boolean! = false
+}
+
+enum AuditAction {
+  MEMBER_ROLE_CHANGED
+  MEMBER_STATUS_CHANGED
+  MEMBER_PROFILE_UPDATED
+  MEMBER_SKILLS_CHANGED
+  SKILL_CREATED
+  SKILL_UPDATED
 }
 
 enum SlaCycleReason {

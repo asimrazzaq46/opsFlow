@@ -295,7 +295,7 @@ public class TicketTaskTests(ApiFactory factory) : IClassFixture<ApiFactory>
         await w.AssignAsync(t.Id, w.Agent2Membership);
         var task = await CreateAsync(w, w.Agent1, t.Id);
         // security revocation is never blocked by the agent's open tasks
-        await HttpAssert.StatusAsync(HttpStatusCode.NoContent, await w.Owner.PutAsync(w.Url($"members/{w.Agent1Membership}/status"), new { isActive = false }));
+        await HttpAssert.StatusAsync(HttpStatusCode.NoContent, await w.Owner.PutAsync(w.Url($"members/{w.Agent1Membership}/status"), new { isActive = false, acknowledgeOpenWork = true }));
 
         await HttpAssert.StatusAsync(HttpStatusCode.Forbidden, await w.Agent1.GetAsync(Tasks(w, t.Id)));
         await HttpAssert.StatusAsync(HttpStatusCode.Forbidden, await StatusAsync(w, w.Agent1, task, "Done"));
@@ -364,7 +364,7 @@ public class TicketTaskTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Contains(w.Agent1.UserId, await audience.TaskStaffAsync(t.Id, CancellationToken.None));
         Assert.DoesNotContain(w.Customer.UserId, await audience.TaskStaffAsync(t.Id, CancellationToken.None));
 
-        (await w.Owner.PutAsync(w.Url($"members/{w.Agent1Membership}/status"), new { isActive = false })).EnsureSuccessStatusCode();
+        (await w.Owner.PutAsync(w.Url($"members/{w.Agent1Membership}/status"), new { isActive = false, acknowledgeOpenWork = true })).EnsureSuccessStatusCode();
         var after = await audience.TaskStaffAsync(t.Id, CancellationToken.None);
         Assert.DoesNotContain(w.Agent1.UserId, after);
         Assert.Contains(w.Manager.UserId, after);

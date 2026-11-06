@@ -1,6 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Observable, finalize, tap } from 'rxjs';
+import { Observable, finalize, merge, tap } from 'rxjs';
 import { Api } from '../api/generated/api';
 import { listMyOrganizations } from '../api/generated/functions';
 import { OrganizationDto } from '../api/generated/models';
@@ -29,9 +29,9 @@ export class TenantService {
 
   constructor() {
     // An administrator changed this user's role or status somewhere: refresh the workspaces so navigation and actions match the server,
-    // which already re-checks every request on its own.
-    inject(RealtimeService)
-      .on('membership.changed')
+    // which already re-checks every request on its own. A reconnect may have missed such a signal, so it refreshes too.
+    const realtime = inject(RealtimeService);
+    merge(realtime.on('membership.changed'), realtime.reconnected)
       .pipe(takeUntilDestroyed())
       .subscribe(() => this.load().subscribe({ error: () => undefined }));
   }

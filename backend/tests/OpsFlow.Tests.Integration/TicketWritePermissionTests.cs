@@ -102,7 +102,7 @@ public class TicketWritePermissionTests(ApiFactory factory) : IClassFixture<ApiF
         Assert.Equal(HttpStatusCode.Forbidden, (await other.Owner.PutAsync(w.Url($"tickets/{t.Id}"), new { title = "x", version = t.Version })).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await other.Manager.PostAsync(w.Url($"tickets/{t.Id}/notes"), new { content = "x", clientNoteId = Guid.NewGuid() })).StatusCode);
 
-        (await w.Owner.PutAsync(w.Url($"members/{w.Agent1Membership}/status"), new { isActive = false })).EnsureSuccessStatusCode();
+        (await w.Owner.PutAsync(w.Url($"members/{w.Agent1Membership}/status"), new { isActive = false, acknowledgeOpenWork = true })).EnsureSuccessStatusCode();
         var before = await CountsAsync(t.Id);
         Assert.Equal(HttpStatusCode.Forbidden, (await w.Agent1.PutAsync(w.Url($"tickets/{t.Id}"), new { title = "x", version = t.Version })).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await w.AddNoteAsync(w.Agent1, t.Id, "x")).StatusCode);

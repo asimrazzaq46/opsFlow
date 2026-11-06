@@ -76,7 +76,7 @@ public sealed class TenantsController(
     [Authorize(Policy = AuthPolicies.TenantOwner)]
     [EndpointSummary("Activate or suspend member")]
     [EndpointDescription(
-        "Activates or suspends a staff membership in this workspace only. A tenant always keeps at least one usable Owner. Suspension takes effect immediately; an Agent's open assignments then show as unstaffed for reassignment. A stale expectedRole is refused (409 MEMBER_CHANGED). The change is audited and the member is told to reload. Requires the Owner role in the tenant."
+        "Activates or suspends a staff membership in this workspace only. A tenant always keeps at least one usable Owner. Suspending an active Agent who holds open work is refused once with 409 MEMBER_HAS_OPEN_WORK listing that work (canAcknowledge = true); repeating with acknowledgeOpenWork suspends immediately and the work shows as unstaffed for reassignment. A stale expectedRole is refused (409 MEMBER_CHANGED). The change is audited and the member is told to reload. Requires the Owner role in the tenant."
     )]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ProblemResponse>(
@@ -89,7 +89,7 @@ public sealed class TenantsController(
         CancellationToken ct
     )
     {
-        return await members.SetActiveAsync(membershipId, request.IsActive, ct, request.ExpectedRole) is { } failure
+        return await members.SetActiveAsync(membershipId, request.IsActive, ct, request.ExpectedRole, request.AcknowledgeOpenWork) is { } failure
             ? this.Answer(failure)
             : NoContent();
     }
@@ -109,7 +109,13 @@ public sealed class TenantsController(
     {
         return await team.UpdateProfileAsync(
             membershipId,
-            new UpdateMemberProfileCommand(request.JobTitle, request.Department, request.Phone),
+            new UpdateMemberProfileCommand(
+                request.JobTitle,
+                request.Department,
+                request.Phone,
+                request.CheckVersion,
+                request.ExpectedUpdatedAtUtc
+            ),
             ct
         ) is { } failure
             ? this.Answer(failure)
@@ -130,7 +136,7 @@ public sealed class TenantsController(
         CancellationToken ct
     )
     {
-        return await team.SetMemberSkillsAsync(membershipId, request.SkillIds!, ct) is { } failure
+        return await team.SetMemberSkillsAsync(membershipId, request.SkillIds!, request.ExpectedSkillIds, ct) is { } failure
             ? this.Answer(failure)
             : NoContent();
     }
