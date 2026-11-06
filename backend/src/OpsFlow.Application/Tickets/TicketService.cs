@@ -21,6 +21,7 @@ public sealed partial class TicketService(
     ITenantContext tenantContext,
     NotificationService notifications,
     OutboxWriter outbox,
+    TicketChatCursorService chatCursors,
     TimeProvider clock,
     ILogger<TicketService> logger
 )
@@ -450,11 +451,13 @@ public sealed partial class TicketService(
             .ToListAsync(ct);
         var prefix = await PrefixAsync(ct);
         var assignees = actor.IsCustomer ? null : await AssigneesOfAsync(rows.ConvertAll(r => r.Id), ct);
+        var unread = await chatCursors.CountsAsync(actor, rows.ConvertAll(r => r.Id), ct);
         return new PagedResult<TicketSummaryDto>(
             rows.ConvertAll(r =>
                 ToSummary(r, prefix, now, !actor.IsCustomer) with
                 {
                     Assignees = assignees is null ? null : assignees.GetValueOrDefault(r.Id) ?? [],
+                    UnreadMessageCount = unread.GetValueOrDefault(r.Id),
                 }
             ),
             page,

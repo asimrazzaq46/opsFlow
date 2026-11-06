@@ -125,6 +125,20 @@ public sealed class TicketAccess(
         actor.Role != TenantRole.Agent
         || await IsActiveAssigneeAsync(ticketId, actor.MembershipId, ct);
 
+    /// <summary>
+    /// Tickets whose public conversation the actor may read: the visible tickets, narrowed for Agents to their open assignments (the
+    /// query form of <see cref="MayWorkOnAsync"/>), so unread data never covers a conversation the history endpoint would refuse.
+    /// </summary>
+    public IQueryable<Ticket> ChatScope(TicketActor actor) =>
+        actor.Role == TenantRole.Agent
+            ? Visible(actor)
+                .Where(t =>
+                    db.TicketAssignments.Any(a =>
+                        a.TicketId == t.Id && a.MembershipId == actor.MembershipId && a.UnassignedAtUtc == null
+                    )
+                )
+            : Visible(actor);
+
     public const string AgentMustBeAssigned = "Agents can only change tickets assigned to them.";
 
     public const string AgentMustBeAssignedToOpen = "Agents can open this part of a ticket only while it is assigned to them.";

@@ -1,0 +1,197 @@
+<section class="flex flex-col gap-3" aria-labelledby="chat-title">
+  <h2 id="chat-title" class="sr-only">{{ 'chat.title' | translate }}</h2>
+  <p id="chat-time-hint" class="sr-only">{{ 'chat.timeHint' | translate }}</p>
+
+  <div class="relative">
+    <div
+      #log
+      class="chat-log flex min-h-48 flex-col overflow-y-auto rounded-lg bg-surface-container-low p-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-container sm:p-4"
+      role="log"
+      aria-live="polite"
+      aria-relevant="additions"
+      tabindex="0"
+      [attr.aria-label]="'chat.title' | translate"
+      [attr.aria-busy]="loading()"
+      (scroll)="onScroll()"
+    >
+      @if (hasOlder() && !error()) {
+        <div class="mb-3 flex flex-col items-center gap-1">
+          <button type="button" class="ops-btn-secondary h-8 px-3 text-body-sm" [disabled]="loadingOlder()" (click)="loadOlder()">
+            <span class="ms text-[18px]" aria-hidden="true">history</span>
+            {{ (loadingOlder() ? 'common.loading' : 'chat.loadOlder') | translate }}
+          </button>
+          @if (olderError()) {
+            <p role="alert" class="text-body-sm text-error">{{ 'chat.olderError' | translate }}</p>
+          }
+        </div>
+      }
+
+      @if (loading() && !messages().length) {
+        <p class="m-auto flex items-center gap-2 text-body-sm text-on-surface-variant">
+          <span class="ms chat-spin text-[18px]" aria-hidden="true">progress_activity</span>
+          {{ 'common.loading' | translate }}
+        </p>
+      } @else if (error()) {
+        <div role="alert" class="m-auto flex flex-col items-center gap-2 text-center">
+          <span class="ms text-[28px] text-error" aria-hidden="true">error</span>
+          <p class="text-body-md text-on-surface">{{ 'chat.error' | translate }}</p>
+          <button type="button" class="ops-btn-secondary" (click)="init()">{{ 'common.retry' | translate }}</button>
+        </div>
+      } @else if (!messages().length && !pending()) {
+        <div class="m-auto flex max-w-xs flex-col items-center gap-2 py-6 text-center">
+          <span class="ms text-[32px] text-outline" aria-hidden="true">chat</span>
+          <p class="text-body-md text-on-surface">{{ 'chat.empty' | translate }}</p>
+          <p class="text-body-sm text-on-surface-variant">
+            {{ (staffView() ? 'chat.emptyHintStaff' : 'chat.emptyHint') | translate }}
+          </p>
+        </div>
+      }
+
+      @for (r of rows(); track r.message.id) {
+        <article
+          class="flex flex-col"
+          [class.items-end]="r.mine"
+          [class.items-start]="!r.mine"
+          [class.mt-4]="r.header && !$first"
+          [class.mt-1]="!r.header"
+        >
+          @if (r.header) {
+            <p class="mb-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 px-1 text-body-sm text-on-surface-variant">
+              <span class="font-semibold text-on-surface">{{ r.label ?? (r.labelKey! | translate) }}</span>
+              @if (r.roleKey) {
+                <span
+                  class="ops-badge"
+                  [class.bg-surface-container-high]="r.tone === 'staff'"
+                  [class.text-on-surface-variant]="r.tone === 'staff'"
+                  [class.bg-primary-fixed]="r.tone === 'customer'"
+                  [class.text-on-primary-fixed]="r.tone === 'customer'"
+                  >{{ r.roleKey | translate }}</span
+                >
+              }
+            </p>
+          }
+          <div
+            class="chat-bubble max-w-[85%] cursor-pointer rounded-lg px-3 py-2 text-body-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-container sm:max-w-[75%]"
+            role="button"
+            tabindex="0"
+            aria-describedby="chat-time-hint"
+            [attr.aria-expanded]="selectedId() === r.message.id"
+            [attr.aria-controls]="selectedId() === r.message.id ? 'chat-time-' + r.message.id : null"
+            (click)="toggleTime(r.message.id)"
+            (keydown.enter)="toggleTime(r.message.id)"
+            (keydown.space)="$event.preventDefault(); toggleTime(r.message.id)"
+            [class.bg-primary-container]="r.tone === 'mine'"
+            [class.text-on-primary]="r.tone === 'mine'"
+            [class.bg-surface-container-lowest]="r.tone !== 'mine'"
+            [class.text-on-surface]="r.tone !== 'mine'"
+            [class.shadow-sm]="r.tone !== 'mine'"
+            [class.chat-bubble-customer]="r.tone === 'customer' && staffView()"
+          >
+            <p class="whitespace-pre-wrap wrap-break-word">{{ r.message.content }}</p>
+          </div>
+          @if (selectedId() === r.message.id) {
+            <time
+              [id]="'chat-time-' + r.message.id"
+              class="mt-0.5 px-1 text-[12px] text-on-surface-variant"
+              [attr.datetime]="r.message.createdAtUtc"
+              >{{ r.time }}</time
+            >
+          }
+        </article>
+      }
+
+      @if (pending(); as p) {
+        <article class="mt-4 flex flex-col items-end" [attr.aria-busy]="p.state === 'sending'">
+          <div
+            class="chat-bubble max-w-[85%] rounded-lg bg-primary-container px-3 py-2 text-body-md text-on-primary sm:max-w-[75%]"
+            [class.opacity-70]="p.state === 'sending'"
+            [class.chat-bubble-failed]="p.state === 'failed'"
+          >
+            <p class="whitespace-pre-wrap wrap-break-word">{{ p.content }}</p>
+          </div>
+          @if (p.state === 'sending') {
+            <p class="mt-0.5 flex items-center gap-1 px-1 text-[12px] text-on-surface-variant">
+              <span class="ms chat-spin text-[14px]" aria-hidden="true">progress_activity</span>
+              {{ 'chat.sending' | translate }}
+            </p>
+          } @else {
+            <div role="alert" class="mt-1 flex max-w-[85%] flex-col items-end gap-1 px-1 sm:max-w-[75%]">
+              <p class="flex items-start gap-1 text-right text-body-sm text-error">
+                <span class="ms text-[16px]" aria-hidden="true">error</span>
+                {{ p.errorKey | translate }}
+              </p>
+              <div class="flex gap-3">
+                @if (p.retryable && !closed()) {
+                  <button type="button" class="ops-link text-body-sm font-semibold" (click)="retry()">
+                    {{ 'common.retry' | translate }}
+                  </button>
+                }
+                <button type="button" class="ops-link text-body-sm" (click)="discard()">
+                  {{ 'chat.discard' | translate }}
+                </button>
+              </div>
+            </div>
+          }
+        </article>
+      }
+    </div>
+
+    @if (unseen()) {
+      <button
+        type="button"
+        class="absolute bottom-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-1 rounded-full bg-inverse-surface px-3 py-1.5 text-body-sm font-semibold text-inverse-on-surface shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-container"
+        (click)="jumpToLatest()"
+      >
+        <span class="ms text-[16px]" aria-hidden="true">arrow_downward</span>
+        {{ 'chat.newMessages' | translate }}
+      </button>
+    }
+  </div>
+
+  @if (syncError()) {
+    <p role="alert" class="flex flex-wrap items-center gap-2 text-body-sm text-error">
+      <span class="ms text-[16px]" aria-hidden="true">sync_problem</span>
+      {{ 'chat.syncError' | translate }}
+      <button type="button" class="ops-link font-semibold" (click)="requestSync()">{{ 'common.retry' | translate }}</button>
+    </p>
+  }
+
+  @if (closed()) {
+    <p role="status" class="flex items-start gap-2 rounded-lg bg-surface-container p-3 text-body-sm text-on-surface-variant">
+      <span class="ms text-[18px]" aria-hidden="true">lock</span>
+      <span>
+        {{ 'chat.closed' | translate }}
+        @if (staffView()) {
+          {{ 'chat.closedStaff' | translate }}
+        }
+      </span>
+    </p>
+  } @else {
+    <form class="flex flex-col gap-2" (ngSubmit)="send()">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <label for="chat-input" class="text-body-sm font-semibold text-on-surface">{{ 'chat.label' | translate }}</label>
+        @if (staffView()) {
+          <span class="ops-badge bg-primary-fixed text-on-primary-fixed">
+            <span class="ms text-[14px]" aria-hidden="true">visibility</span>{{ 'chat.visibleToCustomer' | translate }}
+          </span>
+        }
+      </div>
+      <textarea
+        id="chat-input"
+        rows="3"
+        maxlength="4000"
+        [formControl]="text"
+        (keydown)="onKeydown($event)"
+        aria-describedby="chat-shortcut"
+        class="ops-input h-auto min-h-20 resize-y py-2"
+      ></textarea>
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <p id="chat-shortcut" class="text-body-sm text-on-surface-variant">{{ 'chat.shortcut' | translate }}</p>
+        <button type="submit" class="ops-btn-primary h-10 px-5" [disabled]="text.invalid || !canCompose()">
+          <span class="ms text-[18px]" aria-hidden="true">send</span>
+          {{ (pending()?.state === 'sending' ? 'chat.sending' : 'chat.send') | translate }}
+        </button>
+      </div>
+    </form>
+  }
+</section>

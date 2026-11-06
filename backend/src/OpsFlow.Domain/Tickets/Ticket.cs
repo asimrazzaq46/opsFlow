@@ -38,6 +38,9 @@ public sealed class Ticket : ITenantOwned
     // Per-ticket sequence counter shared by messages and notes; allocated by a row-locking ExecuteUpdate, never written by EF.
     public int MessageSequence { get; private set; }
 
+    // Conversation position that counts as already read for everyone; set once for tickets that existed before read tracking, 0 for new ones.
+    public int ChatReadBaselineSequence { get; private set; }
+
     public static Ticket Create(
         Guid tenantId,
         long number,

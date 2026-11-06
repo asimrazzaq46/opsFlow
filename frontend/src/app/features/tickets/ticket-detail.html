@@ -167,7 +167,12 @@
               } @else if (visited().has(tb.key)) {
                 @switch (tb.key) {
                   @case ('conversation') {
-                    <app-ticket-chat [ticketId]="id()" />
+                    <app-ticket-chat
+                      [ticketId]="id()"
+                      [closed]="t.summary.status === 'Closed'"
+                      [active]="tab() === 'conversation'"
+                      (stale)="refresh()"
+                    />
                   }
                   @case ('notes') {
                     <app-ticket-notes [ticketId]="id()" />

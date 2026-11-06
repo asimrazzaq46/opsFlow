@@ -10,7 +10,7 @@ import {
   untracked,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormControl, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { TranslatePipe } from '@ngx-translate/core';
 import { TicketNoteDto } from '../../core/api/generated/models';
 import { TenantService } from '../../core/auth/tenant.service';
@@ -27,70 +27,10 @@ interface NoteEvent {
 /** Staff-only. The parent renders it only for non-customers; the API rejects customers regardless. */
 @Component({
   selector: 'app-ticket-notes',
-  imports: [ReactiveFormsModule, TranslatePipe, DatePipe],
+  imports: [FormsModule, ReactiveFormsModule, TranslatePipe, DatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <section
-      class="rounded-xl border border-amber-500/40 bg-card p-4"
-      aria-labelledby="notes-title"
-    >
-      <h2 id="notes-title" class="text-lg font-semibold">{{ 'notes.title' | translate }}</h2>
-      <p class="text-xs text-muted">{{ 'notes.hint' | translate }}</p>
-
-      <div
-        class="mt-3 max-h-72 space-y-3 overflow-y-auto"
-        role="log"
-        aria-live="polite"
-        tabindex="0"
-        [attr.aria-label]="'notes.title' | translate"
-      >
-        @if (loading() && !notes().length) {
-          <p class="text-muted">{{ 'common.loading' | translate }}</p>
-        } @else if (error()) {
-          <p role="alert" class="text-danger">
-            {{ 'notes.error' | translate }}
-            <button type="button" class="ml-2 underline" (click)="init()">
-              {{ 'common.retry' | translate }}
-            </button>
-          </p>
-        } @else if (!notes().length) {
-          <p class="text-muted">{{ 'notes.empty' | translate }}</p>
-        }
-        @for (n of notes(); track n.id) {
-          <article class="rounded-lg bg-surface px-3 py-2">
-            <header class="text-xs text-muted">
-              {{ n.authorDisplayName }} ·
-              <time [attr.datetime]="n.createdAtUtc">{{ n.createdAtUtc | date: 'short' }}</time>
-            </header>
-            <p class="whitespace-pre-wrap break-words">{{ n.content }}</p>
-          </article>
-        }
-      </div>
-
-      <form class="mt-4" (ngSubmit)="add()">
-        <label for="note-input" class="block text-sm font-medium">{{
-          'notes.label' | translate
-        }}</label>
-        <textarea
-          id="note-input"
-          rows="2"
-          maxlength="4000"
-          [formControl]="text"
-          class="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 focus-visible:outline-2 focus-visible:outline-brand"
-        ></textarea>
-        @if (saveError()) {
-          <p role="alert" class="mt-1 text-sm text-danger">{{ 'notes.saveError' | translate }}</p>
-        }
-        <button
-          type="submit"
-          [disabled]="text.invalid || saving()"
-          class="mt-2 rounded-lg bg-brand px-4 py-2 font-semibold text-brand-fg disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-        >
-          {{ 'notes.add' | translate }}
-        </button>
-      </form>
-    </section>
-  `,
+  templateUrl: './ticket-notes.html',
+  styleUrl: './ticket-notes.css',
 })
 export class TicketNotes {
   readonly ticketId = input.required<string>();

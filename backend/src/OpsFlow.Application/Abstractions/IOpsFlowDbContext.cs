@@ -32,6 +32,7 @@ public interface IOpsFlowDbContext
     DbSet<TenantTicketCounter> TicketCounters { get; }
     DbSet<TicketMessage> TicketMessages { get; }
     DbSet<TicketNote> TicketNotes { get; }
+    DbSet<TicketConversationCursor> TicketConversationCursors { get; }
     DbSet<TicketAttachment> TicketAttachments { get; }
     DbSet<Notification> Notifications { get; }
     DbSet<OutboxMessage> OutboxMessages { get; }

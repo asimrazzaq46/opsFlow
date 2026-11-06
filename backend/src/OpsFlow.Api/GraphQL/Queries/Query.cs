@@ -27,6 +27,13 @@ public sealed class Query
 
     [Serial]
     [Cost(5)]
+    public Task<ChatUnreadSummaryDto> ChatUnreadSummary(
+        [Service] TicketChatCursorService svc,
+        CancellationToken ct
+    ) => svc.SummaryAsync(ct);
+
+    [Serial]
+    [Cost(5)]
     public Task<TicketDetailDto> Ticket(
         [Service] TicketService svc,
         Guid id,

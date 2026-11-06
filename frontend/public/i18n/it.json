@@ -299,11 +299,34 @@
     "label": "Scrivi un messaggio",
     "send": "Invia",
     "sending": "Invio…",
-    "sendError": "Impossibile inviare il messaggio. Riprovare non crea duplicati.",
+    "sendError": "Impossibile inviare il messaggio.",
     "error": "Impossibile caricare i messaggi.",
     "loadOlder": "Carica messaggi precedenti",
     "you": "Tu",
-    "supportTeam": "Team di supporto"
+    "supportTeam": "Team di supporto",
+    "customer": "Cliente",
+    "roleStaff": "Staff",
+    "roleCustomer": "Cliente",
+    "emptyHint": "Invia un messaggio al team di supporto. Le risposte compariranno qui.",
+    "emptyHintStaff": "Le risposte inviate qui sono visibili al cliente.",
+    "discard": "Scarta",
+    "olderError": "Impossibile caricare i messaggi precedenti.",
+    "syncError": "Impossibile caricare alcuni nuovi messaggi.",
+    "newMessages": "Nuovi messaggi",
+    "closed": "Questo ticket è chiuso, quindi non è possibile inviare nuovi messaggi.",
+    "closedStaff": "Riaprilo per continuare la conversazione.",
+    "visibleToCustomer": "Visibile al cliente",
+    "shortcut": "Premi Ctrl+Invio per inviare.",
+    "errors": {
+      "invalid": "Il messaggio è stato rifiutato. Controlla lunghezza e contenuto.",
+      "forbidden": "Non puoi più inviare messaggi su questo ticket.",
+      "conflict": "Il ticket è cambiato durante l'invio. Controlla lo stato e riprova."
+    },
+    "unread": {
+      "one": "{{count}} messaggio non letto",
+      "other": "{{count}} messaggi non letti"
+    },
+    "timeHint": "Seleziona un messaggio per vedere quando è stato inviato."
   },
   "tasks": {
     "title": "Attività figlie",

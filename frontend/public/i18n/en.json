@@ -299,11 +299,34 @@
     "label": "Write a message",
     "send": "Send",
     "sending": "Sending…",
-    "sendError": "The message could not be sent. Retrying will not create a duplicate.",
+    "sendError": "The message could not be sent.",
     "error": "Could not load messages.",
     "loadOlder": "Load older messages",
     "you": "You",
-    "supportTeam": "Support team"
+    "supportTeam": "Support team",
+    "customer": "Customer",
+    "roleStaff": "Staff",
+    "roleCustomer": "Customer",
+    "emptyHint": "Send a message to the support team. Replies appear here.",
+    "emptyHintStaff": "Replies you send here are visible to the customer.",
+    "discard": "Discard",
+    "olderError": "Older messages could not be loaded.",
+    "syncError": "Some new messages could not be loaded.",
+    "newMessages": "New messages",
+    "closed": "This ticket is closed, so new messages cannot be sent.",
+    "closedStaff": "Reopen it to continue the conversation.",
+    "visibleToCustomer": "Visible to the customer",
+    "shortcut": "Press Ctrl+Enter to send.",
+    "errors": {
+      "invalid": "The message was rejected. Check its length and content.",
+      "forbidden": "You can no longer send messages on this ticket.",
+      "conflict": "The ticket changed while sending. Check its status, then try again."
+    },
+    "unread": {
+      "one": "{{count}} unread message",
+      "other": "{{count}} unread messages"
+    },
+    "timeHint": "Select a message to show when it was sent."
   },
   "tasks": {
     "title": "Child tasks",

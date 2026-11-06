@@ -1,0 +1,3 @@
+query ChatUnreadSummary {
+  chatUnreadSummary { total }
+}

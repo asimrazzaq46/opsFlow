@@ -45,7 +45,9 @@ public sealed record TicketSummaryDto(
     // Whether the caller holds an open assignment (the condition the status and reopen commands check for Agents). Null for Customers.
     bool? AssignedToMe,
     // Current assignees of list pages (one batched query per page); null for Customers and for single-ticket reads, which carry them separately.
-    IReadOnlyList<AssigneeDto>? Assignees = null
+    IReadOnlyList<AssigneeDto>? Assignees = null,
+    // Unread public chat messages of list pages for the caller (one grouped query per page); null for single-ticket reads.
+    int? UnreadMessageCount = null
 );
 
 /// <summary><c>IsAgentActive</c> is true only while the assignee is still ELIGIBLE (Agent role, active membership, active user).</summary>

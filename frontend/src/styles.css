@@ -246,6 +246,11 @@ body {
     @apply inline-flex items-center gap-1 rounded-sm px-2 py-0.5 text-badge-label font-semibold whitespace-nowrap;
   }
 
+  /* Unread chat count: white on primary blue meets AA in both themes. */
+  .ops-unread-badge {
+    @apply inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary-container px-1.5 text-badge-label font-semibold text-on-primary tabular-nums;
+  }
+
   .ops-th {
     @apply px-3 py-2.5 text-left text-label-caps font-semibold whitespace-nowrap text-on-surface-variant uppercase;
   }

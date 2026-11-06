@@ -12,7 +12,8 @@ namespace OpsFlow.Api.Controllers;
 [Route("api/v1/tenants/{tenantId:guid}/tickets/{ticketId:guid}/messages")]
 [Authorize(Policy = AuthPolicies.TenantMember)] // visibility (Customer = own tickets, Agent = assigned/created) is decided from DB state by the service
 [Tags("Ticket messages")]
-public sealed class TicketMessagesController(TicketMessageService messages) : ControllerBase
+public sealed class TicketMessagesController(TicketMessageService messages, TicketChatCursorService cursors)
+    : ControllerBase
 {
     [HttpGet(Name = "ListTicketMessages")]
     [EndpointSummary("List ticket messages")]
@@ -66,5 +67,25 @@ public sealed class TicketMessagesController(TicketMessageService messages) : Co
                 sent.Value
             )
             : Ok(sent.Value);
+    }
+
+    [HttpPost("cursor", Name = "UpdateTicketMessageCursor")]
+    [EndpointSummary("Acknowledge ticket messages")]
+    [EndpointDescription(
+        "Moves the caller's own conversation cursor forward: deliveredSequence when messages were received, readSequence when they were displayed (reading also counts as delivery). Each value must be the sequence of a stored chat message of this ticket; a cursor never moves backwards, so repeating or reordering acknowledgements is harmless. Returns the caller's cursor. Requires the same access as reading the conversation."
+    )]
+    [ProducesResponseType<TicketConversationCursorDto>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<TicketConversationCursorDto>> UpdateTicketMessageCursor(
+        Guid ticketId,
+        AcknowledgeMessagesRequest request,
+        CancellationToken ct
+    )
+    {
+        var result = await cursors.AcknowledgeAsync(
+            ticketId,
+            new AcknowledgeMessagesCommand(request.DeliveredSequence, request.ReadSequence),
+            ct
+        );
+        return result.Result is ObjectResult failure ? this.Answer(failure) : Ok(result.Value);
     }
 }

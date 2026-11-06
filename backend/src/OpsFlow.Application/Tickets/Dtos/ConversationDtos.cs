@@ -29,6 +29,14 @@ public sealed record SendMessageCommand(string Content, Guid ClientMessageId);
 
 public sealed record CreateNoteCommand(string Content, Guid ClientNoteId);
 
+/// <summary>Positions the caller has received (delivered) and displayed (read); each must be the sequence of a stored chat message.</summary>
+public sealed record AcknowledgeMessagesCommand(int? DeliveredSequence, int? ReadSequence);
+
+/// <summary>The caller's own cursor only; other users' cursors are never returned.</summary>
+public sealed record TicketConversationCursorDto(Guid TicketId, int DeliveredSequence, int ReadSequence);
+
+public sealed record ChatUnreadSummaryDto(int Total);
+
 /// <summary>Created = false when the same ClientMessageId/ClientNoteId was already stored (an idempotent retry returns the original).</summary>
 public sealed record WriteResult<T>(T Value, bool Created);
 

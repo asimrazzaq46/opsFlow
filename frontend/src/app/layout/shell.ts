@@ -13,6 +13,7 @@ import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } fro
 import { TranslatePipe } from '@ngx-translate/core';
 import { filter } from 'rxjs';
 import { AuthService } from '../core/auth/auth.service';
+import { ChatUnreadService, compactCount, unreadKey } from '../core/chat/chat-unread.service';
 import { TenantService } from '../core/auth/tenant.service';
 import { RealtimeService } from '../core/realtime/realtime.service';
 import { ThemeService } from '../core/services/theme.service';
@@ -43,6 +44,9 @@ export class Shell {
   protected readonly realtime = inject(RealtimeService);
   protected readonly theme = inject(ThemeService);
   protected readonly language = inject(LanguageService);
+  protected readonly chatUnread = inject(ChatUnreadService);
+  protected readonly unreadKey = unreadKey;
+  protected readonly compactCount = compactCount;
   protected readonly languages = SUPPORTED_LANGUAGES;
   protected readonly initials = initials;
 

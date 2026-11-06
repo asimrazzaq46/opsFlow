@@ -5,6 +5,7 @@ schema {
 type Query {
   tickets(filter: TicketFilterInput): PagedResultOfTicketSummaryDto!
     @cost(weight: "10")
+  chatUnreadSummary: ChatUnreadSummaryDto! @cost(weight: "5")
   ticket(id: UUID!): TicketDetailDto! @cost(weight: "5")
   ticketActivity(ticketId: UUID!, page: Int! = 1, pageSize: Int! = 20): PagedResultOfTicketActivityDto!
     @cost(weight: "10")
@@ -52,6 +53,10 @@ type CategoryShareDto {
   sharePercent: Float!
 }
 
+type ChatUnreadSummaryDto {
+  total: Int!
+}
+
 type CountByDto {
   key: String!
   count: Int!
@@ -87,17 +92,6 @@ type CustomerDto {
   linkedUserName: String
 }
 
-type LinkableUserDto {
-  userId: UUID!
-  email: String!
-  displayName: String!
-}
-
-type TicketCreationEligibilityDto {
-  canCreate: Boolean!
-  reason: String
-}
-
 type DashboardDto {
   generatedAtUtc: DateTime!
   timeZone: String!
@@ -120,6 +114,12 @@ type KanbanColumn {
   status: TicketStatus!
   total: Int!
   tickets: [TicketSummaryDto!]!
+}
+
+type LinkableUserDto {
+  userId: UUID!
+  email: String!
+  displayName: String!
 }
 
 type MemberDto {
@@ -227,6 +227,11 @@ type TicketActivityDto {
   relatedDisplayName: String
 }
 
+type TicketCreationEligibilityDto {
+  canCreate: Boolean!
+  reason: String
+}
+
 type TicketDetailDto {
   summary: TicketSummaryDto!
   description: String!
@@ -261,6 +266,7 @@ type TicketSummaryDto {
   isOverdue: Boolean
   assignedToMe: Boolean
   assignees: [AssigneeDto!]
+  unreadMessageCount: Int
 }
 
 type TicketTaskProgressDto {

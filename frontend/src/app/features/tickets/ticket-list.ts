@@ -7,6 +7,7 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { debounceTime, distinctUntilChanged, map, merge } from 'rxjs';
 import { TicketState, TicketStatus, TicketPriority } from '../../core/api/generated/models';
 import { TenantService } from '../../core/auth/tenant.service';
+import { compactCount, unreadKey } from '../../core/chat/chat-unread.service';
 import { RealtimeService } from '../../core/realtime/realtime.service';
 import { activeWorkspaceEvents } from '../../core/realtime/workspace-events';
 import {
@@ -66,6 +67,10 @@ export class TicketList {
   protected readonly pageSizes = PAGE_SIZES;
   protected readonly statusBadge = STATUS_BADGE;
   protected readonly priorityBadge = PRIORITY_BADGE;
+  protected readonly unreadKey = unreadKey;
+  protected readonly compactCount = compactCount;
+  /** Server-computed unread public messages of the row; 0 shows no badge. */
+  protected readonly unread = (t: { unreadMessageCount?: number | string | null }): number => Number(t.unreadMessageCount ?? 0);
 
   protected readonly query = toSignal(this.route.queryParamMap.pipe(map(parseTicketQuery)), {
     requireSync: true,
@@ -140,8 +145,9 @@ export class TicketList {
   });
 
   constructor() {
-    // Any staff change in this workspace (and a reconnect) refreshes the current page; the server decides what the caller may see.
-    merge(activeWorkspaceEvents('ticket.changed'), this.realtime.reconnected)
+    // Any staff change or new chat message in this workspace (and a reconnect) refreshes the current page, including its unread counts;
+    // the server decides what the caller may see.
+    merge(activeWorkspaceEvents('ticket.changed'), activeWorkspaceEvents('ticket.message.created'), this.realtime.reconnected)
       .pipe(debounceTime(1000), takeUntilDestroyed())
       .subscribe(() => this.tickets.reload());
     this.search.valueChanges

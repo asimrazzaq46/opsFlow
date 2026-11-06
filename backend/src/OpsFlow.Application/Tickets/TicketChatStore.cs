@@ -22,6 +22,7 @@ public sealed class TicketChatStore(
     NotificationService notifications,
     TicketMessageMapper mapper,
     OutboxWriter outbox,
+    IOutboxSignal outboxSignal,
     TimeProvider clock
 ) : IChatConversationAuthorizer, IChatMessageStore<TicketMessageDto>
 {
@@ -177,6 +178,7 @@ public sealed class TicketChatStore(
         {
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
+            outboxSignal.Notify(); // live chat must not wait for the recurring dispatch schedule
         }
         catch (DbUpdateException ex)
             when (db.IsUniqueViolation(ex, UniqueConstraintKind.MessageClientId)

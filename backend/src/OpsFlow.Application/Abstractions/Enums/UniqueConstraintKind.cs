@@ -20,4 +20,5 @@ public enum UniqueConstraintKind
     NoteClientId,
     NotificationDedup,
     OutboxDedup,
+    ConversationCursor,
 }

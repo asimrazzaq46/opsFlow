@@ -404,4 +404,53 @@ public class ConversationTests(ApiFactory factory) : IClassFixture<ApiFactory>
         (await w.Manager.DeleteAsync(w.Url($"tickets/{t.Id}/assignments/{w.Agent1Membership}"))).EnsureSuccessStatusCode();
         Assert.Equal(HttpStatusCode.Forbidden, (await w.Agent1.GetAsync(w.Url($"tickets/{t.Id}/attachments/{internalFile.Id}"))).StatusCode);
     }
+
+    private static async Task<int> UnreadTotalAsync(TicketWorld w, ApiClient who)
+    {
+        var response = await who.PostAsync(w.Url("graphql"), new { query = "{ chatUnreadSummary { total } }" });
+        response.EnsureSuccessStatusCode();
+        using var doc = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        return doc.RootElement.GetProperty("data").GetProperty("chatUnreadSummary").GetProperty("total").GetInt32();
+    }
+
+    private static Task<HttpResponseMessage> AcknowledgeAsync(TicketWorld w, ApiClient who, Guid ticketId, int? delivered, int? read) =>
+        who.PostAsync(w.Url($"tickets/{ticketId}/messages/cursor"), new { deliveredSequence = delivered, readSequence = read });
+
+    [Fact]
+    public async Task Unread_counts_follow_each_users_read_cursor_and_respect_chat_access()
+    {
+        var w = await TicketWorld.CreateAsync(factory);
+        var ticket = await w.AssignAsync((await w.CreateTicketAsync(w.Customer)).Id, w.Agent1Membership);
+        await w.SendMessageAsync(w.Agent1, ticket.Id, "first reply");
+        var last = await w.Agent1.ReadAsync<MessageJson>(await w.SendMessageAsync(w.Agent1, ticket.Id, "second reply"));
+        await w.SendMessageAsync(w.Customer, ticket.Id, "customer answer");
+        var note = await w.Agent1.ReadAsync<NoteJson>(await w.AddNoteAsync(w.Agent1, ticket.Id, "private note"));
+
+        // Own messages and internal notes never count; an unassigned Agent has no conversation access and therefore no unread data.
+        Assert.Equal(2, await UnreadTotalAsync(w, w.Customer));
+        Assert.Equal(1, await UnreadTotalAsync(w, w.Agent1));
+        Assert.Equal(3, await UnreadTotalAsync(w, w.Manager));
+        Assert.Equal(0, await UnreadTotalAsync(w, w.Agent2));
+        Assert.Equal(HttpStatusCode.Forbidden, (await AcknowledgeAsync(w, w.Agent2, ticket.Id, null, last.Sequence)).StatusCode);
+
+        // Only sequences of stored chat messages can be acknowledged: not a note's sequence, not a future one, not nothing.
+        Assert.Equal(HttpStatusCode.BadRequest, (await AcknowledgeAsync(w, w.Customer, ticket.Id, null, note.Sequence)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await AcknowledgeAsync(w, w.Customer, ticket.Id, null, note.Sequence + 100)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await AcknowledgeAsync(w, w.Customer, ticket.Id, null, null)).StatusCode);
+
+        var read = await w.Customer.ReadAsync<CursorJson>(await AcknowledgeAsync(w, w.Customer, ticket.Id, null, last.Sequence));
+        Assert.Equal((last.Sequence, last.Sequence), (read.DeliveredSequence, read.ReadSequence)); // reading implies delivery
+        Assert.Equal(0, await UnreadTotalAsync(w, w.Customer));
+        Assert.Equal(3, await UnreadTotalAsync(w, w.Manager)); // another user's cursor is independent
+
+        // A late or repeated acknowledgement never moves the cursor backwards.
+        var stale = await w.Customer.ReadAsync<CursorJson>(await AcknowledgeAsync(w, w.Customer, ticket.Id, last.Sequence - 1, last.Sequence - 1));
+        Assert.Equal((last.Sequence, last.Sequence), (stale.DeliveredSequence, stale.ReadSequence));
+
+        // Another workspace never sees or moves this cursor.
+        var other = await TicketWorld.CreateAsync(factory);
+        Assert.Equal(HttpStatusCode.Forbidden, (await AcknowledgeAsync(w, other.Owner, ticket.Id, null, last.Sequence)).StatusCode);
+    }
+
+    private sealed record CursorJson(Guid TicketId, int DeliveredSequence, int ReadSequence);
 }

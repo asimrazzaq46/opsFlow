@@ -453,6 +453,9 @@ namespace OpsFlow.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("CategoryId")
                         .HasColumnType("uuid");
 
+                    b.Property<int>("ChatReadBaselineSequence")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -725,6 +728,46 @@ namespace OpsFlow.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("TicketCategories", (string)null);
+                });
+
+            modelBuilder.Entity("OpsFlow.Domain.Tickets.TicketConversationCursor", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("DeliveredSequence")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ReadSequence")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TicketId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("TenantId", "UserId");
+
+                    b.HasIndex(new[] { "TenantId", "TicketId", "UserId" }, "IX_TicketConversationCursors_Ticket_User")
+                        .IsUnique();
+
+                    b.ToTable("TicketConversationCursors", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_TicketConversationCursors_Delivered", "\"DeliveredSequence\" >= \"ReadSequence\"");
+
+                            t.HasCheckConstraint("CK_TicketConversationCursors_Read", "\"ReadSequence\" >= 0");
+                        });
                 });
 
             modelBuilder.Entity("OpsFlow.Domain.Tickets.TicketMessage", b =>
@@ -1413,6 +1456,28 @@ namespace OpsFlow.Infrastructure.Persistence.Migrations
                     b.HasOne("OpsFlow.Domain.Tenants.Tenant", null)
                         .WithMany()
                         .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OpsFlow.Domain.Tickets.TicketConversationCursor", b =>
+                {
+                    b.HasOne("OpsFlow.Domain.Tenants.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpsFlow.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OpsFlow.Domain.Tickets.Ticket", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "TicketId")
+                        .HasPrincipalKey("TenantId", "Id")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

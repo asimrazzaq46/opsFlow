@@ -24,6 +24,7 @@ import {
   sendTicketMessage,
   unassignTicketAgent,
   updateTicket,
+  updateTicketMessageCursor,
   updateTicketTask,
   uploadTicketAttachment,
 } from '../../core/api/generated/functions';
@@ -36,6 +37,7 @@ import {
   PagedResultOfTicketNoteDto,
   PagedResultOfTicketSummaryDto,
   TicketCategoryDto,
+  TicketConversationCursorDto,
   TicketDetailDto,
   TicketMessageDto,
   TicketNoteDto,
@@ -130,6 +132,15 @@ export class TicketsApi {
       tenantId: this.tenantId,
       ticketId,
       body: { content, clientNoteId },
+    });
+  }
+
+  /** Moves the caller's own read cursor forward; the server accepts only sequences of stored chat messages. */
+  markRead(ticketId: string, readSequence: number): Observable<TicketConversationCursorDto> {
+    return this.api.invoke(updateTicketMessageCursor, {
+      tenantId: this.tenantId,
+      ticketId,
+      body: { deliveredSequence: null, readSequence },
     });
   }
 

@@ -40,6 +40,7 @@ public sealed class OpsFlowDbContext(
 
     public DbSet<TicketMessage> TicketMessages => Set<TicketMessage>();
     public DbSet<TicketNote> TicketNotes => Set<TicketNote>();
+    public DbSet<TicketConversationCursor> TicketConversationCursors => Set<TicketConversationCursor>();
     public DbSet<TicketAttachment> TicketAttachments => Set<TicketAttachment>();
     public DbSet<Notification> Notifications => Set<Notification>();
 
@@ -73,6 +74,7 @@ public sealed class OpsFlowDbContext(
             .HasQueryFilter(e => e.TenantId == CurrentTenantId);
         modelBuilder.Entity<TicketMessage>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
         modelBuilder.Entity<TicketNote>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<TicketConversationCursor>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
         modelBuilder.Entity<TicketAttachment>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
         modelBuilder.Entity<Notification>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
         modelBuilder.Entity<TicketTask>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
@@ -140,6 +142,10 @@ public sealed class OpsFlowDbContext(
             UniqueConstraintKind.NotificationDedup => (
                 "IX_Notifications_TenantId_UserId_DedupKey",
                 "Notifications.DedupKey"
+            ),
+            UniqueConstraintKind.ConversationCursor => (
+                "IX_TicketConversationCursors_Ticket_User",
+                "TicketConversationCursors.UserId"
             ),
             UniqueConstraintKind.OutboxDedup => (
                 "IX_OutboxMessages_TenantId_DedupKey",

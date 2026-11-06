@@ -4792,6 +4792,104 @@
         ]
       }
     },
+    "/api/v1/tenants/{tenantId}/tickets/{ticketId}/messages/cursor": {
+      "post": {
+        "tags": [
+          "Ticket messages"
+        ],
+        "summary": "Acknowledge ticket messages",
+        "description": "Moves the caller's own conversation cursor forward: deliveredSequence when messages were received, readSequence when they were displayed (reading also counts as delivery). Each value must be the sequence of a stored chat message of this ticket; a cursor never moves backwards, so repeating or reordering acknowledgements is harmless. Returns the caller's cursor. Requires the same access as reading the conversation.",
+        "operationId": "UpdateTicketMessageCursor",
+        "parameters": [
+          {
+            "name": "ticketId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "path",
+            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcknowledgeMessagesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketConversationCursorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid Bearer access token.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no active membership with a sufficient role in this tenant.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed; see `errors` for the offending fields.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The resource does not exist or is not visible to the caller.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/tickets/{ticketId}/notes": {
       "get": {
         "tags": [
@@ -6699,6 +6797,33 @@
           }
         }
       },
+      "AcknowledgeMessagesRequest": {
+        "required": [
+          "deliveredSequence",
+          "readSequence"
+        ],
+        "type": "object",
+        "properties": {
+          "deliveredSequence": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "readSequence": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "AssignAgentsRequest": {
         "required": [
           "membershipIds",
@@ -8460,6 +8585,36 @@
           }
         }
       },
+      "TicketConversationCursorDto": {
+        "required": [
+          "ticketId",
+          "deliveredSequence",
+          "readSequence"
+        ],
+        "type": "object",
+        "properties": {
+          "ticketId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "deliveredSequence": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "readSequence": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "TicketDetailDto": {
         "required": [
           "summary",
@@ -8790,6 +8945,15 @@
             "items": {
               "$ref": "#/components/schemas/AssigneeDto"
             }
+          },
+          "unreadMessageCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },

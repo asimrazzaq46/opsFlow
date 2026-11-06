@@ -3,6 +3,7 @@ using Hangfire.Dashboard;
 using Hangfire.PostgreSql;
 using Microsoft.Extensions.Options;
 using Npgsql;
+using OpsFlow.Application.Outbox;
 using OpsFlow.Infrastructure.Background;
 
 namespace OpsFlow.Api.Infrastructure.Background;
@@ -85,6 +86,10 @@ public static class BackgroundSetup
             o.ServerName = $"opsflow-{Environment.MachineName}-{Environment.ProcessId}";
         });
         services.AddHostedService<RecurringJobsRegistrar>();
+        // Committed events are dispatched immediately; the recurring job stays the fallback for missed signals and retries.
+        services.AddSingleton<OutboxWakeup>();
+        services.AddSingleton<IOutboxSignal>(sp => sp.GetRequiredService<OutboxWakeup>());
+        services.AddHostedService(sp => sp.GetRequiredService<OutboxWakeup>());
         return services;
     }
 

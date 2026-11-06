@@ -23,6 +23,7 @@ export interface TicketSummaryDto {
   resolvedAtUtc: (string | null);
   status: TicketStatus;
   title: string;
+  unreadMessageCount?: (number | string | null);
   updatedAtUtc: string;
   version: (number | string);
 }

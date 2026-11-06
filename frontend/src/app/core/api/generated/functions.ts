@@ -147,6 +147,8 @@ export type { ListTicketMessages$Params as ListTicketMessages$Params } from './f
 export { listTicketMessages as listTicketMessages } from './fn/ticket-messages/list-ticket-messages';
 export type { SendTicketMessage$Params as SendTicketMessage$Params } from './fn/ticket-messages/send-ticket-message';
 export { sendTicketMessage as sendTicketMessage } from './fn/ticket-messages/send-ticket-message';
+export type { UpdateTicketMessageCursor$Params as UpdateTicketMessageCursor$Params } from './fn/ticket-messages/update-ticket-message-cursor';
+export { updateTicketMessageCursor as updateTicketMessageCursor } from './fn/ticket-messages/update-ticket-message-cursor';
 export type { ListTicketNotes$Params as ListTicketNotes$Params } from './fn/ticket-notes/list-ticket-notes';
 export { listTicketNotes as listTicketNotes } from './fn/ticket-notes/list-ticket-notes';
 export type { CreateTicketNote$Params as CreateTicketNote$Params } from './fn/ticket-notes/create-ticket-note';

@@ -1,0 +1,204 @@
+<div class="flex flex-wrap items-end justify-between gap-4">
+  <h1 class="text-2xl font-bold tracking-tight">{{ 'kanban.title' | translate }}</h1>
+  <form [formGroup]="form" class="flex flex-wrap items-end gap-3 text-sm" (ngSubmit)="load()">
+    <label class="grid gap-1"
+      ><span class="text-muted">{{ 'filters.search' | translate }}</span>
+      <input
+        type="search"
+        formControlName="search"
+        class="rounded-lg border border-border bg-card px-2 py-1"
+    /></label>
+    <label class="grid gap-1"
+      ><span class="text-muted">{{ 'filters.priority' | translate }}</span>
+      <select
+        formControlName="priority"
+        class="rounded-lg border border-border bg-card px-2 py-1"
+      >
+        <option value="">{{ 'filters.any' | translate }}</option>
+        @for (p of priorities; track p) {
+          <option [value]="p">{{ 'tickets.priority.' + p | translate }}</option>
+        }
+      </select></label
+    >
+    <label class="flex items-center gap-2 py-1.5"
+      ><input type="checkbox" formControlName="overdue" />
+      {{ 'kanban.overdueOnly' | translate }}</label
+    >
+    <label class="flex items-center gap-2 py-1.5"
+      ><input type="checkbox" formControlName="mine" />
+      {{ 'kanban.mineOnly' | translate }}</label
+    >
+    <button
+      type="submit"
+      class="rounded-lg bg-brand px-3 py-1.5 font-semibold text-brand-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+    >
+      {{ 'filters.apply' | translate }}
+    </button>
+  </form>
+</div>
+
+@if (message(); as m) {
+  @if (m.error) {
+    <p
+      role="alert"
+      class="mt-4 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger"
+    >
+      {{ m.key | translate }}
+    </p>
+  } @else {
+    <p role="status" class="mt-4 rounded-lg border border-success/40 bg-success/10 px-3 py-2 text-sm">
+      {{ m.key | translate }}
+    </p>
+  }
+}
+
+<div class="mt-6" aria-live="polite">
+  @if (error()) {
+    <p role="alert" class="text-danger">
+      {{ 'kanban.loadError' | translate }}
+      <button type="button" class="ml-2 underline" (click)="load()">
+        {{ 'common.retry' | translate }}
+      </button>
+    </p>
+  } @else if (!board()) {
+    <p class="text-muted">{{ 'common.loading' | translate }}</p>
+  } @else {
+    <div class="kanban-board" cdkDropListGroup [style.--kanban-columns]="board()!.length">
+      @for (col of board(); track col.status) {
+        <section
+          class="kanban-column flex min-w-0 flex-col rounded-xl border border-border bg-surface"
+          [attr.aria-label]="'tickets.status.' + pascal(col.status) | translate"
+        >
+          <header class="flex items-center justify-between gap-2 border-b border-border px-3 py-2.5">
+            <h2 class="min-w-0 truncate text-sm font-semibold">
+              {{ 'tickets.status.' + pascal(col.status) | translate }}
+            </h2>
+            <span class="min-w-6 shrink-0 rounded-full bg-card px-2 text-center text-xs font-semibold tabular-nums">{{ col.total }}</span>
+          </header>
+          <div
+            cdkDropList
+            cdkDropListSortingDisabled
+            [id]="col.status"
+            [cdkDropListData]="col"
+            [cdkDropListEnterPredicate]="canEnter(col.status)"
+            (cdkDropListDropped)="drop($event)"
+            class="min-h-24 space-y-2 p-2"
+          >
+            @for (t of col.tickets; track t.id) {
+              <article
+                cdkDrag
+                [cdkDragData]="t"
+                [cdkDragDisabled]="pending().has(t.id) || !canMove(t)"
+                [cdkDragStartDelay]="{ touch: 250, mouse: 0 }"
+                class="min-w-0 rounded-lg border bg-card p-2.5 text-sm shadow-sm"
+                [class]="t.isOverdue ? 'border-danger' : 'border-border'"
+                [class.opacity-60]="pending().has(t.id)"
+              >
+                <div cdkDragHandle [cdkDragHandleDisabled]="!canMove(t)" [class.cursor-grab]="canMove(t)">
+                <a
+                  [routerLink]="['/tickets', t.id]"
+                  [attr.title]="t.title" class="line-clamp-3 font-medium wrap-break-word hover:underline focus-visible:outline-2 focus-visible:outline-brand"
+                >
+                  <span class="font-mono text-xs text-muted">{{ t.displayNumber }}</span>
+                  {{ t.title }}</a
+                >
+                <p class="mt-2 flex flex-wrap gap-2 text-xs text-muted">
+                  <span>{{ 'tickets.priority.' + pascal(t.priority) | translate }}</span>
+                  @if (t.categoryName) {
+                    <span>· {{ t.categoryName }}</span>
+                  }
+                  @if (t.assigneeCount !== null) {
+                    <span>· {{ 'kanban.assignees' | translate: { n: t.assigneeCount } }}</span>
+                  }
+                  @if (tenant.role() === 'Agent' && t.assignedToMe === false) {
+                    <span>· {{ 'kanban.notAssignedToYou' | translate }}</span>
+                  }
+                </p>
+                </div>
+                @if (tenant.isStaff()) {
+                  <div class="mt-2">
+                    <app-agent-picker
+                      [ticketKey]="t.id"
+                      [assignees]="t.assignees ?? []"
+                      [agents]="agents()"
+                      [loading]="membersLoading()"
+                      [loadFailed]="membersFailed()"
+                      [me]="meMembership()"
+                      [busyId]="assigning()?.ticketId === t.id ? assigning()!.membershipId : null"
+                      [readOnly]="t.status === 'RESOLVED' || t.status === 'CLOSED'"
+                      (pick)="assign(t, $event)"
+                      (retry)="loadMembers()"
+                    />
+                  </div>
+                  <div class="mt-1">
+                    <app-card-tasks
+                      [ticketId]="t.id"
+                      [progress]="progress().get(t.id) ?? null"
+                      [canWork]="manager() || t.assignedToMe === true"
+                      [isManager]="manager()"
+                      [canClaim]="!manager() && t.assignedToMe === false && !!meMembership()"
+                      [claiming]="assigning()?.ticketId === t.id && assigning()!.membershipId === meMembership()"
+                      [finished]="t.status === 'RESOLVED' || t.status === 'CLOSED'"
+                      [assignees]="t.assignees ?? []"
+                      (claim)="claim(t)"
+                      (changed)="loadProgress()"
+                    />
+                  </div>
+                }
+                @if (t.resolutionDueAtUtc) {
+                  <p
+                    class="mt-1 text-xs"
+                    [class]="t.isOverdue ? 'font-semibold text-danger' : 'text-muted'"
+                  >
+                    {{ (t.isOverdue ? 'kanban.overdue' : 'kanban.due') | translate }}
+                    <time [attr.datetime]="t.resolutionDueAtUtc">{{
+                      t.resolutionDueAtUtc | date: 'short'
+                    }}</time>
+                  </p>
+                }
+                @if (targets(t).length) {
+                  <label class="mt-2 grid gap-1 text-xs"
+                    ><span class="text-muted">{{ 'kanban.moveTo' | translate }}</span>
+                    <select
+                      class="rounded-md border border-border bg-card px-1 py-1"
+                      [disabled]="pending().has(t.id)"
+                      (change)="moveTo(t, $event)"
+                    >
+                      <option value="">—</option>
+                      @for (s of targets(t); track s) {
+                        <option [value]="s">
+                          {{ 'tickets.status.' + pascal(s) | translate }}
+                        </option>
+                      }
+                    </select></label
+                  >
+                }
+                @if (canReopen(t)) {
+                  <button
+                    type="button"
+                    class="mt-2 rounded-md border border-border px-2 py-1 text-xs font-semibold hover:bg-surface focus-visible:outline-2 focus-visible:outline-brand disabled:opacity-60"
+                    [disabled]="pending().has(t.id)"
+                    [attr.aria-busy]="pending().has(t.id)"
+                    (click)="reopen(t)"
+                  >
+                    {{ (pending().has(t.id) ? 'kanban.reopening' : 'tickets.actions.reopen') | translate }}
+                  </button>
+                }
+              </article>
+            } @empty {
+              <p class="px-1 py-4 text-center text-xs text-muted">
+                {{ 'kanban.empty' | translate }}
+              </p>
+            }
+          </div>
+          @if (col.tickets.length < col.total) {
+            <p class="px-3 pb-2 text-xs text-muted">
+              {{ 'kanban.more' | translate: { n: col.total - col.tickets.length } }}
+            </p>
+          }
+        </section>
+      }
+    </div>
+  }
+</div>
+

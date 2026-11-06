@@ -21,6 +21,7 @@ public sealed class TicketNoteService(
     NotificationService notifications,
     TicketNoteMapper mapper,
     OutboxWriter outbox,
+    IOutboxSignal outboxSignal,
     TimeProvider clock
 )
 {
@@ -139,6 +140,7 @@ public sealed class TicketNoteService(
         {
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
+            outboxSignal.Notify(); // staff see the note live without waiting for the recurring dispatch schedule
         }
         catch (DbUpdateException ex)
             when (db.IsUniqueViolation(ex, UniqueConstraintKind.NoteClientId)

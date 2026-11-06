@@ -1,0 +1,35 @@
+:host {
+  display: block;
+}
+
+/* Tall enough to read a conversation, short enough to keep the composer in view on small screens. */
+.chat-log {
+  max-height: min(32rem, 60vh);
+  overscroll-behavior: contain;
+}
+
+/* Staff can tell customer messages apart without relying on color alone (accent bar plus role badge). */
+.chat-bubble-customer {
+  box-shadow: inset 3px 0 0 var(--ops-primary-container);
+}
+
+.chat-bubble-failed {
+  outline: 2px solid var(--ops-error);
+  outline-offset: 2px;
+}
+
+.chat-spin {
+  animation: chat-spin 1s linear infinite;
+}
+
+@keyframes chat-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-spin {
+    animation: none;
+  }
+}

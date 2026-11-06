@@ -50,6 +50,7 @@ public static class DependencyInjection
         services.AddScoped<TicketNoteMapper>();
         services.AddScoped<TicketNoteService>();
         services.AddScoped<TicketTaskService>();
+        services.AddScoped<TicketChatCursorService>();
         // Transactional outbox: writer + dispatcher + per-channel handlers
         services.AddScoped<OutboxWriter>();
         services.AddScoped<NotificationEligibility>();
@@ -57,6 +58,7 @@ public static class DependencyInjection
         services.AddScoped<IOutboxChannelHandler, EmailOutboxHandler>();
         services.AddScoped<IOutboxChannelHandler, CacheOutboxHandler>();
         services.AddScoped<OutboxDispatcher>();
+        services.TryAddSingleton<IOutboxSignal, NoOutboxSignal>(); // the background worker replaces it with an immediate dispatch
         services.AddScoped<SlaMonitor>();
         services.TryAddSingleton<ITenantCache, NoCache>(); // Infrastructure replaces it with the Redis cache when configured
         services.AddScoped<TicketAttachmentService>();

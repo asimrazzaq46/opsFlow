@@ -15,7 +15,10 @@ import { ListTicketMessages$Params } from '../fn/ticket-messages/list-ticket-mes
 import { PagedResultOfTicketMessageDto } from '../models/paged-result-of-ticket-message-dto';
 import { sendTicketMessage } from '../fn/ticket-messages/send-ticket-message';
 import { SendTicketMessage$Params } from '../fn/ticket-messages/send-ticket-message';
+import { TicketConversationCursorDto } from '../models/ticket-conversation-cursor-dto';
 import { TicketMessageDto } from '../models/ticket-message-dto';
+import { updateTicketMessageCursor } from '../fn/ticket-messages/update-ticket-message-cursor';
+import { UpdateTicketMessageCursor$Params } from '../fn/ticket-messages/update-ticket-message-cursor';
 
 @Injectable({ providedIn: 'root' })
 export class TicketMessagesService extends BaseService {
@@ -90,6 +93,41 @@ export class TicketMessagesService extends BaseService {
     const resp = this.sendTicketMessage$Response(params, context);
     return resp.pipe(
       map((r: StrictHttpResponse<TicketMessageDto>): TicketMessageDto => r.body)
+    );
+  }
+
+  /** Path part for operation `updateTicketMessageCursor()` */
+  static readonly UpdateTicketMessageCursorPath = '/api/v1/tenants/{tenantId}/tickets/{ticketId}/messages/cursor';
+
+  /**
+   * Acknowledge ticket messages.
+   *
+   * Moves the caller's own conversation cursor forward: deliveredSequence when messages were received, readSequence when they were displayed (reading also counts as delivery). Each value must be the sequence of a stored chat message of this ticket; a cursor never moves backwards, so repeating or reordering acknowledgements is harmless. Returns the caller's cursor. Requires the same access as reading the conversation.
+   *
+   * This method provides access to the full `HttpResponse`, allowing access to response headers.
+   * To access only the response body, use `updateTicketMessageCursor()` instead.
+   *
+   * This method sends `application/json` and handles request body of type `application/json`.
+   */
+  updateTicketMessageCursor$Response(params: UpdateTicketMessageCursor$Params, context?: HttpContext): Observable<StrictHttpResponse<TicketConversationCursorDto>> {
+    const obs = updateTicketMessageCursor(this.http, this.rootUrl, params, context);
+    return obs;
+  }
+
+  /**
+   * Acknowledge ticket messages.
+   *
+   * Moves the caller's own conversation cursor forward: deliveredSequence when messages were received, readSequence when they were displayed (reading also counts as delivery). Each value must be the sequence of a stored chat message of this ticket; a cursor never moves backwards, so repeating or reordering acknowledgements is harmless. Returns the caller's cursor. Requires the same access as reading the conversation.
+   *
+   * This method provides access only to the response body.
+   * To access the full response (for headers, for example), `updateTicketMessageCursor$Response()` instead.
+   *
+   * This method sends `application/json` and handles request body of type `application/json`.
+   */
+  updateTicketMessageCursor(params: UpdateTicketMessageCursor$Params, context?: HttpContext): Observable<TicketConversationCursorDto> {
+    const resp = this.updateTicketMessageCursor$Response(params, context);
+    return resp.pipe(
+      map((r: StrictHttpResponse<TicketConversationCursorDto>): TicketConversationCursorDto => r.body)
     );
   }
 

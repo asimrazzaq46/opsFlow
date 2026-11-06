@@ -127,6 +127,12 @@
                   >
                     <span class="ms text-[20px]" aria-hidden="true">{{ item.icon }}</span>
                     <span>{{ item.label | translate }}</span>
+                    @if (item.link === '/tickets' && chatUnread.total() > 0) {
+                      <span class="ops-unread-badge ml-auto" aria-hidden="true">{{
+                        compactCount(chatUnread.total())
+                      }}</span>
+                      <span class="sr-only">({{ unreadKey(chatUnread.total()) | translate: { count: chatUnread.total() } }})</span>
+                    }
                   </a>
                 </li>
               }
