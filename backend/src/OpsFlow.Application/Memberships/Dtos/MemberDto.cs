@@ -7,6 +7,9 @@ using OpsFlow.Domain.Users;
 
 namespace OpsFlow.Application.Memberships;
 
+[OpsFlow.Realtime.RealtimeEvent("membership.changed")]
+public sealed record MembershipChanged(Guid TenantId, Guid MembershipId);
+
 public sealed record MemberDto(
     Guid Id,
     Guid UserId,

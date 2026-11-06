@@ -3,5 +3,6 @@
 
 import { TenantRole } from '../models/tenant-role';
 export interface ChangeRoleRequest {
+  expectedRole?: (null | TenantRole);
   role: TenantRole;
 }

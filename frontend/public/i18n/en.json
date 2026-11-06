@@ -656,7 +656,31 @@
     "name": "Name",
     "role": "Role",
     "loadError": "Could not load the team.",
-    "readOnly": "Only owners and managers can invite people to this workspace."
+    "readOnly": "Only owners and managers can invite people to this workspace.",
+    "actions": "Actions",
+    "changeRoleFor": "Change role for {{name}}",
+    "suspend": "Suspend",
+    "reactivate": "Reactivate",
+    "changed": "The member was updated.",
+    "confirm": "Confirm",
+    "confirmRoleTitle": "Change role?",
+    "confirmRole": "{{name}} will become {{role}} in this workspace only.",
+    "confirmSuspendTitle": "Suspend member?",
+    "confirmSuspend": "{{name}} loses access to this workspace immediately. Their open tickets will show as unstaffed until they are reassigned.",
+    "confirmReactivateTitle": "Reactivate member?",
+    "confirmReactivate": "{{name}} regains access to this workspace with their current role.",
+    "openWork": {
+      "title": "{{name}} still has open work",
+      "text": "Reassign {{assignments}} open ticket assignment(s) and {{tasks}} unfinished task(s) before changing the role.",
+      "dismiss": "Dismiss"
+    },
+    "errors": {
+      "failed": "The change could not be saved.",
+      "stale": "Someone else changed this member meanwhile. The list was reloaded.",
+      "invalid": "This change is not allowed.",
+      "notFound": "This member no longer exists.",
+      "conflict": "The change conflicts with the current team, for example the last active Owner."
+    }
   },
   "invitations": {
     "title": "Invitations",

@@ -194,7 +194,7 @@
       </div>
     } @else {
       <!-- Desktop: data table -->
-      <div class="hidden overflow-x-auto md:block" [class.opacity-60]="tickets.isLoading()">
+      <div class="@container hidden overflow-x-auto md:block" [class.opacity-60]="tickets.isLoading()">
         <table class="w-full border-collapse text-left">
           <caption class="sr-only">
             {{
@@ -219,7 +219,7 @@
                   }}</span>
                 </button>
               </th>
-              <th scope="col" class="ops-th min-w-64" [attr.aria-sort]="ariaSort('title')">
+              <th scope="col" class="ops-th w-full min-w-48" [attr.aria-sort]="ariaSort('title')">
                 <button type="button" class="sort-btn" (click)="sort('title')">
                   {{ 'tickets.form.title' | translate
                   }}<span class="ms text-[14px]" aria-hidden="true">{{
@@ -228,11 +228,11 @@
                 </button>
               </th>
               @if (tenant.isStaff()) {
-                <th scope="col" class="ops-th">{{ 'tickets.form.customer' | translate }}</th>
+                <th scope="col" class="ops-th hidden @3xl:table-cell">{{ 'tickets.form.customer' | translate }}</th>
               }
-              <th scope="col" class="ops-th">{{ 'tickets.form.category' | translate }}</th>
+              <th scope="col" class="ops-th hidden @7xl:table-cell">{{ 'tickets.form.category' | translate }}</th>
               @if (tenant.isStaff()) {
-                <th scope="col" class="ops-th">{{ 'tickets.assignees' | translate }}</th>
+                <th scope="col" class="ops-th hidden @5xl:table-cell">{{ 'tickets.assignees' | translate }}</th>
               }
               <th scope="col" class="ops-th" [attr.aria-sort]="ariaSort('status')">
                 <button type="button" class="sort-btn" (click)="sort('status')">
@@ -243,9 +243,9 @@
                 </button>
               </th>
               @if (tenant.isStaff()) {
-                <th scope="col" class="ops-th">{{ 'tickets.list.col.slaDue' | translate }}</th>
+                <th scope="col" class="ops-th hidden @5xl:table-cell">{{ 'tickets.list.col.slaDue' | translate }}</th>
               }
-              <th scope="col" class="ops-th" [attr.aria-sort]="ariaSort('updatedAt')">
+              <th scope="col" class="ops-th hidden @4xl:table-cell" [attr.aria-sort]="ariaSort('updatedAt')">
                 <button type="button" class="sort-btn" (click)="sort('updatedAt')">
                   {{ 'tickets.list.col.updated' | translate
                   }}<span class="ms text-[14px]" aria-hidden="true">{{
@@ -300,20 +300,54 @@
                       >
                     }
                   </div>
+                  <p
+                    class="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-body-sm text-on-surface-variant @7xl:hidden"
+                  >
+                    @if (tenant.isStaff()) {
+                      <span class="@3xl:hidden">{{
+                        t.customerName ?? ('tickets.list.internal' | translate)
+                      }}</span>
+                    }
+                    <span>{{ t.categoryName }}</span>
+                    @if (tenant.isStaff()) {
+                      <span class="@5xl:hidden"
+                        >{{ 'tickets.assignees' | translate }}: {{ count(t.assigneeCount) }}</span
+                      >
+                      @if (t.isOverdue) {
+                        <span class="text-error @5xl:hidden">{{ 'tickets.list.overdue' | translate }}</span>
+                      } @else if (t.resolutionDueAtUtc && !t.resolvedAtUtc) {
+                        <span class="@5xl:hidden"
+                          >{{ 'tickets.list.col.slaDue' | translate }}:
+                          <time [attr.datetime]="t.resolutionDueAtUtc">{{
+                            t.resolutionDueAtUtc | date: 'short'
+                          }}</time></span
+                        >
+                      }
+                    }
+                    <span class="@4xl:hidden"
+                      >{{ 'tickets.list.col.updated' | translate }}:
+                      <time [attr.datetime]="t.updatedAtUtc">{{ t.updatedAtUtc | date: 'short' }}</time></span
+                    >
+                  </p>
                 </td>
                 @if (tenant.isStaff()) {
-                  <td class="px-3 py-3 whitespace-nowrap">
-                    {{ t.customerName ?? ('tickets.list.internal' | translate) }}
+                  <td class="hidden px-3 py-3 @3xl:table-cell">
+                    <span
+                      class="block max-w-40 truncate"
+                      [attr.title]="t.customerName ?? ('tickets.list.internal' | translate)"
+                      >{{ t.customerName ?? ('tickets.list.internal' | translate) }}</span
+                    >
                   </td>
                 }
-                <td class="px-3 py-3 whitespace-nowrap">
+                <td class="hidden px-3 py-3 @7xl:table-cell">
                   <span
-                    class="ops-badge bg-surface-container font-medium text-on-surface-variant"
+                    class="ops-badge block max-w-32 truncate bg-surface-container font-medium text-on-surface-variant"
+                    [attr.title]="t.categoryName"
                     >{{ t.categoryName }}</span
                   >
                 </td>
                 @if (tenant.isStaff()) {
-                  <td class="px-3 py-3 whitespace-nowrap">
+                  <td class="hidden px-3 py-3 whitespace-nowrap @5xl:table-cell">
                     @if (count(t.assigneeCount) === 0) {
                       <span
                         class="ops-badge rounded-full bg-surface-container-high font-normal text-on-surface-variant"
@@ -340,7 +374,7 @@
                   }}</span>
                 </td>
                 @if (tenant.isStaff()) {
-                  <td class="px-3 py-3 whitespace-nowrap">
+                  <td class="hidden px-3 py-3 whitespace-nowrap @5xl:table-cell">
                     @if (t.isOverdue) {
                       <span class="ops-badge bg-error-container font-mono text-on-error-container">
                         <span class="ms text-[14px]" aria-hidden="true">timer_off</span
@@ -357,7 +391,7 @@
                     }
                   </td>
                 }
-                <td class="px-3 py-3 whitespace-nowrap">
+                <td class="hidden px-3 py-3 whitespace-nowrap @4xl:table-cell">
                   <time
                     class="font-mono text-mono-data text-on-surface-variant"
                     [attr.datetime]="t.updatedAtUtc"

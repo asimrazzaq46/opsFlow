@@ -85,6 +85,10 @@ export type { CreateOrganization$Params as CreateOrganization$Params } from './f
 export { createOrganization as createOrganization } from './fn/organizations/create-organization';
 export type { ExportReportCsv$Params as ExportReportCsv$Params } from './fn/reports/export-report-csv';
 export { exportReportCsv as exportReportCsv } from './fn/reports/export-report-csv';
+export type { CreateSkill$Params as CreateSkill$Params } from './fn/team/create-skill';
+export { createSkill as createSkill } from './fn/team/create-skill';
+export type { UpdateSkill$Params as UpdateSkill$Params } from './fn/team/update-skill';
+export { updateSkill as updateSkill } from './fn/team/update-skill';
 export type { ListSlaPolicies$Params as ListSlaPolicies$Params } from './fn/sla-policies/list-sla-policies';
 export { listSlaPolicies as listSlaPolicies } from './fn/sla-policies/list-sla-policies';
 export type { CreateSlaPolicy$Params as CreateSlaPolicy$Params } from './fn/sla-policies/create-sla-policy';
@@ -101,6 +105,10 @@ export type { ChangeMemberRole$Params as ChangeMemberRole$Params } from './fn/te
 export { changeMemberRole as changeMemberRole } from './fn/tenants/change-member-role';
 export type { SetMemberStatus$Params as SetMemberStatus$Params } from './fn/tenants/set-member-status';
 export { setMemberStatus as setMemberStatus } from './fn/tenants/set-member-status';
+export type { UpdateMemberProfile$Params as UpdateMemberProfile$Params } from './fn/tenants/update-member-profile';
+export { updateMemberProfile as updateMemberProfile } from './fn/tenants/update-member-profile';
+export type { SetMemberSkills$Params as SetMemberSkills$Params } from './fn/tenants/set-member-skills';
+export { setMemberSkills as setMemberSkills } from './fn/tenants/set-member-skills';
 export type { InitializeTenantDefaults$Params as InitializeTenantDefaults$Params } from './fn/tenants/initialize-tenant-defaults';
 export { initializeTenantDefaults as initializeTenantDefaults } from './fn/tenants/initialize-tenant-defaults';
 export type { GetTenantSettings$Params as GetTenantSettings$Params } from './fn/tenants/get-tenant-settings';

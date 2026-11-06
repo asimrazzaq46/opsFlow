@@ -8,6 +8,7 @@ export { InvitationsService } from './services/invitations.service';
 export { NotificationsService } from './services/notifications.service';
 export { OrganizationsService } from './services/organizations.service';
 export { ReportsService } from './services/reports.service';
+export { TeamService } from './services/team.service';
 export { SlaPoliciesService } from './services/sla-policies.service';
 export { TenantsService } from './services/tenants.service';
 export { TicketsService } from './services/tickets.service';

@@ -21,4 +21,7 @@ public enum UniqueConstraintKind
     NotificationDedup,
     OutboxDedup,
     ConversationCursor,
+    SkillName,
+    MemberProfile,
+    MemberSkill,
 }

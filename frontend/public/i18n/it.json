@@ -656,7 +656,31 @@
     "name": "Nome",
     "role": "Ruolo",
     "loadError": "Impossibile caricare il team.",
-    "readOnly": "Solo proprietari e manager possono invitare persone in questa organizzazione."
+    "readOnly": "Solo proprietari e manager possono invitare persone in questa organizzazione.",
+    "actions": "Azioni",
+    "changeRoleFor": "Cambia ruolo di {{name}}",
+    "suspend": "Sospendi",
+    "reactivate": "Riattiva",
+    "changed": "Il membro è stato aggiornato.",
+    "confirm": "Conferma",
+    "confirmRoleTitle": "Cambiare ruolo?",
+    "confirmRole": "{{name}} diventerà {{role}} solo in questo workspace.",
+    "confirmSuspendTitle": "Sospendere il membro?",
+    "confirmSuspend": "{{name}} perde subito l'accesso a questo workspace. I suoi ticket aperti risulteranno senza personale finché non saranno riassegnati.",
+    "confirmReactivateTitle": "Riattivare il membro?",
+    "confirmReactivate": "{{name}} riottiene l'accesso a questo workspace con il ruolo attuale.",
+    "openWork": {
+      "title": "{{name}} ha ancora lavoro aperto",
+      "text": "Riassegna {{assignments}} assegnazioni di ticket aperte e {{tasks}} attività non completate prima di cambiare il ruolo.",
+      "dismiss": "Chiudi"
+    },
+    "errors": {
+      "failed": "Impossibile salvare la modifica.",
+      "stale": "Qualcun altro ha modificato questo membro nel frattempo. L'elenco è stato ricaricato.",
+      "invalid": "Questa modifica non è consentita.",
+      "notFound": "Questo membro non esiste più.",
+      "conflict": "La modifica è in conflitto con il team attuale, ad esempio l'ultimo titolare attivo."
+    }
   },
   "invitations": {
     "title": "Inviti",

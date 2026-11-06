@@ -96,6 +96,9 @@ public sealed class RealtimeOutboxHandler(
                 case OutboxEvents.CustomerEligibilityChanged:
                     await PublishCustomerEligibilityAsync(Read<CustomerEligibilityEvent>(message), ct);
                     break;
+                case OutboxEvents.MembershipChanged:
+                    await PublishMembershipChangedAsync(Read<MembershipChangedEvent>(message), ct);
+                    break;
                 default:
                     throw new OutboxPermanentException(
                         $"Unsupported realtime event type '{message.EventType}'."
@@ -225,6 +228,14 @@ public sealed class RealtimeOutboxHandler(
             ct
         );
     }
+
+    // Only the affected user is told, even when the change suspended them: the payload has ids only and the client re-reads its access.
+    private Task PublishMembershipChangedAsync(MembershipChangedEvent ev, CancellationToken ct) =>
+        publisher.NotifyUsersAsync(
+            [ev.UserId.ToString()],
+            new Memberships.MembershipChanged(tenantContext.TenantId!.Value, ev.MembershipId),
+            ct
+        );
 
     // Recipients are computed at delivery time from the internal task audience (no customer path); the payload carries no task content.
     private async Task PublishTaskAsync(TicketTaskEvent ev, CancellationToken ct)

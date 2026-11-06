@@ -5,6 +5,7 @@ using OpsFlow.Domain.Customers;
 using OpsFlow.Domain.Invitations;
 using OpsFlow.Domain.Notifications;
 using OpsFlow.Domain.Outbox;
+using OpsFlow.Domain.Team;
 using OpsFlow.Domain.Tenants;
 using OpsFlow.Domain.Tickets;
 using OpsFlow.Domain.Users;
@@ -33,6 +34,10 @@ public interface IOpsFlowDbContext
     DbSet<TicketMessage> TicketMessages { get; }
     DbSet<TicketNote> TicketNotes { get; }
     DbSet<TicketConversationCursor> TicketConversationCursors { get; }
+    DbSet<MemberProfile> MemberProfiles { get; }
+    DbSet<Skill> Skills { get; }
+    DbSet<MemberSkill> MemberSkills { get; }
+    DbSet<AuditEvent> AuditEvents { get; }
     DbSet<TicketAttachment> TicketAttachments { get; }
     DbSet<Notification> Notifications { get; }
     DbSet<OutboxMessage> OutboxMessages { get; }

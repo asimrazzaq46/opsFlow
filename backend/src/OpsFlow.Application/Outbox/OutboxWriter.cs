@@ -14,6 +14,7 @@ public static class OutboxEvents
     public const string TicketTaskChanged = "ticket.task.changed";
     public const string TicketChanged = "ticket.changed";
     public const string CustomerEligibilityChanged = "customer.eligibility.changed";
+    public const string MembershipChanged = "membership.changed";
 }
 
 public sealed record NotificationEvent(Guid NotificationId);
@@ -32,6 +33,9 @@ public sealed record TicketChangedEvent(Guid TicketId, string Change);
 
 /// <summary>Staged with the affected portal user decided by the server; the delivered state is re-read from the database at publish time.</summary>
 public sealed record CustomerEligibilityEvent(Guid CustomerId, Guid UserId);
+
+/// <summary>The affected user's role or status in a workspace changed; the client reloads its workspaces, the server re-checks every request.</summary>
+public sealed record MembershipChangedEvent(Guid MembershipId, Guid UserId);
 
 /// <summary>
 /// Stages events in the caller's DbContext. They are committed by the SAME SaveChanges as the business change, so a rollback removes them
@@ -69,6 +73,17 @@ public sealed class OutboxWriter(IOpsFlowDbContext db, TimeProvider clock)
             customerId,
             new CustomerEligibilityEvent(customerId, userId),
             $"customer-eligibility:{customerId}:{Guid.NewGuid():N}",
+            OutboxChannels.Realtime
+        );
+
+    /// <summary>Tells the affected user to reload their workspaces and permissions; carries ids only.</summary>
+    public void StageMembershipChanged(Guid tenantId, Guid membershipId, Guid userId) =>
+        Stage(
+            tenantId,
+            OutboxEvents.MembershipChanged,
+            membershipId,
+            new MembershipChangedEvent(membershipId, userId),
+            $"membership:{membershipId}:{Guid.NewGuid():N}",
             OutboxChannels.Realtime
         );
 

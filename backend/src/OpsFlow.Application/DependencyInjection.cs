@@ -51,6 +51,7 @@ public static class DependencyInjection
         services.AddScoped<TicketNoteService>();
         services.AddScoped<TicketTaskService>();
         services.AddScoped<TicketChatCursorService>();
+        services.AddScoped<TeamService>();
         // Transactional outbox: writer + dispatcher + per-channel handlers
         services.AddScoped<OutboxWriter>();
         services.AddScoped<NotificationEligibility>();

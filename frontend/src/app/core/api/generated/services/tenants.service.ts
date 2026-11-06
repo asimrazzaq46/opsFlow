@@ -23,9 +23,13 @@ import { listMembers } from '../fn/tenants/list-members';
 import { ListMembers$Params } from '../fn/tenants/list-members';
 import { OrganizationDto } from '../models/organization-dto';
 import { PagedResultOfMemberDto } from '../models/paged-result-of-member-dto';
+import { setMemberSkills } from '../fn/tenants/set-member-skills';
+import { SetMemberSkills$Params } from '../fn/tenants/set-member-skills';
 import { setMemberStatus } from '../fn/tenants/set-member-status';
 import { SetMemberStatus$Params } from '../fn/tenants/set-member-status';
 import { TenantSettingsDto } from '../models/tenant-settings-dto';
+import { updateMemberProfile } from '../fn/tenants/update-member-profile';
+import { UpdateMemberProfile$Params } from '../fn/tenants/update-member-profile';
 import { updateTenantSettings } from '../fn/tenants/update-tenant-settings';
 import { UpdateTenantSettings$Params } from '../fn/tenants/update-tenant-settings';
 
@@ -111,7 +115,7 @@ export class TenantsService extends BaseService {
   /**
    * Change member role.
    *
-   * Changes a member's role. A tenant always keeps at least one usable Owner. Requires the Owner role in the tenant.
+   * Changes a staff member's role in this workspace only. A tenant always keeps at least one usable Owner. An active Agent who still holds open ticket assignments or unfinished tasks cannot leave the Agent role (409 MEMBER_HAS_OPEN_WORK, listing the work); a stale expectedRole is refused (409 MEMBER_CHANGED). The change is audited and the member is told to reload. Requires the Owner role in the tenant.
    *
    * This method provides access to the full `HttpResponse`, allowing access to response headers.
    * To access only the response body, use `changeMemberRole()` instead.
@@ -126,7 +130,7 @@ export class TenantsService extends BaseService {
   /**
    * Change member role.
    *
-   * Changes a member's role. A tenant always keeps at least one usable Owner. Requires the Owner role in the tenant.
+   * Changes a staff member's role in this workspace only. A tenant always keeps at least one usable Owner. An active Agent who still holds open ticket assignments or unfinished tasks cannot leave the Agent role (409 MEMBER_HAS_OPEN_WORK, listing the work); a stale expectedRole is refused (409 MEMBER_CHANGED). The change is audited and the member is told to reload. Requires the Owner role in the tenant.
    *
    * This method provides access only to the response body.
    * To access the full response (for headers, for example), `changeMemberRole$Response()` instead.
@@ -146,7 +150,7 @@ export class TenantsService extends BaseService {
   /**
    * Activate or suspend member.
    *
-   * Activates or suspends a membership. A tenant always keeps at least one usable Owner. Requires the Owner role in the tenant.
+   * Activates or suspends a staff membership in this workspace only. A tenant always keeps at least one usable Owner. Suspension takes effect immediately; an Agent's open assignments then show as unstaffed for reassignment. A stale expectedRole is refused (409 MEMBER_CHANGED). The change is audited and the member is told to reload. Requires the Owner role in the tenant.
    *
    * This method provides access to the full `HttpResponse`, allowing access to response headers.
    * To access only the response body, use `setMemberStatus()` instead.
@@ -161,7 +165,7 @@ export class TenantsService extends BaseService {
   /**
    * Activate or suspend member.
    *
-   * Activates or suspends a membership. A tenant always keeps at least one usable Owner. Requires the Owner role in the tenant.
+   * Activates or suspends a staff membership in this workspace only. A tenant always keeps at least one usable Owner. Suspension takes effect immediately; an Agent's open assignments then show as unstaffed for reassignment. A stale expectedRole is refused (409 MEMBER_CHANGED). The change is audited and the member is told to reload. Requires the Owner role in the tenant.
    *
    * This method provides access only to the response body.
    * To access the full response (for headers, for example), `setMemberStatus$Response()` instead.
@@ -170,6 +174,76 @@ export class TenantsService extends BaseService {
    */
   setMemberStatus(params: SetMemberStatus$Params, context?: HttpContext): Observable<void> {
     const resp = this.setMemberStatus$Response(params, context);
+    return resp.pipe(
+      map((r: StrictHttpResponse<void>): void => r.body)
+    );
+  }
+
+  /** Path part for operation `updateMemberProfile()` */
+  static readonly UpdateMemberProfilePath = '/api/v1/tenants/{tenantId}/members/{membershipId}/profile';
+
+  /**
+   * Update member profile.
+   *
+   * Sets a staff member's workspace profile (job title, department, phone). Owners may edit every staff member, Managers only Agents; Agents cannot edit profiles, not even their own. The change is audited without copying the values. Requires an Owner or Manager role in the tenant.
+   *
+   * This method provides access to the full `HttpResponse`, allowing access to response headers.
+   * To access only the response body, use `updateMemberProfile()` instead.
+   *
+   * This method sends `application/json` and handles request body of type `application/json`.
+   */
+  updateMemberProfile$Response(params: UpdateMemberProfile$Params, context?: HttpContext): Observable<StrictHttpResponse<void>> {
+    const obs = updateMemberProfile(this.http, this.rootUrl, params, context);
+    return obs;
+  }
+
+  /**
+   * Update member profile.
+   *
+   * Sets a staff member's workspace profile (job title, department, phone). Owners may edit every staff member, Managers only Agents; Agents cannot edit profiles, not even their own. The change is audited without copying the values. Requires an Owner or Manager role in the tenant.
+   *
+   * This method provides access only to the response body.
+   * To access the full response (for headers, for example), `updateMemberProfile$Response()` instead.
+   *
+   * This method sends `application/json` and handles request body of type `application/json`.
+   */
+  updateMemberProfile(params: UpdateMemberProfile$Params, context?: HttpContext): Observable<void> {
+    const resp = this.updateMemberProfile$Response(params, context);
+    return resp.pipe(
+      map((r: StrictHttpResponse<void>): void => r.body)
+    );
+  }
+
+  /** Path part for operation `setMemberSkills()` */
+  static readonly SetMemberSkillsPath = '/api/v1/tenants/{tenantId}/members/{membershipId}/skills';
+
+  /**
+   * Set member skills.
+   *
+   * Replaces a staff member's skill tags with the given set; only active skills can be newly added. Owners may edit every staff member, Managers only Agents; Agents cannot edit skills, not even their own. The change is audited. Requires an Owner or Manager role in the tenant.
+   *
+   * This method provides access to the full `HttpResponse`, allowing access to response headers.
+   * To access only the response body, use `setMemberSkills()` instead.
+   *
+   * This method sends `application/json` and handles request body of type `application/json`.
+   */
+  setMemberSkills$Response(params: SetMemberSkills$Params, context?: HttpContext): Observable<StrictHttpResponse<void>> {
+    const obs = setMemberSkills(this.http, this.rootUrl, params, context);
+    return obs;
+  }
+
+  /**
+   * Set member skills.
+   *
+   * Replaces a staff member's skill tags with the given set; only active skills can be newly added. Owners may edit every staff member, Managers only Agents; Agents cannot edit skills, not even their own. The change is audited. Requires an Owner or Manager role in the tenant.
+   *
+   * This method provides access only to the response body.
+   * To access the full response (for headers, for example), `setMemberSkills$Response()` instead.
+   *
+   * This method sends `application/json` and handles request body of type `application/json`.
+   */
+  setMemberSkills(params: SetMemberSkills$Params, context?: HttpContext): Observable<void> {
+    const resp = this.setMemberSkills$Response(params, context);
     return resp.pipe(
       map((r: StrictHttpResponse<void>): void => r.body)
     );

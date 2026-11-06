@@ -35,6 +35,16 @@ internal static class ControllerProblemExtensions
             );
         }
 
-        return controller.Problem(detail: problem.Detail, statusCode: status, title: problem.Title);
+        var answer = (ObjectResult)controller.Problem(detail: problem.Detail, statusCode: status, title: problem.Title);
+        // Domain-specific details (e.g. the open work blocking a role change) travel with the problem; the code is handled above.
+        foreach (var (key, value) in problem.Extensions)
+        {
+            if (key != "code")
+            {
+                ((ProblemDetails)answer.Value!).Extensions[key] = value;
+            }
+        }
+
+        return answer;
     }
 }

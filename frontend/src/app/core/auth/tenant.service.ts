@@ -1,8 +1,10 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Observable, finalize, tap } from 'rxjs';
 import { Api } from '../api/generated/api';
 import { listMyOrganizations } from '../api/generated/functions';
 import { OrganizationDto } from '../api/generated/models';
+import { RealtimeService } from '../realtime/realtime.service';
 
 /** Remembers which workspace was active on this device; it is only a preference and is honored only if the server lists it. */
 export const WORKSPACE_STORAGE_KEY = 'opsflow.workspace';
@@ -24,6 +26,15 @@ export class TenantService {
   readonly isOwner = computed(() => this.role() === 'TenantOwner');
   /** Owners and Managers administer customers; the server enforces it, this only shapes the UI. */
   readonly isManager = computed(() => this.role() === 'TenantOwner' || this.role() === 'Manager');
+
+  constructor() {
+    // An administrator changed this user's role or status somewhere: refresh the workspaces so navigation and actions match the server,
+    // which already re-checks every request on its own.
+    inject(RealtimeService)
+      .on('membership.changed')
+      .pipe(takeUntilDestroyed())
+      .subscribe(() => this.load().subscribe({ error: () => undefined }));
+  }
 
   /** Reloads the memberships from the server; a selection that is no longer authorized falls back to the remembered or first workspace. */
   load(): Observable<OrganizationDto[]> {

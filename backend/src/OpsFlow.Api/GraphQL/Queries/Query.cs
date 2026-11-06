@@ -6,6 +6,7 @@ using OpsFlow.Application.Common;
 using OpsFlow.Application.Customers;
 using OpsFlow.Application.Memberships;
 using OpsFlow.Application.Tickets;
+using OpsFlow.Domain.Tenants;
 using OpsFlow.Domain.Tickets;
 
 namespace OpsFlow.Api.GraphQL;
@@ -94,6 +95,45 @@ public sealed class Query
         Guid id,
         CancellationToken ct
     ) => svc.GetAsync(id, ct);
+
+    [Serial]
+    [Cost(10)]
+    public Task<PagedResult<TeamMemberRowDto>> TeamDirectory(
+        [Service] TeamService svc,
+        CancellationToken ct,
+        string? search = null,
+        TenantRole? role = null,
+        bool? isActive = null,
+        Guid? skillId = null,
+        string? sortBy = null,
+        bool descending = false,
+        int page = 1,
+        int pageSize = 20
+    ) =>
+        svc.DirectoryAsync(
+            search,
+            role,
+            isActive,
+            skillId,
+            sortBy,
+            descending,
+            PageGuard.Page(page),
+            PageGuard.Size(pageSize),
+            ct
+        );
+
+    [Serial]
+    [Cost(10)]
+    public Task<TeamMemberDetailDto> TeamMember([Service] TeamService svc, Guid membershipId, CancellationToken ct) =>
+        svc.DetailAsync(membershipId, ct);
+
+    [Serial]
+    [Cost(5)]
+    public Task<IReadOnlyList<SkillDto>> Skills(
+        [Service] TeamService svc,
+        CancellationToken ct,
+        bool includeInactive = false
+    ) => svc.SkillsAsync(includeInactive, ct);
 
     [Serial]
     [Cost(10)]

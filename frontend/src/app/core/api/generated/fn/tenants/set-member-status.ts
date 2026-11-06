@@ -7,7 +7,7 @@ import { filter, map } from 'rxjs/operators';
 import { StrictHttpResponse } from '../../strict-http-response';
 import { RequestBuilder } from '../../request-builder';
 
-import { SetStatusRequest } from '../../models/set-status-request';
+import { SetMemberStatusRequest } from '../../models/set-member-status-request';
 
 export interface SetMemberStatus$Params {
   membershipId: string;
@@ -16,7 +16,7 @@ export interface SetMemberStatus$Params {
  * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
  */
   tenantId: string;
-      body: SetStatusRequest
+      body: SetMemberStatusRequest
 }
 
 export function setMemberStatus(http: HttpClient, rootUrl: string, params: SetMemberStatus$Params, context?: HttpContext): Observable<StrictHttpResponse<void>> {

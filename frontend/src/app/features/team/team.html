@@ -19,6 +19,9 @@
             <th>{{ 'customers.email' | translate }}</th>
             <th>{{ 'team.role' | translate }}</th>
             <th>{{ 'common.status' | translate }}</th>
+            @if (canManageMembers()) {
+              <th><span class="sr-only">{{ 'team.actions' | translate }}</span></th>
+            }
           </tr>
         </thead>
         <tbody>
@@ -28,6 +31,35 @@
               <td>{{ m.email }}</td>
               <td>{{ 'roles.' + pascal(m.role) | translate }}</td>
               <td>{{ (m.isActive ? 'common.active' : 'common.inactive') | translate }}</td>
+              @if (canManageMembers()) {
+                <td class="py-2">
+                  <div class="flex flex-wrap items-center justify-end gap-2">
+                    <label class="sr-only" [for]="'role-' + m.id">{{
+                      'team.changeRoleFor' | translate: { name: m.displayName }
+                    }}</label>
+                    <select
+                      [id]="'role-' + m.id"
+                      class="ops-select"
+                      [disabled]="changing()"
+                      [value]="roleOf(m)"
+                      (change)="proposeRole(m, $event)"
+                    >
+                      @for (r of staffRoles; track r) {
+                        <option [value]="r" [selected]="r === roleOf(m)">{{ 'roles.' + r | translate }}</option>
+                      }
+                    </select>
+                    <button
+                      type="button"
+                      class="ops-btn-secondary h-9 px-3 text-body-sm"
+                      [disabled]="changing()"
+                      (click)="proposeStatus(m)"
+                    >
+                      {{ (m.isActive ? 'team.suspend' : 'team.reactivate') | translate }}
+                      <span class="sr-only">{{ m.displayName }}</span>
+                    </button>
+                  </div>
+                </td>
+              }
             </tr>
           }
         </tbody>
@@ -55,6 +87,42 @@
       <p class="text-muted" role="status">{{ 'common.loading' | translate }}</p>
     }
   </div>
+
+  @if (changeMessage(); as msg) {
+    <p class="mt-4 text-sm" [class.text-danger]="msg.error" [attr.role]="msg.error ? 'alert' : 'status'">
+      {{ msg.key | translate }}
+    </p>
+  }
+
+  @if (openWork(); as w) {
+    <section role="alert" class="mt-4 rounded-lg border border-danger/40 bg-danger/10 p-4 text-sm" aria-labelledby="open-work-title">
+      <h2 id="open-work-title" class="font-semibold">{{ 'team.openWork.title' | translate: { name: w.member } }}</h2>
+      <p class="mt-1">{{ 'team.openWork.text' | translate: { assignments: w.assignments, tasks: w.tasks } }}</p>
+      @if (w.tickets.length) {
+        <ul class="mt-2 list-disc space-y-1 pl-5">
+          @for (t of w.tickets; track t.ticketId) {
+            <li>
+              <a class="ops-link" [routerLink]="['/tickets', t.ticketId]">{{ t.displayNumber }}</a> · {{ t.title }}
+            </li>
+          }
+        </ul>
+      }
+      <button type="button" class="mt-3 underline" (click)="openWork.set(null)">{{ 'team.openWork.dismiss' | translate }}</button>
+    </section>
+  }
+
+  <app-confirm-dialog
+    #changeDialog
+    [title]="(pending()?.role ? 'team.confirmRoleTitle' : pending()?.isActive ? 'team.confirmReactivateTitle' : 'team.confirmSuspendTitle') | translate"
+    [message]="
+      (pending()?.role ? 'team.confirmRole' : pending()?.isActive ? 'team.confirmReactivate' : 'team.confirmSuspend')
+        | translate: { name: pending()?.member?.displayName ?? '', role: (pending()?.role ? ('roles.' + pending()!.role | translate) : '') }
+    "
+    [confirmLabel]="'team.confirm' | translate"
+    [busy]="changing()"
+    (confirmed)="confirmChange()"
+    (closed)="changing() || pending.set(null)"
+  />
 
   @if (canInvite()) {
     <h2 class="mt-10 text-xl font-bold tracking-tight">{{ 'invitations.title' | translate }}</h2>

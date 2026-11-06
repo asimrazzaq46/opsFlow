@@ -16,6 +16,7 @@ namespace OpsFlow.Api.Controllers;
 public sealed class TenantsController(
     OrganizationService organizations,
     MembershipService members,
+    TeamService team,
     TenantDefaultsService defaults,
     TenantSettingsService settings
 ) : ControllerBase
@@ -53,7 +54,7 @@ public sealed class TenantsController(
     [Authorize(Policy = AuthPolicies.TenantOwner)]
     [EndpointSummary("Change member role")]
     [EndpointDescription(
-        "Changes a member's role. A tenant always keeps at least one usable Owner. Requires the Owner role in the tenant."
+        "Changes a staff member's role in this workspace only. A tenant always keeps at least one usable Owner. An active Agent who still holds open ticket assignments or unfinished tasks cannot leave the Agent role (409 MEMBER_HAS_OPEN_WORK, listing the work); a stale expectedRole is refused (409 MEMBER_CHANGED). The change is audited and the member is told to reload. Requires the Owner role in the tenant."
     )]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ProblemResponse>(
@@ -66,7 +67,7 @@ public sealed class TenantsController(
         CancellationToken ct
     )
     {
-        return await members.ChangeRoleAsync(membershipId, request.Role, ct) is { } failure
+        return await members.ChangeRoleAsync(membershipId, request.Role, ct, request.ExpectedRole) is { } failure
             ? this.Answer(failure)
             : NoContent();
     }
@@ -75,7 +76,7 @@ public sealed class TenantsController(
     [Authorize(Policy = AuthPolicies.TenantOwner)]
     [EndpointSummary("Activate or suspend member")]
     [EndpointDescription(
-        "Activates or suspends a membership. A tenant always keeps at least one usable Owner. Requires the Owner role in the tenant."
+        "Activates or suspends a staff membership in this workspace only. A tenant always keeps at least one usable Owner. Suspension takes effect immediately; an Agent's open assignments then show as unstaffed for reassignment. A stale expectedRole is refused (409 MEMBER_CHANGED). The change is audited and the member is told to reload. Requires the Owner role in the tenant."
     )]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ProblemResponse>(
@@ -84,11 +85,52 @@ public sealed class TenantsController(
     )]
     public async Task<IActionResult> SetMemberStatus(
         Guid membershipId,
-        SetStatusRequest request,
+        SetMemberStatusRequest request,
         CancellationToken ct
     )
     {
-        return await members.SetActiveAsync(membershipId, request.IsActive, ct) is { } failure
+        return await members.SetActiveAsync(membershipId, request.IsActive, ct, request.ExpectedRole) is { } failure
+            ? this.Answer(failure)
+            : NoContent();
+    }
+
+    [HttpPut("members/{membershipId:guid}/profile", Name = "UpdateMemberProfile")]
+    [Authorize(Policy = AuthPolicies.TenantStaff)]
+    [EndpointSummary("Update member profile")]
+    [EndpointDescription(
+        "Sets a staff member's workspace profile (job title, department, phone). Owners may edit every staff member, Managers only Agents; Agents cannot edit profiles, not even their own. The change is audited without copying the values. Requires an Owner or Manager role in the tenant."
+    )]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> UpdateMemberProfile(
+        Guid membershipId,
+        UpdateMemberProfileRequest request,
+        CancellationToken ct
+    )
+    {
+        return await team.UpdateProfileAsync(
+            membershipId,
+            new UpdateMemberProfileCommand(request.JobTitle, request.Department, request.Phone),
+            ct
+        ) is { } failure
+            ? this.Answer(failure)
+            : NoContent();
+    }
+
+    [HttpPut("members/{membershipId:guid}/skills", Name = "SetMemberSkills")]
+    [Authorize(Policy = AuthPolicies.TenantStaff)]
+    [EndpointSummary("Set member skills")]
+    [EndpointDescription(
+        "Replaces a staff member's skill tags with the given set; only active skills can be newly added. Owners may edit every staff member, Managers only Agents; Agents cannot edit skills, not even their own. The change is audited. Requires an Owner or Manager role in the tenant."
+    )]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType<ProblemResponse>(StatusCodes.Status409Conflict, "application/problem+json")]
+    public async Task<IActionResult> SetMemberSkills(
+        Guid membershipId,
+        SetMemberSkillsRequest request,
+        CancellationToken ct
+    )
+    {
+        return await team.SetMemberSkillsAsync(membershipId, request.SkillIds!, ct) is { } failure
             ? this.Answer(failure)
             : NoContent();
     }

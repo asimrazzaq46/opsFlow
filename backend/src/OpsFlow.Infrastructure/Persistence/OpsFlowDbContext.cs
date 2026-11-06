@@ -8,6 +8,7 @@ using OpsFlow.Domain.Customers;
 using OpsFlow.Domain.Invitations;
 using OpsFlow.Domain.Notifications;
 using OpsFlow.Domain.Outbox;
+using OpsFlow.Domain.Team;
 using OpsFlow.Domain.Tenants;
 using OpsFlow.Domain.Tickets;
 using OpsFlow.Domain.Users;
@@ -41,6 +42,10 @@ public sealed class OpsFlowDbContext(
     public DbSet<TicketMessage> TicketMessages => Set<TicketMessage>();
     public DbSet<TicketNote> TicketNotes => Set<TicketNote>();
     public DbSet<TicketConversationCursor> TicketConversationCursors => Set<TicketConversationCursor>();
+    public DbSet<MemberProfile> MemberProfiles => Set<MemberProfile>();
+    public DbSet<Skill> Skills => Set<Skill>();
+    public DbSet<MemberSkill> MemberSkills => Set<MemberSkill>();
+    public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
     public DbSet<TicketAttachment> TicketAttachments => Set<TicketAttachment>();
     public DbSet<Notification> Notifications => Set<Notification>();
 
@@ -75,6 +80,10 @@ public sealed class OpsFlowDbContext(
         modelBuilder.Entity<TicketMessage>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
         modelBuilder.Entity<TicketNote>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
         modelBuilder.Entity<TicketConversationCursor>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<MemberProfile>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<Skill>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<MemberSkill>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<AuditEvent>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
         modelBuilder.Entity<TicketAttachment>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
         modelBuilder.Entity<Notification>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
         modelBuilder.Entity<TicketTask>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
@@ -142,6 +151,18 @@ public sealed class OpsFlowDbContext(
             UniqueConstraintKind.NotificationDedup => (
                 "IX_Notifications_TenantId_UserId_DedupKey",
                 "Notifications.DedupKey"
+            ),
+            UniqueConstraintKind.SkillName => (
+                "IX_Skills_TenantId_NormalizedName",
+                "Skills.NormalizedName"
+            ),
+            UniqueConstraintKind.MemberProfile => (
+                "IX_MemberProfiles_TenantId_MembershipId",
+                "MemberProfiles.MembershipId"
+            ),
+            UniqueConstraintKind.MemberSkill => (
+                "PK_MemberSkills",
+                "MemberSkills.SkillId"
             ),
             UniqueConstraintKind.ConversationCursor => (
                 "IX_TicketConversationCursors_Ticket_User",
