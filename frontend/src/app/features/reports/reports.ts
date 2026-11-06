@@ -9,8 +9,7 @@ import {
 } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { Api } from '../../core/api/generated/api';
-import { exportReportCsv } from '../../core/api/generated/functions';
+import { ReportsService } from '../../core/api/generated/services/reports.service';
 import { ReportExportKind } from '../../core/api/generated/models';
 import { TenantService } from '../../core/auth/tenant.service';
 import { GraphqlClient } from '../../core/graphql/graphql-client';
@@ -253,7 +252,7 @@ type Rep = ReportQuery['report'];
 })
 export class Reports {
   private readonly gql = inject(GraphqlClient);
-  private readonly api = inject(Api);
+  private readonly reportsService = inject(ReportsService);
   private readonly i18n = inject(TranslateService);
   protected readonly tenant = inject(TenantService);
 
@@ -306,8 +305,8 @@ export class Reports {
     const { from, to, priority } = this.form.getRawValue();
     this.exporting.set(true);
     this.notice.set(null);
-    this.api
-      .invoke$Response(exportReportCsv, {
+    this.reportsService
+      .exportReportCsv$Response({
         tenantId,
         kind,
         from,

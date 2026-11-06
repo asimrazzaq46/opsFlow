@@ -4,5 +4,6 @@
   "output": "src/app/core/api/generated",
   "skipJsonSuffix": true,
   "promises": false,
+  "services": true,
   "ignoreUnusedModels": false
 }

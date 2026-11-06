@@ -11,12 +11,7 @@ import {
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { TranslatePipe } from '@ngx-translate/core';
 import { TimeoutError, timeout } from 'rxjs';
-import { Api } from '../../core/api/generated/api';
-import {
-  createInvitation,
-  listInvitations,
-  revokeInvitation,
-} from '../../core/api/generated/functions';
+import { InvitationsService } from '../../core/api/generated/services/invitations.service';
 import { InvitationDto, TenantRole } from '../../core/api/generated/models';
 import { TenantService } from '../../core/auth/tenant.service';
 import { GraphqlClient } from '../../core/graphql/graphql-client';
@@ -40,7 +35,7 @@ const REQUEST_TIMEOUT_MS = 20_000;
 })
 export class Team {
   private readonly gql = inject(GraphqlClient);
-  private readonly api = inject(Api);
+  private readonly invitationsService = inject(InvitationsService);
   protected readonly tenant = inject(TenantService);
   protected readonly pascal = pascal;
 
@@ -116,8 +111,8 @@ export class Team {
     const tenantId = this.tenant.tenantId();
     if (!tenantId || !this.canInvite()) return;
     this.invitationsError.set(false);
-    this.api
-      .invoke(listInvitations, { tenantId })
+    this.invitationsService
+      .listInvitations({ tenantId })
       .pipe(timeout(REQUEST_TIMEOUT_MS))
       .subscribe({
         next: (l) => {
@@ -135,8 +130,8 @@ export class Team {
     if (!this.canInvite() || this.invite.invalid || !tenantId || this.busy()) return;
     this.busy.set(true);
     this.message.set(null);
-    this.api
-      .invoke(createInvitation, { tenantId, body: this.invite.getRawValue() })
+    this.invitationsService
+      .createInvitation({ tenantId, body: this.invite.getRawValue() })
       .pipe(timeout(REQUEST_TIMEOUT_MS))
       .subscribe({
         next: () => {
@@ -157,8 +152,8 @@ export class Team {
   protected revoke(invitationId: string): void {
     const tenantId = this.tenant.tenantId();
     if (!tenantId || !this.canInvite()) return;
-    this.api
-      .invoke(revokeInvitation, { tenantId, invitationId })
+    this.invitationsService
+      .revokeInvitation({ tenantId, invitationId })
       .pipe(timeout(REQUEST_TIMEOUT_MS))
       .subscribe({
         next: () => {

@@ -1,13 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable, map, timeout } from 'rxjs';
-import { Api } from '../../core/api/generated/api';
-import {
-  createCustomer,
-  createInvitation,
-  setCustomerStatus,
-  unlinkCustomerUser,
-  updateCustomer,
-} from '../../core/api/generated/functions';
+import { CustomersService } from '../../core/api/generated/services/customers.service';
+import { InvitationsService } from '../../core/api/generated/services/invitations.service';
 import { TenantService } from '../../core/auth/tenant.service';
 import {
   CustomerDocument,
@@ -57,7 +51,8 @@ const WRITE_TIMEOUT_MS = 20_000;
 @Injectable({ providedIn: 'root' })
 export class CustomersApi {
   private readonly gql = inject(GraphqlClient);
-  private readonly api = inject(Api);
+  private readonly customersService = inject(CustomersService);
+  private readonly invitationsService = inject(InvitationsService);
   private readonly tenant = inject(TenantService);
 
   private get tenantId(): string {
@@ -90,34 +85,34 @@ export class CustomersApi {
   }
 
   create(body: CustomerInput) {
-    return this.api
-      .invoke(createCustomer, { tenantId: this.tenantId, body })
+    return this.customersService
+      .createCustomer({ tenantId: this.tenantId, body })
       .pipe(timeout(WRITE_TIMEOUT_MS));
   }
 
   /** Email and phone are not part of an update: only the account owner may change them. */
   update(customerId: string, body: CustomerUpdate) {
-    return this.api
-      .invoke(updateCustomer, { tenantId: this.tenantId, customerId, body: { ...body, email: null, phone: null } })
+    return this.customersService
+      .updateCustomer({ tenantId: this.tenantId, customerId, body: { ...body, email: null, phone: null } })
       .pipe(timeout(WRITE_TIMEOUT_MS));
   }
 
   setActive(customerId: string, isActive: boolean) {
-    return this.api
-      .invoke(setCustomerStatus, { tenantId: this.tenantId, customerId, body: { isActive } })
+    return this.customersService
+      .setCustomerStatus({ tenantId: this.tenantId, customerId, body: { isActive } })
       .pipe(timeout(WRITE_TIMEOUT_MS));
   }
 
   unlinkUser(customerId: string) {
-    return this.api
-      .invoke(unlinkCustomerUser, { tenantId: this.tenantId, customerId })
+    return this.customersService
+      .unlinkCustomerUser({ tenantId: this.tenantId, customerId })
       .pipe(timeout(WRITE_TIMEOUT_MS));
   }
 
   /** Reuses the invitation service: accepting links (or creates) the contact for the invited address. */
   invite(email: string) {
-    return this.api
-      .invoke(createInvitation, { tenantId: this.tenantId, body: { email, role: 'Customer' } })
+    return this.invitationsService
+      .createInvitation({ tenantId: this.tenantId, body: { email, role: 'Customer' } })
       .pipe(timeout(WRITE_TIMEOUT_MS));
   }
 }
