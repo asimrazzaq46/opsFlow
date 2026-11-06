@@ -149,6 +149,28 @@ public class RealtimeTests(ApiFactory factory) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task An_unassigned_creator_agent_receives_no_chat_or_note_content()
+    {
+        var w = await TicketWorld.CreateAsync(factory);
+        var ticket = await w.CreateTicketAsync(w.Agent1);
+        (await w.Manager.DeleteAsync(w.Url($"tickets/{ticket.Id}/assignments/{w.Agent1Membership}"))).EnsureSuccessStatusCode();
+        await using var creator = await ConnectAsync(w.Agent1);
+        await using var control = await ConnectAsync(w.Owner);
+
+        await w.SendMessageAsync(w.Manager, ticket.Id, "creator must not read this");
+        await w.AddNoteAsync(w.Manager, ticket.Id, "creator must not read this note");
+        Assert.True(await control.WaitForAsync(e => e.Name == "ticket.message.created"));
+        Assert.True(await control.WaitForAsync(e => e.Name == "ticket.note.created"));
+        await Task.Delay(300);
+
+        // Live delivery follows the same rule as the history endpoints, which refuse the unassigned creator.
+        Assert.DoesNotContain(creator.Events, e => e.Name is "ticket.message.created" or "ticket.note.created");
+        Assert.DoesNotContain(creator.Events, e => e.Payload.ToString().Contains("creator must not read", StringComparison.Ordinal));
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Agent1.GetAsync(w.Url($"tickets/{ticket.Id}/messages"))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Agent1.GetAsync(w.Url($"tickets/{ticket.Id}/notes"))).StatusCode);
+    }
+
+    [Fact]
     public async Task Hub_connections_are_not_shared_across_tenants()
     {
         var a = await TicketWorld.CreateAsync(factory);

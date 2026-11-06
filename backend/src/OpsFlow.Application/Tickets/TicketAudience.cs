@@ -56,8 +56,9 @@ public sealed class TicketAudience(IOpsFlowDbContext db)
             .ToListAsync(ct);
 
     /// <summary>
-    /// Audience of internal child-task data: active Owners/Managers and only the Agents that are CURRENTLY eligible assignees
-    /// (never the creating agent by itself, never the customer).
+    /// Audience of responsibility-gated content (child tasks, chat messages, internal notes): active Owners/Managers and only the
+    /// Agents that are CURRENTLY eligible assignees (never the creating agent by itself, never the customer). Mirrors the REST read
+    /// rule of <see cref="TicketAccess.MayWorkOnAsync"/>, so live delivery never reaches someone the history endpoint would refuse.
     /// </summary>
     public async Task<List<Guid>> TaskStaffAsync(Guid ticketId, CancellationToken ct) =>
         await db

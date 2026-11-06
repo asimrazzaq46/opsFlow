@@ -137,8 +137,9 @@ public sealed class RealtimeOutboxHandler(
         }
 
         // Recipients are recomputed from the database NOW; each audience gets its own view (customers never see staff identities).
+        // Staff must match the REST read rule (TicketAccess.MayWorkOnAsync): an unassigned Agent, even the creator, gets no content.
         var tenantId = tenantContext.TenantId!.Value;
-        var staff = await audience.StaffAsync(ticket.Id, ticket.CreatedByUserId, ct);
+        var staff = await audience.TaskStaffAsync(ticket.Id, ct);
         await publisher.SendToUsersAsync(
             staff.ConvertAll(u => u.ToString()),
             new TicketMessageCreated(
@@ -175,8 +176,8 @@ public sealed class RealtimeOutboxHandler(
             return;
         }
 
-        // Internal notes go to STAFF only; there is no customer delivery path at all.
-        var staff = await audience.StaffAsync(ticket.Id, ticket.CreatedByUserId, ct);
+        // Internal notes go to STAFF only (same rule as the notes endpoint); there is no customer delivery path at all.
+        var staff = await audience.TaskStaffAsync(ticket.Id, ct);
         await publisher.NotifyUsersAsync(
             staff.ConvertAll(u => u.ToString()),
             new TicketNoteCreated(
