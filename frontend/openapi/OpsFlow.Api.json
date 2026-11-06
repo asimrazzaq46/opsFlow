@@ -1156,6 +1156,21 @@
             }
           },
           {
+            "name": "sortBy",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "descending",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
             "name": "tenantId",
             "in": "path",
             "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
@@ -1384,7 +1399,7 @@
           "Customers"
         ],
         "summary": "Update customer",
-        "description": "Updates a customer contact. Requires the Owner or Manager role in the tenant.",
+        "description": "Renames a customer contact and optionally links a portal user. Email and phone cannot be changed here (they belong to the account owner); sending different values returns 403. A null linkedUserId keeps the current link; use the unlink action to remove it. Requires the Owner or Manager role in the tenant.",
         "operationId": "UpdateCustomer",
         "parameters": [
           {
@@ -1411,7 +1426,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CustomerRequest"
+                "$ref": "#/components/schemas/CustomerUpdateRequest"
               }
             }
           },
@@ -1492,7 +1507,7 @@
           "Customers"
         ],
         "summary": "Activate or deactivate customer",
-        "description": "Changes whether the customer can be selected for new tickets; history is kept. Requires the Owner or Manager role in the tenant.",
+        "description": "Allows or stops new tickets for the customer; sign-in and history are unaffected. Requires the Owner role in the tenant.",
         "operationId": "SetCustomerStatus",
         "parameters": [
           {
@@ -1555,6 +1570,77 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ValidationProblemResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The resource does not exist or is not visible to the caller.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/tenants/{tenantId}/customers/{customerId}/user": {
+      "delete": {
+        "tags": [
+          "Customers"
+        ],
+        "summary": "Unlink customer portal user",
+        "description": "Removes the portal-user link from a customer contact; the contact and its tickets are kept. Requires the Owner or Manager role in the tenant.",
+        "operationId": "UnlinkCustomerUser",
+        "parameters": [
+          {
+            "name": "customerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "path",
+            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Missing, expired or invalid Bearer access token.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no active membership with a sufficient role in this tenant.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
                 }
               }
             }
@@ -6446,6 +6532,158 @@
           }
         ]
       }
+    },
+    "/api/v1/notifications": {
+      "get": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "List my notifications across workspaces",
+        "description": "Returns the caller's notification history from every workspace where their membership is active, newest first and paged. Each item names its workspace through tenantId.",
+        "operationId": "ListMyNotifications",
+        "parameters": [
+          {
+            "name": "unreadOnly",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "1-based page number (clamped to a safe range).",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "Items per page (capped by the endpoint).",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 30
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagedResultOfNotificationDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid Bearer access token.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed; see `errors` for the offending fields.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/notifications/unread-count": {
+      "get": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Get my unread notification count across workspaces",
+        "description": "Returns how many unread notifications the caller has in all workspaces where their membership is active.",
+        "operationId": "GetMyUnreadNotificationCount",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnreadCountDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid Bearer access token.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
+    "/api/v1/notifications/read-all": {
+      "post": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Mark all my notifications as read across workspaces",
+        "description": "Marks every unread notification of the caller as read in all workspaces where their membership is active.",
+        "operationId": "MarkAllMyNotificationsRead",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Missing, expired or invalid Bearer access token.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -6933,6 +7171,18 @@
           "updatedAtUtc": {
             "type": "string",
             "format": "date-time"
+          },
+          "linkedUserEmail": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "linkedUserName": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -6950,6 +7200,39 @@
           },
           "email": {
             "type": "string"
+          },
+          "phone": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "linkedUserId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
+      "CustomerUpdateRequest": {
+        "required": [
+          "name",
+          "email",
+          "phone",
+          "linkedUserId"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "phone": {
             "type": [
@@ -7320,7 +7603,8 @@
           "MessageReceived",
           "NoteAdded",
           "SlaWarning",
-          "SlaBreached"
+          "SlaBreached",
+          "TicketClosed"
         ]
       },
       "OrganizationDto": {

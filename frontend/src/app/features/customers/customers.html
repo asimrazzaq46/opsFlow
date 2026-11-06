@@ -1,0 +1,357 @@
+<div class="flex flex-col gap-4">
+  <!-- Heading and primary action -->
+  <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+    <div>
+      @if (tenant.current(); as org) {
+        <span class="ops-label text-primary">{{ org.name }}</span>
+      }
+      <h1 class="mt-1 text-headline-lg tracking-tight text-on-surface sm:text-headline-xl">
+        {{ 'customers.title' | translate }}
+      </h1>
+      <p class="mt-1 text-body-md text-on-surface-variant">{{ 'customers.subtitle' | translate }}</p>
+    </div>
+    <a routerLink="/customers/new" class="ops-btn-primary h-10 self-start px-4 sm:self-auto">
+      <span class="ms text-[18px]" aria-hidden="true">add</span>{{ 'customers.add' | translate }}
+    </a>
+  </div>
+
+  <!-- Action feedback -->
+  <div aria-live="polite">
+    @if (message(); as m) {
+      <p
+        class="flex items-center gap-2 rounded-lg px-3 py-2 text-body-sm"
+        [class]="
+          m.error
+            ? 'bg-error-container text-on-error-container'
+            : 'bg-secondary-container text-on-secondary-container'
+        "
+        [attr.role]="m.error ? 'alert' : 'status'"
+      >
+        <span class="ms text-[18px]" aria-hidden="true">{{ m.error ? 'error' : 'check_circle' }}</span>
+        {{ m.key | translate }}
+      </p>
+    }
+  </div>
+
+  <!-- Search and filters -->
+  <div class="ops-card p-3 sm:p-4">
+    <div class="flex flex-col gap-2 lg:flex-row lg:items-center">
+      <div class="relative flex-1">
+        <label for="customer-search" class="sr-only">{{ 'customers.searchLabel' | translate }}</label>
+        <span
+          class="ms pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-on-surface-variant"
+          aria-hidden="true"
+          >search</span
+        >
+        <input
+          id="customer-search"
+          type="search"
+          maxlength="200"
+          [formControl]="search"
+          (focus)="searchFocused = true"
+          (blur)="searchFocused = false"
+          [placeholder]="'customers.searchPlaceholder' | translate"
+          class="h-10 w-full rounded-lg bg-surface-container-low pl-9 pr-3 text-body-md text-on-surface placeholder:text-on-surface-variant focus:bg-surface-container focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary-container"
+        />
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <label class="sr-only" for="customer-status">{{ 'common.status' | translate }}</label>
+        <select id="customer-status" class="ops-select" (change)="setFilter('status', $event)">
+          <option value="" [selected]="query().isActive === undefined">
+            {{ 'common.status' | translate }}: {{ 'filters.any' | translate }}
+          </option>
+          <option value="active" [selected]="query().isActive === true">
+            {{ 'common.active' | translate }}
+          </option>
+          <option value="inactive" [selected]="query().isActive === false">
+            {{ 'common.inactive' | translate }}
+          </option>
+        </select>
+      </div>
+    </div>
+    <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-body-sm">
+      @if (filtered()) {
+        <button type="button" class="ops-link font-medium" (click)="reset()">
+          {{ 'customers.reset' | translate }}
+        </button>
+      }
+      <p class="ml-auto font-mono text-mono-timer text-on-surface-variant" aria-live="polite">
+        @if (total()) {
+          {{ 'tickets.list.range' | translate: range() }}
+        }
+      </p>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <section
+    class="ops-card overflow-hidden"
+    [attr.aria-busy]="customers.isLoading()"
+    aria-labelledby="customers-results"
+  >
+    <h2 id="customers-results" class="sr-only">{{ 'customers.results' | translate }}</h2>
+    @if (loadError(); as err) {
+      <div role="alert" class="flex flex-col items-center gap-3 px-4 py-12 text-center">
+        <span class="ms text-[32px] text-error" aria-hidden="true">error</span>
+        <p class="text-body-md text-on-surface">{{ err | translate }}</p>
+        @if (err !== 'common.forbidden') {
+          <button type="button" class="ops-btn-secondary" (click)="customers.reload()">
+            <span class="ms text-[18px]" aria-hidden="true">refresh</span
+            >{{ 'common.retry' | translate }}
+          </button>
+        }
+      </div>
+    } @else if (!page()) {
+      <p
+        role="status"
+        class="flex items-center justify-center gap-2 px-4 py-12 text-body-md text-on-surface-variant"
+      >
+        <span class="ms text-[20px] motion-safe:animate-spin" aria-hidden="true"
+          >progress_activity</span
+        >{{ 'common.loading' | translate }}
+      </p>
+    } @else if (!page()!.items.length) {
+      <div class="flex flex-col items-center gap-2 px-4 py-12 text-center">
+        <span class="ms text-[32px] text-on-surface-variant" aria-hidden="true">apartment</span>
+        <p class="text-headline-sm text-on-surface">
+          {{ (filtered() ? 'customers.noMatches' : 'customers.empty') | translate }}
+        </p>
+        @if (filtered()) {
+          <button type="button" class="ops-link text-body-sm font-medium" (click)="reset()">
+            {{ 'customers.reset' | translate }}
+          </button>
+        } @else {
+          <a routerLink="/customers/new" class="ops-btn-primary mt-2 h-10 px-4">
+            {{ 'customers.add' | translate }}
+          </a>
+        }
+      </div>
+    } @else {
+      <!-- Desktop: data table -->
+      <div class="hidden overflow-x-auto md:block" [class.opacity-60]="customers.isLoading()">
+        <table class="w-full border-collapse text-left">
+          <caption class="sr-only">
+            {{
+              'customers.caption' | translate
+            }}
+          </caption>
+          <thead class="bg-surface-container-low">
+            <tr>
+              <th scope="col" class="ops-th" [attr.aria-sort]="ariaSort('name')">
+                <button type="button" class="sort-btn" (click)="sort('name')">
+                  {{ 'customers.name' | translate
+                  }}<span class="ms text-[14px]" aria-hidden="true">{{
+                    ariaSort('name') === 'descending' ? 'arrow_downward' : 'arrow_upward'
+                  }}</span>
+                </button>
+              </th>
+              <th scope="col" class="ops-th" [attr.aria-sort]="ariaSort('email')">
+                <button type="button" class="sort-btn" (click)="sort('email')">
+                  {{ 'customers.email' | translate
+                  }}<span class="ms text-[14px]" aria-hidden="true">{{
+                    ariaSort('email') === 'descending' ? 'arrow_downward' : 'arrow_upward'
+                  }}</span>
+                </button>
+              </th>
+              <th scope="col" class="ops-th">{{ 'customers.phone' | translate }}</th>
+              <th scope="col" class="ops-th">{{ 'customers.portalAccess' | translate }}</th>
+              <th scope="col" class="ops-th">{{ 'common.status' | translate }}</th>
+              <th scope="col" class="ops-th" [attr.aria-sort]="ariaSort('created')">
+                <button type="button" class="sort-btn" (click)="sort('created')">
+                  {{ 'customers.created' | translate
+                  }}<span class="ms text-[14px]" aria-hidden="true">{{
+                    ariaSort('created') === 'descending' ? 'arrow_downward' : 'arrow_upward'
+                  }}</span>
+                </button>
+              </th>
+              <th scope="col" class="ops-th"><span class="sr-only">{{ 'customers.actions' | translate }}</span></th>
+            </tr>
+          </thead>
+          <tbody class="text-body-sm text-on-surface">
+            @for (c of page()!.items; track c.id) {
+              <tr
+                class="border-t border-outline-variant/40 transition-colors hover:bg-surface-container-low/70"
+              >
+                <td class="px-3 py-3">
+                  <a
+                    [routerLink]="['/customers', c.id]"
+                    class="rounded-xs text-headline-sm text-on-surface hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-container"
+                    >{{ c.name }}</a
+                  >
+                </td>
+                <td class="px-3 py-3">{{ c.email }}</td>
+                <td class="px-3 py-3 whitespace-nowrap">{{ c.phone || '—' }}</td>
+                <td class="px-3 py-3 whitespace-nowrap">
+                  @if (c.linkedUserId) {
+                    <span class="ops-badge bg-secondary-container text-on-secondary-container">
+                      <span class="ms text-[14px]" aria-hidden="true">link</span
+                      >{{ 'customers.linked' | translate }}</span
+                    >
+                  } @else {
+                    <span class="ops-badge bg-surface-container-high text-on-surface-variant">
+                      <span class="ms text-[14px]" aria-hidden="true">link_off</span
+                      >{{ 'customers.notLinked' | translate }}</span
+                    >
+                  }
+                </td>
+                <td class="px-3 py-3 whitespace-nowrap">
+                  <span
+                    class="ops-badge"
+                    [class]="
+                      c.isActive
+                        ? 'bg-secondary-container text-on-secondary-container'
+                        : 'bg-surface-container text-on-surface-variant'
+                    "
+                    >{{ (c.isActive ? 'common.active' : 'common.inactive') | translate }}<span class="sr-only"> — {{ (c.isActive ? 'customers.statusActiveHelp' : 'customers.statusInactiveHelp') | translate }}</span></span
+                  >
+                </td>
+                <td class="px-3 py-3 whitespace-nowrap">
+                  <time
+                    class="font-mono text-mono-data text-on-surface-variant"
+                    [attr.datetime]="c.createdAtUtc"
+                    >{{ c.createdAtUtc | date: 'mediumDate' }}</time
+                  >
+                </td>
+                <td class="px-3 py-3 whitespace-nowrap text-right">
+                  <a
+                    [routerLink]="['/customers', c.id, 'edit']"
+                    class="ops-link mr-3 font-medium"
+                    [attr.aria-label]="'customers.editNamed' | translate: { name: c.name }"
+                    >{{ 'customers.edit' | translate }}</a
+                  >
+                  @if (isOwner()) {
+                  <button
+                      type="button"
+                      class="ops-link font-medium disabled:opacity-60"
+                      [disabled]="busyId() !== null"
+                      [attr.aria-label]="
+                        (c.isActive ? 'customers.stopTicketsNamed' : 'customers.allowTicketsNamed')
+                          | translate: { name: c.name }
+                      "
+                      (click)="toggle(c)"
+                    >
+                      {{ (c.isActive ? 'customers.stopTickets' : 'customers.allowTickets') | translate }}
+                    </button>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Mobile: stacked cards -->
+      <ul
+        class="divide-y divide-outline-variant/40 md:hidden"
+        [class.opacity-60]="customers.isLoading()"
+      >
+        @for (c of page()!.items; track c.id) {
+          <li class="flex flex-col gap-2 px-4 py-3">
+            <div class="flex items-start justify-between gap-2">
+              <a
+                [routerLink]="['/customers', c.id]"
+                class="rounded-xs text-headline-sm text-on-surface hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-container"
+                >{{ c.name }}</a
+              >
+              <span
+                class="ops-badge"
+                [class]="
+                  c.isActive
+                    ? 'bg-secondary-container text-on-secondary-container'
+                    : 'bg-surface-container text-on-surface-variant'
+                "
+                >{{ (c.isActive ? 'common.active' : 'common.inactive') | translate }}</span
+              >
+            </div>
+            <p class="break-all text-body-sm text-on-surface-variant">{{ c.email }}</p>
+            <p class="flex flex-wrap items-center gap-x-3 text-body-sm text-on-surface-variant">
+              @if (c.phone) {
+                <span>{{ c.phone }}</span>
+              }
+              <span>{{ (c.linkedUserId ? 'customers.linked' : 'customers.notLinked') | translate }}</span>
+            </p>
+            <div class="flex gap-4 text-body-sm">
+              <a
+                [routerLink]="['/customers', c.id, 'edit']"
+                class="ops-link font-medium"
+                [attr.aria-label]="'customers.editNamed' | translate: { name: c.name }"
+                >{{ 'customers.edit' | translate }}</a
+              >
+              @if (isOwner()) {
+              <button
+                  type="button"
+                  class="ops-link font-medium disabled:opacity-60"
+                  [disabled]="busyId() !== null"
+                  [attr.aria-label]="
+                    (c.isActive ? 'customers.stopTicketsNamed' : 'customers.allowTicketsNamed')
+                      | translate: { name: c.name }
+                  "
+                  (click)="toggle(c)"
+                >
+                  {{ (c.isActive ? 'customers.stopTickets' : 'customers.allowTickets') | translate }}
+                </button>
+              }
+            </div>
+          </li>
+        }
+      </ul>
+
+      <!-- Footer: page size and pagination -->
+      <div
+        class="flex flex-col items-center justify-between gap-3 border-t border-outline-variant/40 p-3 text-body-sm text-on-surface-variant sm:flex-row sm:px-4"
+      >
+        <div class="flex items-center gap-2">
+          <label for="customer-page-size">{{ 'tickets.list.pageSize' | translate }}</label>
+          <select id="customer-page-size" class="ops-select h-8" (change)="setFilter('size', $event)">
+            @for (s of pageSizes; track s) {
+              <option [value]="s" [selected]="query().pageSize === s">{{ s }}</option>
+            }
+          </select>
+        </div>
+        <nav class="flex items-center gap-1" [attr.aria-label]="'tickets.paging' | translate">
+          <button
+            type="button"
+            class="page-btn px-2.5"
+            [disabled]="query().page <= 1"
+            (click)="goTo(query().page - 1)"
+          >
+            <span class="ms text-[16px]" aria-hidden="true">chevron_left</span
+            ><span class="hidden sm:inline">{{ 'common.previous' | translate }}</span>
+            <span class="sr-only sm:hidden">{{ 'common.previous' | translate }}</span>
+          </button>
+          @for (n of pageNumbers(); track n) {
+            <button
+              type="button"
+              class="page-btn w-9 justify-center font-mono"
+              [class.is-current]="n === query().page"
+              [attr.aria-current]="n === query().page ? 'page' : null"
+              [attr.aria-label]="'tickets.list.pageN' | translate: { n }"
+              (click)="goTo(n)"
+            >
+              {{ n }}
+            </button>
+          }
+          <button
+            type="button"
+            class="page-btn px-2.5"
+            [disabled]="query().page >= pages()"
+            (click)="goTo(query().page + 1)"
+          >
+            <span class="hidden sm:inline">{{ 'common.next' | translate }}</span
+            ><span class="sr-only sm:hidden">{{ 'common.next' | translate }}</span>
+            <span class="ms text-[16px]" aria-hidden="true">chevron_right</span>
+          </button>
+        </nav>
+      </div>
+    }
+  </section>
+</div>
+
+<app-confirm-dialog
+  #confirm
+  [title]="'customers.deactivateTitle' | translate"
+  [message]="'customers.deactivateMessage' | translate: { name: pending()?.name ?? '' }"
+  [confirmLabel]="'customers.stopTickets' | translate"
+  [busy]="busyId() !== null"
+  (confirmed)="confirmDeactivate()"
+/>

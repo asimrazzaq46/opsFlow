@@ -6,7 +6,9 @@ export interface CustomerDto {
   email: string;
   id: string;
   isActive: boolean;
+  linkedUserEmail?: (string | null);
   linkedUserId: (string | null);
+  linkedUserName?: (string | null);
   name: string;
   phone: (string | null);
   updatedAtUtc: string;

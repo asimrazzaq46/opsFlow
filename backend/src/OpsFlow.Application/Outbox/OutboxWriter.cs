@@ -13,6 +13,7 @@ public static class OutboxEvents
     public const string CacheInvalidated = "cache.invalidated";
     public const string TicketTaskChanged = "ticket.task.changed";
     public const string TicketChanged = "ticket.changed";
+    public const string CustomerEligibilityChanged = "customer.eligibility.changed";
 }
 
 public sealed record NotificationEvent(Guid NotificationId);
@@ -28,6 +29,9 @@ public sealed record TicketTaskEvent(Guid TicketId, Guid? TaskId, string Change,
 
 /// <summary>Id-only change signal for the whole staff of a workspace; clients reload through their own authorized queries. <c>Change</c> is a <see cref="TicketChanges"/> value.</summary>
 public sealed record TicketChangedEvent(Guid TicketId, string Change);
+
+/// <summary>Staged with the affected portal user decided by the server; the delivered state is re-read from the database at publish time.</summary>
+public sealed record CustomerEligibilityEvent(Guid CustomerId, Guid UserId);
 
 /// <summary>
 /// Stages events in the caller's DbContext. They are committed by the SAME SaveChanges as the business change, so a rollback removes them
@@ -54,6 +58,17 @@ public sealed class OutboxWriter(IOpsFlowDbContext db, TimeProvider clock)
             ticketId,
             new TicketChangedEvent(ticketId, change),
             $"ticket:{ticketId}:{Guid.NewGuid():N}",
+            OutboxChannels.Realtime
+        );
+
+    /// <summary>Tells one portal user that whether they may open new tickets changed; carries no customer data.</summary>
+    public void StageCustomerEligibilityChanged(Guid tenantId, Guid customerId, Guid userId) =>
+        Stage(
+            tenantId,
+            OutboxEvents.CustomerEligibilityChanged,
+            customerId,
+            new CustomerEligibilityEvent(customerId, userId),
+            $"customer-eligibility:{customerId}:{Guid.NewGuid():N}",
             OutboxChannels.Realtime
         );
 

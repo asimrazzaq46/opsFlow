@@ -52,15 +52,33 @@ public sealed class Query
     ) => svc.GetSlaAsync(ticketId, ct);
 
     [Serial]
+    [Cost(2)]
+    public Task<TicketCreationEligibilityDto> TicketCreationEligibility(
+        [Service] TicketService svc,
+        CancellationToken ct
+    ) => svc.GetCreationEligibilityAsync(ct);
+
+    [Serial]
     [Cost(10)]
     public Task<PagedResult<CustomerDto>> Customers(
         [Service] CustomerService svc,
         string? search,
         bool? isActive,
         CancellationToken ct,
+        string? sortBy = null,
+        bool descending = false,
         int page = 1,
         int pageSize = 20
-    ) => svc.ListAsync(search, isActive, PageGuard.Page(page), PageGuard.Size(pageSize), ct);
+    ) =>
+        svc.ListAsync(search, isActive, PageGuard.Page(page), PageGuard.Size(pageSize), ct, sortBy, descending);
+
+    [Serial]
+    [Cost(10)]
+    public Task<IReadOnlyList<LinkableUserDto>> LinkableCustomerUsers(
+        [Service] CustomerService svc,
+        string? search,
+        CancellationToken ct
+    ) => svc.LinkableUsersAsync(search, ct);
 
     [Serial]
     [Cost(5)]

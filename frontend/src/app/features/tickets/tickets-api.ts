@@ -58,6 +58,8 @@ export interface TicketQuery {
   status?: TicketStatus;
   priority?: TicketPriority;
   categoryId?: string;
+  /** Staff only: narrows to the tickets of one customer contact. */
+  customerId?: string;
   state?: NonNullable<TicketState>;
   /** "My tickets": only tickets the caller is assigned to. The server resolves the caller; no membership id is sent. */
   assignedToMe?: boolean;
@@ -86,6 +88,7 @@ export class TicketsApi {
       Status: q.status ? [q.status] : undefined,
       Priority: q.priority,
       CategoryId: q.categoryId,
+      CustomerId: q.customerId,
       State: q.state,
       AssignedToMe: q.assignedToMe || undefined,
       SortBy: q.sortBy,

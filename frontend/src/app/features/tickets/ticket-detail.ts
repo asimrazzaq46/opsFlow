@@ -17,6 +17,7 @@ import { TicketDetailDto } from '../../core/api/generated/models';
 import { TenantService } from '../../core/auth/tenant.service';
 import { NotificationCreatedEvent } from '../../core/notifications/notification.service';
 import { RealtimeService } from '../../core/realtime/realtime.service';
+import { activeWorkspaceEvents } from '../../core/realtime/workspace-events';
 import { minutesLabel } from '../../shared/format';
 import { TicketActions } from './ticket-actions';
 import { TicketActivity } from './ticket-activity';
@@ -36,6 +37,7 @@ const TICKET_CHANGES = new Set([
   'TicketUnassigned',
   'TicketStatusChanged',
   'TicketResolved',
+  'TicketClosed',
   'TicketReopened',
 ]);
 
@@ -101,17 +103,23 @@ export class TicketDetail {
     return !!t && !this.unassignedAgent() && canEditTicket(t, this.tenant.isStaff());
   });
 
-  private readonly openedIn = this.tenant.tenantId();
+  /** Workspace the shown ticket belongs to; follows the ticket when a notification opens another one in a different workspace. */
+  private openedIn = this.tenant.tenantId();
   private request?: Subscription;
 
   constructor() {
     effect(() => {
       // a ticket belongs to ONE workspace: switching workspaces leaves the page instead of showing stale data
-      if (this.tenant.tenantId() !== this.openedIn) void this.router.navigateByUrl('/tickets');
+      // A navigation already under way (e.g. opening a notification of another workspace) decides where the user lands.
+      if (this.tenant.tenantId() !== this.openedIn && !this.router.getCurrentNavigation())
+        void this.router.navigateByUrl('/tickets');
     });
     effect(() => {
       this.id();
-      untracked(() => this.load());
+      untracked(() => {
+        this.openedIn = this.tenant.tenantId();
+        this.load();
+      });
     });
     const realtime = inject(RealtimeService);
     merge(
@@ -119,11 +127,14 @@ export class TicketDetail {
         .on<NotificationCreatedEvent>('notification.created')
         .pipe(
           filter(
-            (e) => e.notification.ticketId === this.id() && TICKET_CHANGES.has(e.notification.type),
+            (e) =>
+              e.notification.tenantId === this.tenant.tenantId() &&
+              e.notification.ticketId === this.id() &&
+              TICKET_CHANGES.has(e.notification.type),
           ),
         ),
       // Workspace staff who are not recipients of the personal notification still learn that this ticket changed.
-      realtime.on<{ ticketId: string }>('ticket.changed').pipe(filter((e) => e.ticketId === this.id())),
+      activeWorkspaceEvents<{ tenantId: string; ticketId: string }>('ticket.changed').pipe(filter((e) => e.ticketId === this.id())),
       realtime.reconnected,
     )
       .pipe(debounceTime(500), takeUntilDestroyed())

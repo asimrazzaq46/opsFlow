@@ -14,7 +14,8 @@ public class CustomerTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var created = await w.Manager.ReadAsync<CustomerJson>(await w.Manager.PostAsync(w.Url("customers"), new { name = "Globex", email, phone = "123" }));
         var found = await w.Owner.ReadAsync<PagedDto<CustomerJson>>(await w.Owner.GetAsync(w.Url("customers?search=globex")));
         var updated = await w.Owner.ReadAsync<CustomerJson>(await w.Owner.PutAsync(w.Url($"customers/{created.Id}"), new { name = "Globex Corp", email, phone = (string?)null }));
-        (await w.Manager.PutAsync(w.Url($"customers/{created.Id}/status"), new { isActive = false })).EnsureSuccessStatusCode();
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Manager.PutAsync(w.Url($"customers/{created.Id}/status"), new { isActive = false })).StatusCode); // only Owners change status
+        (await w.Owner.PutAsync(w.Url($"customers/{created.Id}/status"), new { isActive = false })).EnsureSuccessStatusCode();
         var inactive = await w.Owner.ReadAsync<PagedDto<CustomerJson>>(await w.Owner.GetAsync(w.Url("customers?isActive=false")));
 
         Assert.Single(found.Items, c => c.Id == created.Id);
@@ -90,11 +91,85 @@ public class CustomerTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var w = await TicketWorld.CreateAsync(factory);
         var ticket = await w.CreateTicketAsync(w.Customer);
 
-        (await w.Manager.PutAsync(w.Url($"customers/{w.CustomerContactId}/status"), new { isActive = false })).EnsureSuccessStatusCode();
+        (await w.Owner.PutAsync(w.Url($"customers/{w.CustomerContactId}/status"), new { isActive = false })).EnsureSuccessStatusCode();
 
         Assert.Equal(w.CustomerContactId, (await w.GetTicketAsync(w.Manager, ticket.Id)).Summary.CustomerId); // history intact
         Assert.Equal(HttpStatusCode.OK, (await w.Customer.GetAsync(w.Url($"tickets/{ticket.Id}"))).StatusCode); // still viewable
         Assert.Equal(HttpStatusCode.Forbidden, (await w.TryCreateTicketAsync(w.Customer, new { title = "More work", description = "d", categoryId = w.CategoryId })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await w.TryCreateTicketAsync(w.Manager, new { title = "On behalf", description = "d", categoryId = w.CategoryId, customerId = w.CustomerContactId })).StatusCode);
+    }
+
+    private async Task<ApiClient> AcceptCustomerInvitationAsync(TicketWorld w, string email)
+    {
+        (await w.Owner.PostAsync(w.Url("invitations"), new { email, role = "Customer" })).EnsureSuccessStatusCode();
+        var invitee = await ApiClient.RegisterAsync(factory, email);
+        var token = ApiClient.InvitationTokenFrom(factory, email);
+        (await invitee.PostAsync("/api/v1/invitations/accept", new { token })).EnsureSuccessStatusCode();
+        return invitee;
+    }
+
+    private async Task<List<CustomerJson>> FindContactsAsync(TicketWorld w, string email) =>
+        (await w.Owner.ReadAsync<PagedDto<CustomerJson>>(await w.Owner.GetAsync(w.Url($"customers?search={Uri.EscapeDataString(email)}")))).Items;
+
+    [Fact]
+    public async Task Accepting_a_customer_invitation_creates_one_linked_contact_and_the_customer_can_create_tickets()
+    {
+        var w = await TicketWorld.CreateAsync(factory);
+        var email = $"portal-{Guid.NewGuid():N}@example.com";
+
+        var invitee = await AcceptCustomerInvitationAsync(w, email);
+        var token = ApiClient.InvitationTokenFrom(factory, email);
+        (await invitee.PostAsync("/api/v1/invitations/accept", new { token })).EnsureSuccessStatusCode(); // idempotent retry
+
+        var contact = Assert.Single(await FindContactsAsync(w, email));
+        Assert.Equal(invitee.UserId, contact.LinkedUserId);
+        Assert.Equal(HttpStatusCode.Created, (await w.TryCreateTicketAsync(invitee, new { title = "First", description = "d", categoryId = w.CategoryId })).StatusCode);
+    }
+
+    [Fact]
+    public async Task Accepting_links_an_existing_unlinked_contact_with_the_invited_email_instead_of_duplicating_it()
+    {
+        var w = await TicketWorld.CreateAsync(factory);
+        var email = $"known-{Guid.NewGuid():N}@example.com";
+        var existing = await w.Manager.ReadAsync<CustomerJson>(await w.Manager.PostAsync(w.Url("customers"), new { name = "Known", email }));
+
+        var invitee = await AcceptCustomerInvitationAsync(w, email);
+
+        var contact = Assert.Single(await FindContactsAsync(w, email));
+        Assert.Equal(existing.Id, contact.Id);
+        Assert.Equal(invitee.UserId, contact.LinkedUserId);
+    }
+
+    [Fact]
+    public async Task Accepting_is_refused_atomically_when_the_contact_belongs_to_another_user()
+    {
+        var w = await TicketWorld.CreateAsync(factory);
+        var email = $"taken-{Guid.NewGuid():N}@example.com";
+        var taken = await w.Manager.ReadAsync<CustomerJson>(await w.Manager.PostAsync(w.Url("customers"), new { name = "Taken", email, linkedUserId = w.Customer.UserId }));
+
+        (await w.Owner.PostAsync(w.Url("invitations"), new { email, role = "Customer" })).EnsureSuccessStatusCode();
+        var invitee = await ApiClient.RegisterAsync(factory, email);
+        var token = ApiClient.InvitationTokenFrom(factory, email);
+        Assert.Equal(HttpStatusCode.Conflict, (await invitee.PostAsync("/api/v1/invitations/accept", new { token })).StatusCode);
+
+        var contact = Assert.Single(await FindContactsAsync(w, email));
+        Assert.Equal(taken.Id, contact.Id);
+        Assert.Equal(w.Customer.UserId, contact.LinkedUserId); // the valid link is untouched
+        Assert.Equal(HttpStatusCode.Forbidden, (await invitee.GetAsync(w.Url("tickets"))).StatusCode); // no half-accepted membership
+    }
+
+    [Fact]
+    public async Task Ordinary_updates_keep_the_portal_link_and_only_the_unlink_action_removes_it()
+    {
+        var w = await TicketWorld.CreateAsync(factory);
+        var contact = (await w.Owner.ReadAsync<PagedDto<CustomerJson>>(await w.Owner.GetAsync(w.Url("customers")))).Items.Single(c => c.Id == w.CustomerContactId);
+
+        var updated = await w.Manager.ReadAsync<CustomerJson>(await w.Manager.PutAsync(w.Url($"customers/{contact.Id}"), new { name = "Renamed", email = contact.Email, phone = (string?)null }));
+        Assert.Equal(w.Customer.UserId, updated.LinkedUserId);
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Agent1.DeleteAsync(w.Url($"customers/{contact.Id}/user"))).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await w.Manager.DeleteAsync(w.Url($"customers/{contact.Id}/user"))).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await w.Manager.DeleteAsync(w.Url($"customers/{contact.Id}/user"))).StatusCode); // idempotent
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.TryCreateTicketAsync(w.Customer, new { title = "Unlinked", description = "d", categoryId = w.CategoryId })).StatusCode);
     }
 }

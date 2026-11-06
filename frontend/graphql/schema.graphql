@@ -9,12 +9,16 @@ type Query {
   ticketActivity(ticketId: UUID!, page: Int! = 1, pageSize: Int! = 20): PagedResultOfTicketActivityDto!
     @cost(weight: "10")
   ticketSla(ticketId: UUID!): TicketSlaDto! @cost(weight: "5")
+  ticketCreationEligibility: TicketCreationEligibilityDto! @cost(weight: "2")
   customers(
     search: String
     isActive: Boolean
+    sortBy: String
+    descending: Boolean! = false
     page: Int! = 1
     pageSize: Int! = 20
   ): PagedResultOfCustomerDto! @cost(weight: "10")
+  linkableCustomerUsers(search: String): [LinkableUserDto!]! @cost(weight: "10")
   customer(id: UUID!): CustomerDto! @cost(weight: "5")
   teamMembers(page: Int! = 1, pageSize: Int! = 20): PagedResultOfMemberDto!
     @cost(weight: "10")
@@ -79,6 +83,19 @@ type CustomerDto {
   isActive: Boolean!
   createdAtUtc: DateTime!
   updatedAtUtc: DateTime!
+  linkedUserEmail: String
+  linkedUserName: String
+}
+
+type LinkableUserDto {
+  userId: UUID!
+  email: String!
+  displayName: String!
+}
+
+type TicketCreationEligibilityDto {
+  canCreate: Boolean!
+  reason: String
 }
 
 type DashboardDto {

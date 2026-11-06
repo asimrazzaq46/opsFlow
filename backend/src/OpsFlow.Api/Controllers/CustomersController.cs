@@ -24,10 +24,12 @@ public sealed class CustomersController(CustomerService customers) : ControllerB
         string? search = null,
         bool? isActive = null,
         int page = 1,
-        int pageSize = 25
+        int pageSize = 25,
+        string? sortBy = null,
+        bool descending = false
     )
     {
-        return Ok(await customers.ListAsync(search, isActive, page, pageSize, ct));
+        return Ok(await customers.ListAsync(search, isActive, page, pageSize, ct, sortBy, descending));
     }
 
     [HttpPost(Name = "CreateCustomer")]
@@ -75,7 +77,7 @@ public sealed class CustomersController(CustomerService customers) : ControllerB
     [HttpPut("{customerId:guid}", Name = "UpdateCustomer")]
     [EndpointSummary("Update customer")]
     [EndpointDescription(
-        "Updates a customer contact. Requires the Owner or Manager role in the tenant."
+        "Renames a customer contact and optionally links a portal user. Email and phone cannot be changed here (they belong to the account owner); sending different values returns 403. A null linkedUserId keeps the current link; use the unlink action to remove it. Requires the Owner or Manager role in the tenant."
     )]
     [ProducesResponseType<CustomerDto>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemResponse>(
@@ -84,7 +86,7 @@ public sealed class CustomersController(CustomerService customers) : ControllerB
     )]
     public async Task<ActionResult<CustomerDto>> UpdateCustomer(
         Guid customerId,
-        CustomerRequest request,
+        CustomerUpdateRequest request,
         CancellationToken ct
     )
     {
@@ -102,7 +104,7 @@ public sealed class CustomersController(CustomerService customers) : ControllerB
     [HttpPut("{customerId:guid}/status", Name = "SetCustomerStatus")]
     [EndpointSummary("Activate or deactivate customer")]
     [EndpointDescription(
-        "Changes whether the customer can be selected for new tickets; history is kept. Requires the Owner or Manager role in the tenant."
+        "Allows or stops new tickets for the customer; sign-in and history are unaffected. Requires the Owner role in the tenant."
     )]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> SetCustomerStatus(
@@ -112,6 +114,19 @@ public sealed class CustomersController(CustomerService customers) : ControllerB
     )
     {
         return await customers.SetActiveAsync(customerId, request.IsActive, ct) is { } failure
+            ? this.Answer(failure)
+            : NoContent();
+    }
+
+    [HttpDelete("{customerId:guid}/user", Name = "UnlinkCustomerUser")]
+    [EndpointSummary("Unlink customer portal user")]
+    [EndpointDescription(
+        "Removes the portal-user link from a customer contact; the contact and its tickets are kept. Requires the Owner or Manager role in the tenant."
+    )]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> UnlinkCustomerUser(Guid customerId, CancellationToken ct)
+    {
+        return await customers.UnlinkUserAsync(customerId, ct) is { } failure
             ? this.Answer(failure)
             : NoContent();
     }

@@ -1,0 +1,14 @@
+.ops-dialog {
+  margin: auto;
+  width: min(28rem, calc(100vw - 2rem));
+  border: 0;
+  border-radius: 0.75rem;
+  padding: 0;
+  background: var(--ops-surface-container-lowest);
+  color: var(--ops-on-surface);
+  box-shadow: 0 20px 40px rgb(0 0 0 / 0.25);
+}
+
+.ops-dialog::backdrop {
+  background: rgb(11 16 32 / 0.55);
+}

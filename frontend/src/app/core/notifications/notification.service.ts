@@ -1,9 +1,14 @@
 import { DestroyRef, Injectable, computed, effect, inject, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Api } from '../api/generated/api';
-import { getUnreadNotificationCount, listNotifications, markAllNotificationsRead, markNotificationRead } from '../api/generated/functions';
+import {
+  getMyUnreadNotificationCount,
+  listMyNotifications,
+  markAllMyNotificationsRead,
+  markNotificationRead,
+} from '../api/generated/functions';
 import { NotificationDto } from '../api/generated/models';
-import { TenantService } from '../auth/tenant.service';
+import { AuthService } from '../auth/auth.service';
 import { RealtimeService } from '../realtime/realtime.service';
 
 export interface NotificationCreatedEvent {
@@ -12,11 +17,15 @@ export interface NotificationCreatedEvent {
 
 const PAGE_SIZE = 20;
 
-/** Notification history + unread count of the ACTIVE tenant. Live events of other tenants are ignored; everything resyncs from the server on tenant switch and reconnect. */
+/**
+ * The signed-in user's notification history and unread count across ALL their workspaces. The server restricts both to workspaces where
+ * the membership is active, and every item keeps its own tenant id. Live events are addressed to this user only, so they are shown
+ * whichever workspace is active; everything resyncs from the server on sign-in and reconnect.
+ */
 @Injectable({ providedIn: 'root' })
 export class NotificationService {
   private readonly api = inject(Api);
-  private readonly tenant = inject(TenantService);
+  private readonly auth = inject(AuthService);
   private readonly realtime = inject(RealtimeService);
 
   readonly items = signal<NotificationDto[]>([]);
@@ -25,6 +34,8 @@ export class NotificationService {
   readonly error = signal(false);
   private readonly total = signal(0);
   private page = 1;
+  /** Bumped by every resync/reset so a slow response of an earlier request never overwrites newer state. */
+  private generation = 0;
   readonly hasMore = computed(() => this.items().length < this.total());
 
   constructor() {
@@ -32,42 +43,45 @@ export class NotificationService {
     this.realtime.on<NotificationCreatedEvent>('notification.created').pipe(takeUntilDestroyed(destroyRef)).subscribe((e) => this.receive(e));
     this.realtime.reconnected.pipe(takeUntilDestroyed(destroyRef)).subscribe(() => this.resync());
     effect(() => {
-      const tenantId = this.tenant.tenantId();
+      const signedIn = this.auth.isAuthenticated();
       untracked(() => {
         this.reset();
-        if (tenantId) this.resync();
+        if (signedIn) this.resync();
       });
     });
   }
 
   receive(e: NotificationCreatedEvent): void {
     const n = e.notification;
-    if (n.tenantId !== this.tenant.tenantId() || this.items().some((x) => x.id === n.id)) return;
+    if (this.items().some((x) => x.id === n.id)) return;
     this.items.update((list) => [n, ...list]);
     this.total.update((t) => t + 1);
     if (!n.isRead) this.unread.update((c) => c + 1);
   }
 
   resync(): void {
-    const tenantId = this.tenant.tenantId();
-    if (!tenantId) return;
+    if (!this.auth.isAuthenticated()) return;
+    const generation = ++this.generation;
     this.loading.set(true);
     this.error.set(false);
-    this.api.invoke(getUnreadNotificationCount, { tenantId }).subscribe({
+    this.api.invoke(getMyUnreadNotificationCount, {}).subscribe({
       next: (r) => {
-        if (this.tenant.tenantId() === tenantId) this.unread.set(Number(r.count));
+        if (generation === this.generation) this.unread.set(Number(r.count));
       },
-      error: () => this.error.set(true),
+      error: () => {
+        if (generation === this.generation) this.error.set(true);
+      },
     });
-    this.api.invoke(listNotifications, { tenantId, page: 1, pageSize: PAGE_SIZE }).subscribe({
+    this.api.invoke(listMyNotifications, { page: 1, pageSize: PAGE_SIZE }).subscribe({
       next: (r) => {
-        if (this.tenant.tenantId() !== tenantId) return; // tenant switched meanwhile
+        if (generation !== this.generation) return;
         this.items.set(r.items);
         this.total.set(Number(r.totalCount));
         this.page = 1;
         this.loading.set(false);
       },
       error: () => {
+        if (generation !== this.generation) return;
         this.error.set(true);
         this.loading.set(false);
       },
@@ -75,28 +89,29 @@ export class NotificationService {
   }
 
   loadMore(): void {
-    const tenantId = this.tenant.tenantId();
-    if (!tenantId || this.loading()) return;
+    if (this.loading() || !this.auth.isAuthenticated()) return;
+    const generation = this.generation;
     this.loading.set(true);
-    this.api.invoke(listNotifications, { tenantId, page: this.page + 1, pageSize: PAGE_SIZE }).subscribe({
+    this.api.invoke(listMyNotifications, { page: this.page + 1, pageSize: PAGE_SIZE }).subscribe({
       next: (r) => {
-        if (this.tenant.tenantId() !== tenantId) return;
+        if (generation !== this.generation) return;
         const known = new Set(this.items().map((x) => x.id));
         this.items.update((list) => [...list, ...r.items.filter((x) => !known.has(x.id))]);
         this.page++;
         this.loading.set(false);
       },
       error: () => {
+        if (generation !== this.generation) return;
         this.error.set(true);
         this.loading.set(false);
       },
     });
   }
 
+  /** Uses the notification's own workspace in the route, so it also works while another workspace is active. */
   markRead(n: NotificationDto): void {
-    const tenantId = this.tenant.tenantId();
-    if (!tenantId || n.isRead) return;
-    this.api.invoke(markNotificationRead, { tenantId, notificationId: n.id }).subscribe({
+    if (n.isRead) return;
+    this.api.invoke(markNotificationRead, { tenantId: n.tenantId, notificationId: n.id }).subscribe({
       next: () => {
         this.items.update((list) => list.map((x) => (x.id === n.id ? { ...x, isRead: true } : x)));
         this.unread.update((c) => Math.max(0, c - 1));
@@ -106,9 +121,7 @@ export class NotificationService {
   }
 
   markAllRead(): void {
-    const tenantId = this.tenant.tenantId();
-    if (!tenantId) return;
-    this.api.invoke(markAllNotificationsRead, { tenantId }).subscribe({
+    this.api.invoke(markAllMyNotificationsRead, {}).subscribe({
       next: () => {
         this.items.update((list) => list.map((x) => ({ ...x, isRead: true })));
         this.unread.set(0);
@@ -118,9 +131,11 @@ export class NotificationService {
   }
 
   private reset(): void {
+    this.generation++;
     this.items.set([]);
     this.unread.set(0);
     this.total.set(0);
+    this.loading.set(false);
     this.error.set(false);
     this.page = 1;
   }

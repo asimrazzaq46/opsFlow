@@ -1,0 +1,52 @@
+:host {
+  display: block;
+}
+
+.sort-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 0.125rem;
+  text-transform: inherit;
+  letter-spacing: inherit;
+}
+
+.sort-btn:hover {
+  color: var(--ops-on-surface);
+}
+
+.sort-btn:focus-visible,
+.page-btn:focus-visible {
+  outline: 2px solid var(--ops-primary-container);
+  outline-offset: 2px;
+}
+
+/* The arrow of an unsorted column stays faint; the sorted one is announced through aria-sort. */
+th[aria-sort='none'] .sort-btn .ms {
+  opacity: 0.35;
+}
+
+.page-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-height: 2.25rem;
+  border-radius: 0.5rem;
+  color: var(--ops-on-surface);
+  transition: background-color 0.15s;
+}
+
+.page-btn:hover:not(:disabled) {
+  background: var(--ops-surface-container-low);
+}
+
+.page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.page-btn.is-current {
+  background: var(--ops-primary-container);
+  color: var(--ops-on-primary);
+  font-weight: 600;
+}

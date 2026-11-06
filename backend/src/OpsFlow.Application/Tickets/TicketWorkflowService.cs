@@ -156,9 +156,12 @@ public sealed partial class TicketWorkflowService(
         // Status/resolve notification in the same commit (staff + customer, excluding the actor).
         await notifications.StageAsync(
             ticket,
-            target == TicketStatus.Resolved
-                ? NotificationType.TicketResolved
-                : NotificationType.TicketStatusChanged,
+            target switch
+            {
+                TicketStatus.Resolved => NotificationType.TicketResolved,
+                TicketStatus.Closed => NotificationType.TicketClosed,
+                _ => NotificationType.TicketStatusChanged,
+            },
             actor.UserId,
             $"status:{ticketId}:{ticket.Version}",
             toStaff: true,

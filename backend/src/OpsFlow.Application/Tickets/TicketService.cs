@@ -17,6 +17,7 @@ namespace OpsFlow.Application.Tickets;
 public sealed partial class TicketService(
     IOpsFlowDbContext db,
     TicketAccess access,
+    TicketAudience audience,
     ITenantContext tenantContext,
     NotificationService notifications,
     OutboxWriter outbox,
@@ -229,8 +230,9 @@ public sealed partial class TicketService(
             NotificationType.TicketCreated,
             actor.UserId,
             $"created:{ticket.Id}",
-            toStaff: true,
-            toCustomer: false,
+            toStaff: false,
+            toCustomer: false, // a customer is never told about a ticket creation
+            alsoUsers: await audience.WorkspaceStaffAsync(ct), // active Owners, Managers and Agents; the actor is removed by the service
             ct: ct
         );
         if (assignees.Count > 0)
@@ -521,6 +523,31 @@ public sealed partial class TicketService(
             );
         });
         return new PagedResult<TicketActivityDto>(items, page, pageSize, total);
+    }
+
+    /// <summary>
+    /// Mirrors the rule enforced by <see cref="CreateAsync"/>: staff may always open tickets, a Customer only through an ACTIVE contact
+    /// linked to their own user. Display only; creation re-checks everything.
+    /// </summary>
+    public async Task<TicketCreationEligibilityDto> GetCreationEligibilityAsync(CancellationToken ct)
+    {
+        var actor = await access.ResolveAsync(ct);
+        if (!actor.IsCustomer)
+        {
+            return new TicketCreationEligibilityDto(true, null);
+        }
+
+        var active = await db
+            .Customers.AsNoTracking()
+            .Where(c => c.UserId == actor.UserId)
+            .Select(c => (bool?)c.IsActive)
+            .SingleOrDefaultAsync(ct);
+        return active switch
+        {
+            null => new TicketCreationEligibilityDto(false, "NotLinked"),
+            false => new TicketCreationEligibilityDto(false, "Inactive"),
+            _ => new TicketCreationEligibilityDto(true, null),
+        };
     }
 
     public async Task<TicketSlaDto> GetSlaAsync(Guid ticketId, CancellationToken ct)

@@ -8,6 +8,7 @@ import { debounceTime, distinctUntilChanged, map, merge } from 'rxjs';
 import { TicketState, TicketStatus, TicketPriority } from '../../core/api/generated/models';
 import { TenantService } from '../../core/auth/tenant.service';
 import { RealtimeService } from '../../core/realtime/realtime.service';
+import { activeWorkspaceEvents } from '../../core/realtime/workspace-events';
 import {
   PRIORITY_BADGE,
   STATUS_BADGE,
@@ -15,6 +16,7 @@ import {
   TICKET_STATUSES,
   httpStatus,
 } from './ticket-ui';
+import { TicketEligibility } from './ticket-eligibility';
 import { TicketQuery, TicketSort, TicketsApi } from './tickets-api';
 
 export const PAGE_SIZES = [10, 25, 50] as const;
@@ -57,6 +59,7 @@ export class TicketList {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly realtime = inject(RealtimeService);
+  protected readonly eligibility = inject(TicketEligibility);
 
   protected readonly statuses = TICKET_STATUSES;
   protected readonly priorities = TICKET_PRIORITIES;
@@ -138,7 +141,7 @@ export class TicketList {
 
   constructor() {
     // Any staff change in this workspace (and a reconnect) refreshes the current page; the server decides what the caller may see.
-    merge(this.realtime.on('ticket.changed'), this.realtime.reconnected)
+    merge(activeWorkspaceEvents('ticket.changed'), this.realtime.reconnected)
       .pipe(debounceTime(1000), takeUntilDestroyed())
       .subscribe(() => this.tickets.reload());
     this.search.valueChanges

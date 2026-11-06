@@ -8,7 +8,7 @@ import { StrictHttpResponse } from '../../strict-http-response';
 import { RequestBuilder } from '../../request-builder';
 
 import { CustomerDto } from '../../models/customer-dto';
-import { CustomerRequest } from '../../models/customer-request';
+import { CustomerUpdateRequest } from '../../models/customer-update-request';
 
 export interface UpdateCustomer$Params {
   customerId: string;
@@ -17,7 +17,7 @@ export interface UpdateCustomer$Params {
  * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
  */
   tenantId: string;
-      body: CustomerRequest
+      body: CustomerUpdateRequest
 }
 
 export function updateCustomer(http: HttpClient, rootUrl: string, params: UpdateCustomer$Params, context?: HttpContext): Observable<StrictHttpResponse<CustomerDto>> {

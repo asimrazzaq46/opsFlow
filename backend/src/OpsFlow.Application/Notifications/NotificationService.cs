@@ -6,6 +6,7 @@ using OpsFlow.Application.Outbox;
 using OpsFlow.Application.Tickets;
 using OpsFlow.Domain.Notifications;
 using OpsFlow.Domain.Outbox;
+using OpsFlow.Domain.Tenants;
 using OpsFlow.Domain.Tickets;
 
 namespace OpsFlow.Application.Notifications;
@@ -141,6 +142,56 @@ public sealed class NotificationService(
         await Mine()
             .Where(n => n.ReadAtUtc == null)
             .ExecuteUpdateAsync(s => s.SetProperty(n => n.ReadAtUtc, (DateTime?)now), ct);
+    }
+
+    /// <summary>Newest-first history of the caller across every workspace where their membership is currently active.</summary>
+    public async Task<PagedResult<NotificationDto>> ListAcrossWorkspacesAsync(
+        bool unreadOnly,
+        int page,
+        int pageSize,
+        CancellationToken ct
+    )
+    {
+        (page, pageSize, var skip) = Paging.Normalize(page, pageSize, MaxPageSize);
+        var query = MineAcrossWorkspaces().AsNoTracking();
+        if (unreadOnly)
+        {
+            query = query.Where(n => n.ReadAtUtc == null);
+        }
+
+        var total = await query.CountAsync(ct);
+        var rows = await query
+            .OrderByDescending(n => n.CreatedAtUtc)
+            .ThenByDescending(n => n.Id)
+            .Skip(skip)
+            .Take(pageSize)
+            .ToListAsync(ct);
+        return new PagedResult<NotificationDto>(rows.ConvertAll(ToDto), page, pageSize, total);
+    }
+
+    public async Task<UnreadCountDto> UnreadCountAcrossWorkspacesAsync(CancellationToken ct) =>
+        new(await MineAcrossWorkspaces().CountAsync(n => n.ReadAtUtc == null, ct));
+
+    public async Task MarkAllReadAcrossWorkspacesAsync(CancellationToken ct)
+    {
+        var now = clock.GetUtcNow().UtcDateTime;
+        await MineAcrossWorkspaces()
+            .Where(n => n.ReadAtUtc == null)
+            .ExecuteUpdateAsync(s => s.SetProperty(n => n.ReadAtUtc, (DateTime?)now), ct);
+    }
+
+    // Recipient ownership plus a CURRENTLY active membership in the notification's own tenant: a removed or suspended member sees nothing
+    // of that workspace. The tenant query filter is lifted on purpose, so both conditions are explicit.
+    private IQueryable<Notification> MineAcrossWorkspaces()
+    {
+        var userId = currentUser.UserId;
+        return db
+            .Notifications.IgnoreQueryFilters()
+            .Where(n =>
+                n.UserId == userId
+                && db.Memberships.IgnoreQueryFilters()
+                    .Any(m => m.UserId == userId && m.TenantId == n.TenantId && m.Status == MembershipStatus.Active)
+            );
     }
 
     // Tenant filter + current user: a notification of another user (or tenant) is simply "not found".

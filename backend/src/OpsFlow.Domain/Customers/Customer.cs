@@ -46,12 +46,10 @@ public sealed class Customer : ITenantOwned
             UpdatedAtUtc = nowUtc,
         };
 
-    public void Update(string name, string email, string? phone, DateTime nowUtc)
+    /// <summary>Email and phone are deliberately not editable here: after creation only the account owner may change their own contact details.</summary>
+    public void Rename(string name, DateTime nowUtc)
     {
         Name = name.Trim();
-        Email = email.Trim();
-        NormalizedEmail = EmailAddress.Normalize(email);
-        Phone = string.IsNullOrWhiteSpace(phone) ? null : phone.Trim();
         UpdatedAtUtc = nowUtc;
     }
 

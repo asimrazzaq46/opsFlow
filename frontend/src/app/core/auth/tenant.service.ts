@@ -21,6 +21,9 @@ export class TenantService {
   readonly tenantId = computed(() => this.current()?.id ?? null);
   readonly role = computed(() => this.current()?.role ?? null);
   readonly isStaff = computed(() => this.role() !== null && this.role() !== 'Customer');
+  readonly isOwner = computed(() => this.role() === 'TenantOwner');
+  /** Owners and Managers administer customers; the server enforces it, this only shapes the UI. */
+  readonly isManager = computed(() => this.role() === 'TenantOwner' || this.role() === 'Manager');
 
   /** Reloads the memberships from the server; a selection that is no longer authorized falls back to the remembered or first workspace. */
   load(): Observable<OrganizationDto[]> {

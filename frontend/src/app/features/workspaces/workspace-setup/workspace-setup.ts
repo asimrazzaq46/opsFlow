@@ -1,12 +1,15 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
-import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { TranslatePipe } from '@ngx-translate/core';
-import { catchError, of, switchMap } from 'rxjs';
+import { catchError, of, switchMap, timeout } from 'rxjs';
 import { TenantService } from '../../../core/auth/tenant.service';
 import { requestErrorKey } from '../../auth/auth-api';
 import { WorkspaceApi } from '../workspace-api';
+
+/** Upper bound for the create request. */
+const REQUEST_TIMEOUT_MS = 20_000;
 
 /**
  * Creates a workspace. The server makes the caller its Owner and seeds default ticket settings, categories and SLA policies,
@@ -37,6 +40,8 @@ export class WorkspaceSetup {
     nonNullable: true,
     validators: [Validators.required, Validators.minLength(2), Validators.maxLength(100)],
   });
+  /** ngSubmit is emitted only by a form bound to a FormGroup; a plain form would submit natively and never call the API. */
+  protected readonly form = new FormGroup({ name: this.name });
 
   protected submit(): void {
     this.submitted.set(true);
@@ -47,6 +52,7 @@ export class WorkspaceSetup {
     this.api
       .create(name)
       .pipe(
+        timeout(REQUEST_TIMEOUT_MS), // an unanswered request ends in a retryable error, never an endless spinner
         // The workspace exists even if the list refresh fails; selection then falls back to the picker.
         switchMap((org) =>
           this.tenant.load().pipe(
@@ -62,7 +68,9 @@ export class WorkspaceSetup {
           this.error.set(
             err instanceof HttpErrorResponse && err.status === 400
               ? 'workspaces.setup.invalid'
-              : requestErrorKey(err),
+              : err instanceof HttpErrorResponse && err.status === 409
+                ? 'workspaces.setup.conflict'
+                : requestErrorKey(err),
           );
           this.busy.set(false);
         },

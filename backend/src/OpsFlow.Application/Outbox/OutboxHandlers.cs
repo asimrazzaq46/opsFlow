@@ -39,6 +39,11 @@ public sealed class NotificationEligibility(IOpsFlowDbContext db, TicketAudience
             return true;
         }
 
+        if (n.Type == NotificationType.TicketCreated)
+        {
+            return (await audience.WorkspaceStaffAsync(ct)).Contains(n.UserId); // whole active staff, not only the assigned
+        }
+
         var ticket = await db
             .Tickets.AsNoTracking()
             .Where(t => t.Id == n.TicketId)
@@ -87,6 +92,9 @@ public sealed class RealtimeOutboxHandler(
                     break;
                 case OutboxEvents.TicketChanged:
                     await PublishTicketChangedAsync(Read<TicketChangedEvent>(message), ct);
+                    break;
+                case OutboxEvents.CustomerEligibilityChanged:
+                    await PublishCustomerEligibilityAsync(Read<CustomerEligibilityEvent>(message), ct);
                     break;
                 default:
                     throw new OutboxPermanentException(
@@ -180,18 +188,39 @@ public sealed class RealtimeOutboxHandler(
         );
     }
 
-    // Recipients are the CURRENT active staff of the tenant; the payload has ids only, so nothing about the ticket is disclosed.
+    // Recipients are the CURRENT active staff of the tenant plus the ticket's linked customer; the payload has ids only, so nothing about the ticket is disclosed.
     private async Task PublishTicketChangedAsync(TicketChangedEvent ev, CancellationToken ct)
     {
-        if (!await db.Tickets.AsNoTracking().AnyAsync(t => t.Id == ev.TicketId, ct))
+        var ticket = await db
+            .Tickets.AsNoTracking()
+            .Where(t => t.Id == ev.TicketId)
+            .Select(t => new { t.CustomerId })
+            .SingleOrDefaultAsync(ct);
+        if (ticket is null)
         {
             return;
         }
 
         var recipients = await audience.WorkspaceStaffAsync(ct);
+        if (await audience.CustomerAsync(ticket.CustomerId, ct) is { } requester)
+        {
+            recipients.Add(requester); // the requesting customer sees only this ticket's id and change kind
+        }
+
         await publisher.NotifyUsersAsync(
             recipients.ConvertAll(u => u.ToString()),
             new TicketChanged(tenantContext.TenantId!.Value, ev.TicketId, ev.Change),
+            ct
+        );
+    }
+
+    // Only the affected portal user is targeted. The state is read now, so a later change wins over the staged one.
+    private async Task PublishCustomerEligibilityAsync(CustomerEligibilityEvent ev, CancellationToken ct)
+    {
+        var canCreate = await db.Customers.AsNoTracking().AnyAsync(c => c.UserId == ev.UserId && c.IsActive, ct);
+        await publisher.NotifyUsersAsync(
+            [ev.UserId.ToString()],
+            new CustomerEligibilityChanged(tenantContext.TenantId!.Value, canCreate),
             ct
         );
     }

@@ -18,5 +18,10 @@ public sealed record CustomerDto(
     Guid? LinkedUserId,
     bool IsActive,
     DateTime CreatedAtUtc,
-    DateTime UpdatedAtUtc
+    DateTime UpdatedAtUtc,
+    string? LinkedUserEmail = null,
+    string? LinkedUserName = null
 );
+
+/// <summary>An active Customer member of the tenant who can be linked to a customer contact.</summary>
+public sealed record LinkableUserDto(Guid UserId, string Email, string DisplayName);

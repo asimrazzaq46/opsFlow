@@ -20,6 +20,7 @@ export type { CreateTicketRequest } from './models/create-ticket-request';
 export type { CreateTicketTaskRequest } from './models/create-ticket-task-request';
 export type { CustomerDto } from './models/customer-dto';
 export type { CustomerRequest } from './models/customer-request';
+export type { CustomerUpdateRequest } from './models/customer-update-request';
 export type { DeactivateAccountRequest } from './models/deactivate-account-request';
 export type { DefaultsResult } from './models/defaults-result';
 export type { EmailRequest } from './models/email-request';

@@ -1,0 +1,65 @@
+<div class="flex flex-col gap-3">
+  <div class="flex flex-col gap-1.5">
+    <label [for]="uid + '-search'" class="text-headline-sm text-on-surface">{{
+      'customers.portalSearch' | translate
+    }}</label>
+    <input
+      [id]="uid + '-search'"
+      type="search"
+      maxlength="100"
+      [formControl]="search"
+      class="ops-input"
+      [placeholder]="'customers.portalSearchPlaceholder' | translate"
+    />
+  </div>
+
+  <fieldset class="flex flex-col gap-1" [attr.aria-busy]="linkable.isLoading()">
+    <legend class="sr-only">{{ 'customers.portalSection' | translate }}</legend>
+    @if (linkable.status() === 'error') {
+      <p role="alert" class="ops-error">
+        {{ 'customers.portalLoadError' | translate }}
+        <button type="button" class="ops-link ml-1 font-medium" (click)="linkable.reload()">
+          {{ 'common.retry' | translate }}
+        </button>
+      </p>
+    } @else if (users(); as list) {
+      <label
+        class="flex min-h-10 cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-surface-container-low"
+      >
+        <input
+          type="radio"
+          [name]="uid"
+          class="size-4 accent-[var(--ops-primary-container)]"
+          [checked]="choice() === null"
+          (change)="pick(null)"
+        />
+        <span class="text-body-md text-on-surface">{{ 'customers.portalNone' | translate }}</span>
+      </label>
+      @for (u of list; track u.userId) {
+        <label
+          class="flex min-h-10 cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-surface-container-low"
+        >
+          <input
+            type="radio"
+            [name]="uid"
+            class="size-4 shrink-0 accent-[var(--ops-primary-container)]"
+            [checked]="choice() === u.userId"
+            (change)="pick(u.userId)"
+          />
+          <span class="min-w-0">
+            <span class="block truncate text-body-md text-on-surface">{{ u.displayName }}</span>
+            <span class="block truncate text-body-sm text-on-surface-variant">{{ u.email }}</span>
+          </span>
+        </label>
+      } @empty {
+        <p class="px-2 py-2 text-body-sm text-on-surface-variant">
+          {{ 'customers.portalEmpty' | translate }}
+        </p>
+      }
+    } @else {
+      <p role="status" class="px-2 py-2 text-body-sm text-on-surface-variant">
+        {{ 'common.loading' | translate }}
+      </p>
+    }
+  </fieldset>
+</div>

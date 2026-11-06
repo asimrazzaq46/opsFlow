@@ -49,6 +49,8 @@ export type { UpdateCustomer$Params as UpdateCustomer$Params } from './fn/custom
 export { updateCustomer as updateCustomer } from './fn/customers/update-customer';
 export type { SetCustomerStatus$Params as SetCustomerStatus$Params } from './fn/customers/set-customer-status';
 export { setCustomerStatus as setCustomerStatus } from './fn/customers/set-customer-status';
+export type { UnlinkCustomerUser$Params as UnlinkCustomerUser$Params } from './fn/customers/unlink-customer-user';
+export { unlinkCustomerUser as unlinkCustomerUser } from './fn/customers/unlink-customer-user';
 export type { GetHealth$Params as GetHealth$Params } from './fn/health/get-health';
 export { getHealth as getHealth } from './fn/health/get-health';
 export type { PreviewInvitation$Params as PreviewInvitation$Params } from './fn/invitations/preview-invitation';
@@ -71,6 +73,12 @@ export type { MarkNotificationRead$Params as MarkNotificationRead$Params } from 
 export { markNotificationRead as markNotificationRead } from './fn/notifications/mark-notification-read';
 export type { MarkAllNotificationsRead$Params as MarkAllNotificationsRead$Params } from './fn/notifications/mark-all-notifications-read';
 export { markAllNotificationsRead as markAllNotificationsRead } from './fn/notifications/mark-all-notifications-read';
+export type { ListMyNotifications$Params as ListMyNotifications$Params } from './fn/notifications/list-my-notifications';
+export { listMyNotifications as listMyNotifications } from './fn/notifications/list-my-notifications';
+export type { GetMyUnreadNotificationCount$Params as GetMyUnreadNotificationCount$Params } from './fn/notifications/get-my-unread-notification-count';
+export { getMyUnreadNotificationCount as getMyUnreadNotificationCount } from './fn/notifications/get-my-unread-notification-count';
+export type { MarkAllMyNotificationsRead$Params as MarkAllMyNotificationsRead$Params } from './fn/notifications/mark-all-my-notifications-read';
+export { markAllMyNotificationsRead as markAllMyNotificationsRead } from './fn/notifications/mark-all-my-notifications-read';
 export type { ListMyOrganizations$Params as ListMyOrganizations$Params } from './fn/organizations/list-my-organizations';
 export { listMyOrganizations as listMyOrganizations } from './fn/organizations/list-my-organizations';
 export type { CreateOrganization$Params as CreateOrganization$Params } from './fn/organizations/create-organization';

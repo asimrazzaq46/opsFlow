@@ -9,6 +9,7 @@ import { TenantService } from '../../core/auth/tenant.service';
 import { GraphqlClient } from '../../core/graphql/graphql-client';
 import { CustomersDocument } from '../../core/graphql/generated';
 import { PRIORITY_BADGE, TICKET_PRIORITIES, fieldErrors, httpStatus } from './ticket-ui';
+import { TicketEligibility } from './ticket-eligibility';
 import { TicketsApi } from './tickets-api';
 
 export const TITLE_MAX = 200;
@@ -30,6 +31,7 @@ export class TicketCreate {
   private readonly api = inject(TicketsApi);
   private readonly gql = inject(GraphqlClient);
   private readonly router = inject(Router);
+  protected readonly eligibility = inject(TicketEligibility);
 
   protected readonly priorities = TICKET_PRIORITIES;
   protected readonly priorityBadge = PRIORITY_BADGE;
@@ -38,6 +40,14 @@ export class TicketCreate {
   protected readonly isManager = computed(
     () => this.tenant.role() === 'TenantOwner' || this.tenant.role() === 'Manager',
   );
+
+  /** Customers see the form only while the server says they may open tickets; direct navigation gets the same answer. */
+  protected readonly gate = computed<'form' | 'blocked' | 'loading' | 'error'>(() => {
+    if (this.tenant.role() !== 'Customer') return 'form';
+    const state = this.eligibility.state();
+    if (state !== 'ready') return state;
+    return this.eligibility.canCreate() ? 'form' : 'blocked';
+  });
 
   protected readonly categories = rxResource({
     params: () => this.tenant.tenantId() ?? undefined,
@@ -119,6 +129,7 @@ export class TicketCreate {
           this.saving.set(false); // the typed input is kept for a correction or retry
           this.serverErrors.set(fieldErrors(e));
           const status = httpStatus(e);
+          if (status === 403 && customer) this.eligibility.reload(); // the status may have changed while the form was open
           this.error.set(
             status === 403
               ? 'tickets.form.forbidden'

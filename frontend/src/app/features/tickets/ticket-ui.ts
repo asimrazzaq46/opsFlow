@@ -1,5 +1,6 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { TicketPriority, TicketStatus } from '../../core/api/generated/models';
+import { GraphqlError } from '../../core/graphql/graphql-client';
 
 export const TICKET_STATUSES: TicketStatus[] = [
   'Open',
@@ -29,6 +30,14 @@ export const PRIORITY_BADGE: Record<TicketPriority, { badge: string; dot: string
 };
 
 export const httpStatus = (e: unknown): number => (e instanceof HttpErrorResponse ? e.status : 0);
+
+/** A REST 403 or a GraphQL FORBIDDEN error (GraphQL answers HTTP 200 with the error in the body). */
+export const isForbidden = (e: unknown): boolean =>
+  httpStatus(e) === 403 || (e instanceof GraphqlError && e.code === 'FORBIDDEN');
+
+/** A REST 404 or a GraphQL NOT_FOUND error. */
+export const isNotFound = (e: unknown): boolean =>
+  httpStatus(e) === 404 || (e instanceof GraphqlError && e.code === 'NOT_FOUND');
 
 /** Stable `code` of an RFC 9457 problem body, when the server sent one. */
 export const problemCode = (e: unknown): string | undefined =>

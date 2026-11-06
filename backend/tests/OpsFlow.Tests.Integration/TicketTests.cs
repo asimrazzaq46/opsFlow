@@ -253,7 +253,7 @@ public class TicketTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var both = await ApiClient.AddMemberAsync(factory, a.Owner, a.Org.Id, "Manager");
         (await b.Owner.PostAsync(b.Url("invitations"), new { email = both.Email, role = "Customer" })).EnsureSuccessStatusCode();
         (await both.PostAsync("/api/v1/invitations/accept", new { token = ApiClient.InvitationTokenFrom(factory, both.Email) })).EnsureSuccessStatusCode();
-        await b.Owner.PutAsync(b.Url($"customers/{b.CustomerContactId}"), new { name = "Relinked", email = $"re-{Guid.NewGuid():N}@example.com", linkedUserId = both.UserId });
+        await b.Owner.PutAsync(b.Url($"customers/{b.CustomerContactId}"), new { name = "Relinked", linkedUserId = both.UserId });
 
         Assert.Single((await both.ReadAsync<PagedDto<TicketSummaryJson>>(await both.GetAsync(b.Url("tickets")))).Items, t => t.Id == ticketInB.Id);
         Assert.Contains((await both.ReadAsync<PagedDto<TicketSummaryJson>>(await both.GetAsync(a.Url("tickets")))).Items, t => t.Id == ticketInA.Id); // manager in A sees all of A

@@ -16,6 +16,13 @@ public static class TicketChanges
 [RealtimeEvent("ticket.changed")]
 public sealed record TicketChanged(Guid TenantId, Guid TicketId, string Change);
 
+/// <summary>Sent only to the affected portal user: whether new tickets may be opened in this workspace changed. Clients re-read the authoritative state.</summary>
+[RealtimeEvent("customer.eligibility.changed")]
+public sealed record CustomerEligibilityChanged(Guid TenantId, bool CanCreateTickets);
+
+/// <summary>Whether the caller may open a new ticket now. <c>Reason</c> is NotLinked or Inactive for a Customer who may not.</summary>
+public sealed record TicketCreationEligibilityDto(bool CanCreate, string? Reason);
+
 public sealed record TicketSummaryDto(
     Guid Id,
     long Number,

@@ -15,7 +15,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { TranslatePipe } from '@ngx-translate/core';
-import { debounceTime, merge } from 'rxjs';
+import { debounceTime, filter, merge } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { TenantService } from '../../core/auth/tenant.service';
 import { GraphqlClient } from '../../core/graphql/graphql-client';
@@ -27,7 +27,9 @@ import {
   TeamMembersQuery,
   TicketTaskProgressDocument,
 } from '../../core/graphql/generated';
+import { NotificationCreatedEvent } from '../../core/notifications/notification.service';
 import { RealtimeService } from '../../core/realtime/realtime.service';
+import { activeWorkspaceEvents } from '../../core/realtime/workspace-events';
 import { pascal, toRestStatus } from '../../shared/format';
 import { TicketsApi } from '../tickets/tickets-api';
 import { AgentPicker, PickerAgent } from './agent-picker/agent-picker';
@@ -313,7 +315,13 @@ export class Kanban {
         this.members.set([]);
       }
     });
-    merge(this.realtime.on('notification.created'), this.realtime.on('ticket.changed'), this.realtime.reconnected)
+    merge(
+      this.realtime
+        .on<NotificationCreatedEvent>('notification.created')
+        .pipe(filter((e) => e.notification.tenantId === this.tenant.tenantId())),
+      activeWorkspaceEvents('ticket.changed'),
+      this.realtime.reconnected,
+    )
       .pipe(debounceTime(1000), takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.load());
     // A task change only affects the progress indicators, so the board itself is not reloaded.

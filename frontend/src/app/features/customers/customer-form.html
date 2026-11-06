@@ -1,0 +1,163 @@
+<div class="flex flex-col gap-4">
+  <nav [attr.aria-label]="'customers.breadcrumb' | translate">
+    <ol class="flex items-center gap-1 text-body-sm text-on-surface-variant">
+      <li>
+        <a routerLink="/customers" class="ops-link">{{ 'customers.title' | translate }}</a>
+      </li>
+      <li aria-hidden="true"><span class="ms text-[14px]">chevron_right</span></li>
+      <li aria-current="page" class="font-medium text-on-surface">
+        {{ (editing ? 'customers.edit' : 'customers.add') | translate }}
+      </li>
+    </ol>
+  </nav>
+  <h1 class="text-headline-lg tracking-tight text-on-surface sm:text-headline-xl">
+    {{ (editing ? 'customers.editTitle' : 'customers.createTitle') | translate }}
+  </h1>
+
+  @if (editing && loadError(); as err) {
+    <div role="alert" class="ops-card flex flex-col items-center gap-3 px-4 py-12 text-center">
+      <span class="ms text-[32px] text-error" aria-hidden="true">error</span>
+      <p class="text-body-md text-on-surface">{{ err | translate }}</p>
+      @if (err === 'customers.loadError') {
+        <button type="button" class="ops-btn-secondary" (click)="customer.reload()">
+          <span class="ms text-[18px]" aria-hidden="true">refresh</span
+          >{{ 'common.retry' | translate }}
+        </button>
+      }
+    </div>
+  } @else if (editing && !loaded()) {
+    <p role="status" class="ops-card flex items-center justify-center gap-2 px-4 py-12 text-body-md text-on-surface-variant">
+      <span class="ms text-[20px] motion-safe:animate-spin" aria-hidden="true">progress_activity</span
+      >{{ 'common.loading' | translate }}
+    </p>
+  } @else {
+    <form
+      [formGroup]="form"
+      (ngSubmit)="submit()"
+      class="grid grid-cols-1 gap-4 lg:grid-cols-12"
+      novalidate
+    >
+      <!-- Contact -->
+      <section class="ops-card flex flex-col gap-5 p-4 sm:p-6 lg:col-span-7" aria-labelledby="contact-heading">
+        <div>
+          <h2 id="contact-heading" class="text-headline-lg text-on-surface">
+            {{ 'customers.contactSection' | translate }}
+          </h2>
+          <p class="mt-1 text-body-sm text-on-surface-variant">{{ 'customers.contactHelp' | translate }}</p>
+          @if (editing) {
+            <p id="contact-readonly-help" class="mt-2 flex items-start gap-2 text-body-sm text-on-surface-variant">
+              <span class="ms text-[18px]" aria-hidden="true">lock</span>{{ 'customers.contactReadOnly' | translate }}
+            </p>
+          }
+        </div>
+
+        <div class="flex flex-col gap-1.5">
+          <label for="customer-name" class="text-headline-sm text-on-surface"
+            >{{ 'customers.name' | translate }} <span class="text-error" aria-hidden="true">*</span></label
+          >
+          <input
+            id="customer-name"
+            formControlName="name"
+            [maxlength]="nameMax"
+            required
+            autocomplete="organization"
+            class="ops-input h-11"
+            [attr.aria-invalid]="invalid('name') || !!serverErrors()['Name']"
+            [attr.aria-describedby]="invalid('name') || serverErrors()['Name'] ? 'customer-name-error' : null"
+          />
+          @if (invalid('name') || serverErrors()['Name']) {
+            <p id="customer-name-error" class="ops-error">
+              {{ (fieldMessage('name', 'Name') ?? 'customers.invalid') | translate }}
+            </p>
+          }
+        </div>
+
+        <div class="flex flex-col gap-1.5">
+          <label for="customer-email" class="text-headline-sm text-on-surface"
+            >{{ 'customers.email' | translate }} <span class="text-error" aria-hidden="true">*</span></label
+          >
+          <input
+            id="customer-email"
+            type="email"
+            formControlName="email"
+            [maxlength]="emailMax"
+            required
+            autocomplete="email"
+            [readonly]="editing"
+            class="ops-input h-11 read-only:bg-surface-container read-only:text-on-surface-variant"
+            [attr.aria-invalid]="invalid('email') || !!serverErrors()['Email']"
+            [attr.aria-describedby]="invalid('email') || serverErrors()['Email'] ? 'customer-email-error' : editing ? 'contact-readonly-help' : null"
+          />
+          @if (invalid('email') || serverErrors()['Email']) {
+            <p id="customer-email-error" class="ops-error">
+              {{ (fieldMessage('email', 'Email') ?? 'customers.invalid') | translate }}
+            </p>
+          }
+        </div>
+
+        <div class="flex flex-col gap-1.5">
+          <label for="customer-phone" class="text-headline-sm text-on-surface">{{
+            'customers.phone' | translate
+          }}</label>
+          <input
+            id="customer-phone"
+            type="tel"
+            formControlName="phone"
+            [maxlength]="phoneMax"
+            autocomplete="tel"
+            [readonly]="editing"
+            class="ops-input h-11 read-only:bg-surface-container read-only:text-on-surface-variant"
+            [attr.aria-invalid]="invalid('phone') || !!serverErrors()['Phone']"
+            [attr.aria-describedby]="invalid('phone') || serverErrors()['Phone'] ? 'customer-phone-error' : editing ? 'contact-readonly-help' : null"
+          />
+          @if (invalid('phone') || serverErrors()['Phone']) {
+            <p id="customer-phone-error" class="ops-error">
+              {{ (fieldMessage('phone', 'Phone') ?? 'customers.invalid') | translate }}
+            </p>
+          }
+        </div>
+      </section>
+
+      <!-- Portal user -->
+      <section class="ops-card flex flex-col gap-3 p-4 sm:p-6 lg:col-span-5" aria-labelledby="portal-heading">
+        <div>
+          <h2 id="portal-heading" class="text-headline-lg text-on-surface">
+            {{ 'customers.portalSection' | translate }}
+          </h2>
+          <p class="mt-1 text-body-sm text-on-surface-variant">{{ 'customers.portalHelp' | translate }}</p>
+        </div>
+
+        @if (canPickUser()) {
+          <app-portal-user-picker #picker (selected)="select($event)" />
+        } @else if (loaded(); as c) {
+          <div class="flex items-start gap-2 rounded-lg bg-surface-container-low p-3">
+            <span class="ms text-[20px] text-primary" aria-hidden="true">link</span>
+            <div class="min-w-0">
+              <p class="truncate text-headline-sm text-on-surface">{{ c.linkedUserName }}</p>
+              <p class="truncate text-body-sm text-on-surface-variant">{{ c.linkedUserEmail }}</p>
+              <p class="mt-2 text-body-sm text-on-surface-variant">{{ 'customers.portalKeep' | translate }}</p>
+            </div>
+          </div>
+        }
+      </section>
+
+      <div class="flex flex-col gap-3 lg:col-span-12">
+        @if (errorKey(); as key) {
+          <p role="alert" class="flex items-center gap-2 rounded-lg bg-error-container px-3 py-2 text-body-sm text-on-error-container">
+            <span class="ms text-[18px]" aria-hidden="true">error</span>{{ key | translate }}
+          </p>
+        }
+        <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <a
+            [routerLink]="editing ? ['/customers', id] : ['/customers']"
+            class="ops-btn-secondary h-11"
+            >{{ 'common.cancel' | translate }}</a
+          >
+          <button type="submit" class="ops-btn-primary" [disabled]="saving()">
+            {{ (saving() ? 'common.saving' : editing ? 'customers.saveChanges' : 'customers.create') | translate }}
+          </button>
+        </div>
+      </div>
+    </form>
+  }
+</div>

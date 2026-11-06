@@ -89,7 +89,8 @@ public class RealtimeTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.DoesNotContain(agent2.Events, e => e.Payload.ToString().Contains("live hello", StringComparison.Ordinal));
         // Every active staff member gets the content-free "something changed" signal, never message or note content.
         Assert.True(await agent2.WaitForAsync(e => e.Name == "ticket.changed" && e.Payload.GetProperty("ticketId").GetGuid() == ticket.Id));
-        Assert.DoesNotContain(customer.Events, e => e.Name == "ticket.changed");
+        // The requesting customer gets the same content-free signal for their own ticket so their list and detail refresh.
+        Assert.True(await customer.WaitForAsync(e => e.Name == "ticket.changed" && e.Payload.GetProperty("ticketId").GetGuid() == ticket.Id));
 
         // persistence precedes publishing: whatever was pushed is already readable through REST
         Assert.Contains(await w.MessagesAsync(w.Customer, ticket.Id), m => m.Id == sent.Id);

@@ -22,6 +22,8 @@ export interface ListCustomers$Params {
  * Items per page (capped by the endpoint).
  */
   pageSize?: (number | string);
+  sortBy?: string;
+  descending?: boolean;
 
 /**
  * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
@@ -36,6 +38,8 @@ export function listCustomers(http: HttpClient, rootUrl: string, params: ListCus
     rb.query('isActive', params.isActive, {});
     rb.query('page', params.page, {});
     rb.query('pageSize', params.pageSize, {});
+    rb.query('sortBy', params.sortBy, {});
+    rb.query('descending', params.descending, {});
     rb.path('tenantId', params.tenantId, {});
   }
 

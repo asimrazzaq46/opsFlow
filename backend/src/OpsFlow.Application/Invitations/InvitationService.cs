@@ -7,6 +7,7 @@ using OpsFlow.Application.Abstractions;
 using OpsFlow.Application.Common;
 using OpsFlow.Application.Memberships;
 using OpsFlow.Application.Organizations;
+using OpsFlow.Domain.Customers;
 using OpsFlow.Domain.Invitations;
 using OpsFlow.Domain.Tenants;
 using OpsFlow.Domain.Users;
@@ -401,6 +402,21 @@ public sealed partial class InvitationService(
             db.Memberships.Add(
                 Membership.Create(invitation.TenantId, userId, invitation.Role, now)
             );
+            if (
+                invitation.Role == TenantRole.Customer
+                && !await EnsureCustomerContactAsync(invitation, user, now, ct)
+            )
+            {
+                // Disposing the transaction below rolls back the claim: the invitation stays pending and nothing is created.
+                return new ConflictObjectResult(
+                    new ProblemDetails
+                    {
+                        Title = "This customer contact is already linked to another user.",
+                        Detail = "Ask a manager to resolve the link, then accept the invitation again.",
+                    }
+                );
+            }
+
             try
             {
                 await db.SaveChangesAsync(ct);
@@ -422,10 +438,67 @@ public sealed partial class InvitationService(
                         }
                     );
             }
+            catch (DbUpdateException ex)
+                when (db.IsUniqueViolation(ex, UniqueConstraintKind.CustomerEmail)
+                    || db.IsUniqueViolation(ex, UniqueConstraintKind.CustomerUser)
+                )
+            {
+                // A concurrent writer created or linked the contact; the claim rolls back so a retry resolves it.
+                db.ChangeTracker.Clear();
+                await transaction.RollbackAsync(ct);
+                return new ConflictObjectResult(
+                    new ProblemDetails
+                    {
+                        Title = "The invitation could not be accepted.",
+                        Detail = "Please try again.",
+                    }
+                );
+            }
         }
 
         LogAccepted(logger, invitation.Id, invitation.TenantId, userId);
         return (await ExistingAsync(invitation.TenantId, userId, ct))!;
+    }
+
+    /// <summary>
+    /// Customer members need a contact to create tickets. The invitation was issued by a manager to this verified address, so
+    /// the unlinked contact with that email is linked, or a new one is created. A contact already linked to another user is
+    /// never touched and the acceptance is refused as a whole; an email match alone never grants access without the invitation.
+    /// </summary>
+    /// <returns>False when the contact with this email already belongs to another user; the caller must abort the acceptance.</returns>
+    private async Task<bool> EnsureCustomerContactAsync(
+        Invitation invitation,
+        UserSummary user,
+        DateTime now,
+        CancellationToken ct
+    )
+    {
+        var contact = await db.Customers.SingleOrDefaultAsync(
+            c => c.NormalizedEmail == invitation.NormalizedEmail,
+            ct
+        );
+        if (contact is null)
+        {
+            contact = Customer.Create(
+                invitation.TenantId,
+                string.IsNullOrWhiteSpace(user.DisplayName) ? user.Email : user.DisplayName,
+                user.Email,
+                null,
+                now
+            );
+            contact.LinkUser(user.Id, now);
+            db.Customers.Add(contact);
+        }
+        else if (contact.UserId is null)
+        {
+            contact.LinkUser(user.Id, now);
+        }
+        else if (contact.UserId != user.Id)
+        {
+            return false;
+        }
+
+        return true;
     }
 
     /// <summary>

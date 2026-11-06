@@ -11,11 +11,13 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { debounceTime, merge } from 'rxjs';
+import { debounceTime, filter, merge } from 'rxjs';
 import { TenantService } from '../../core/auth/tenant.service';
 import { GraphqlClient } from '../../core/graphql/graphql-client';
 import { DashboardDocument, DashboardQuery } from '../../core/graphql/generated';
+import { NotificationCreatedEvent } from '../../core/notifications/notification.service';
 import { RealtimeService } from '../../core/realtime/realtime.service';
+import { activeWorkspaceEvents } from '../../core/realtime/workspace-events';
 import { BarChart } from '../../shared/bar-chart';
 import { TrendChart } from '../../shared/trend-chart';
 import { defaultRange, minutesLabel, pascal } from '../../shared/format';
@@ -54,7 +56,13 @@ export class Dashboard {
       else this.data.set(null); // never keep another workspace's numbers
     });
     // the existing notification push (ticket created/assigned/status) and reconnects trigger ONE debounced reconcile
-    merge(this.realtime.on('notification.created'), this.realtime.on('ticket.changed'), this.realtime.reconnected)
+    merge(
+      this.realtime
+        .on<NotificationCreatedEvent>('notification.created')
+        .pipe(filter((e) => e.notification.tenantId === this.tenant.tenantId())),
+      activeWorkspaceEvents('ticket.changed'),
+      this.realtime.reconnected,
+    )
       .pipe(debounceTime(1500), takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.load());
   }

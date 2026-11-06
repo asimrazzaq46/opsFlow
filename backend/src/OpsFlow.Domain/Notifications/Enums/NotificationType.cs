@@ -14,4 +14,5 @@ public enum NotificationType
     NoteAdded,
     SlaWarning, // raised by automated SLA monitoring
     SlaBreached,
+    TicketClosed, // appended: the type is persisted as text, so existing rows are unaffected
 }

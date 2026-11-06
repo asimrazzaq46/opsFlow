@@ -1,5 +1,5 @@
 import { inject } from '@angular/core';
-import { CanActivateFn, Router } from '@angular/router';
+import { CanActivateFn, GuardResult, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from './auth.service';
 import { PendingInvitation } from './pending-invitation';
@@ -41,4 +41,16 @@ export const workspaceGuard: CanActivateFn = async () => {
     return router.createUrlTree(['/workspaces']);
   }
   return tenant.tenantId() ? true : router.createUrlTree(['/workspaces']);
+};
+
+/**
+ * Owner/Manager-only pages: runs the workspace guard first (guards of one route start together), then redirects other roles.
+ * Dependencies are injected before the first await because the injection context ends there.
+ */
+export const managerGuard: CanActivateFn = async (route, state) => {
+  const tenant = inject(TenantService);
+  const router = inject(Router);
+  const allowed = await (workspaceGuard(route, state) as Promise<GuardResult>); // workspaceGuard is async
+  if (allowed !== true) return allowed;
+  return tenant.isManager() || router.createUrlTree(['/dashboard']);
 };

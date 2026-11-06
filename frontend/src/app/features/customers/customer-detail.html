@@ -1,0 +1,235 @@
+<div class="flex flex-col gap-4">
+  <nav [attr.aria-label]="'customers.breadcrumb' | translate">
+    <ol class="flex items-center gap-1 text-body-sm text-on-surface-variant">
+      <li>
+        <a routerLink="/customers" class="ops-link">{{ 'customers.title' | translate }}</a>
+      </li>
+      <li aria-hidden="true"><span class="ms text-[14px]">chevron_right</span></li>
+      <li aria-current="page" class="truncate font-medium text-on-surface">
+        {{ loaded()?.name ?? ('customers.detail' | translate) }}
+      </li>
+    </ol>
+  </nav>
+
+  <div aria-live="polite">
+    @if (message(); as m) {
+      <p
+        class="flex items-center gap-2 rounded-lg px-3 py-2 text-body-sm"
+        [class]="
+          m.error
+            ? 'bg-error-container text-on-error-container'
+            : 'bg-secondary-container text-on-secondary-container'
+        "
+        [attr.role]="m.error ? 'alert' : 'status'"
+      >
+        <span class="ms text-[18px]" aria-hidden="true">{{ m.error ? 'error' : 'check_circle' }}</span>
+        {{ m.key | translate }}
+      </p>
+    }
+  </div>
+
+  @if (loadError(); as err) {
+    <div role="alert" class="ops-card flex flex-col items-center gap-3 px-4 py-12 text-center">
+      <span class="ms text-[32px] text-error" aria-hidden="true">error</span>
+      <p class="text-body-md text-on-surface">{{ err | translate }}</p>
+      @if (err === 'customers.loadError') {
+        <button type="button" class="ops-btn-secondary" (click)="customer.reload()">
+          <span class="ms text-[18px]" aria-hidden="true">refresh</span>{{ 'common.retry' | translate }}
+        </button>
+      }
+    </div>
+  } @else if (!loaded()) {
+    <p role="status" class="ops-card flex items-center justify-center gap-2 px-4 py-12 text-body-md text-on-surface-variant">
+      <span class="ms text-[20px] motion-safe:animate-spin" aria-hidden="true">progress_activity</span
+      >{{ 'common.loading' | translate }}
+    </p>
+  } @else {
+    @let c = loaded()!;
+    <!-- Header and actions -->
+    <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+      <div class="min-w-0">
+        <div class="flex flex-wrap items-center gap-2">
+          <h1 class="break-words text-headline-lg tracking-tight text-on-surface sm:text-headline-xl">
+            {{ c.name }}
+          </h1>
+          <span
+            class="ops-badge"
+            [class]="
+              c.isActive
+                ? 'bg-secondary-container text-on-secondary-container'
+                : 'bg-surface-container text-on-surface-variant'
+            "
+            >{{ (c.isActive ? 'common.active' : 'common.inactive') | translate }}<span class="sr-only"> — {{ (c.isActive ? 'customers.statusActiveHelp' : 'customers.statusInactiveHelp') | translate }}</span></span
+          >
+        </div>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <a [routerLink]="['/customers', c.id, 'edit']" class="ops-btn-secondary">
+          <span class="ms text-[18px]" aria-hidden="true">edit</span>{{ 'customers.edit' | translate }}
+        </a>
+        @if (isOwner()) {
+          @if (c.isActive) {
+            <button type="button" class="ops-btn-secondary" [disabled]="busy() !== null" (click)="openDeactivate()">
+              <span class="ms text-[18px]" aria-hidden="true">block</span>{{ 'customers.stopTickets' | translate }}
+            </button>
+          } @else {
+            <button type="button" class="ops-btn-secondary" [disabled]="busy() !== null" (click)="activate()">
+              <span class="ms text-[18px]" aria-hidden="true">check_circle</span>{{ 'customers.allowTickets' | translate }}
+            </button>
+          }
+        }
+      </div>
+    </div>
+
+    @if (!c.isActive) {
+      <p class="flex items-start gap-2 rounded-lg bg-surface-container px-3 py-2 text-body-sm text-on-surface-variant">
+        <span class="ms text-[18px]" aria-hidden="true">info</span>{{ 'customers.inactiveNotice' | translate }}
+      </p>
+    }
+
+    <div class="grid grid-cols-1 gap-4 lg:grid-cols-12">
+      <!-- Contact -->
+      <section class="ops-card p-4 sm:p-6 lg:col-span-5" aria-labelledby="contact-heading">
+        <h2 id="contact-heading" class="text-headline-lg text-on-surface">
+          {{ 'customers.contactSection' | translate }}
+        </h2>
+        <dl class="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-body-md">
+          <dt class="text-on-surface-variant">{{ 'customers.email' | translate }}</dt>
+          <dd class="min-w-0 break-all text-on-surface">{{ c.email }}</dd>
+          <dt class="text-on-surface-variant">{{ 'customers.phone' | translate }}</dt>
+          <dd class="text-on-surface">{{ c.phone || '—' }}</dd>
+          <dt class="text-on-surface-variant">{{ 'customers.created' | translate }}</dt>
+          <dd class="text-on-surface">
+            <time [attr.datetime]="c.createdAtUtc">{{ c.createdAtUtc | date: 'medium' }}</time>
+          </dd>
+          <dt class="text-on-surface-variant">{{ 'customers.updated' | translate }}</dt>
+          <dd class="text-on-surface">
+            <time [attr.datetime]="c.updatedAtUtc">{{ c.updatedAtUtc | date: 'medium' }}</time>
+          </dd>
+        </dl>
+      </section>
+
+      <!-- Portal access -->
+      <section class="ops-card flex flex-col gap-3 p-4 sm:p-6 lg:col-span-7" aria-labelledby="portal-heading">
+        <h2 id="portal-heading" class="text-headline-lg text-on-surface">
+          {{ 'customers.portalSection' | translate }}
+        </h2>
+        @if (c.linkedUserId) {
+          <div class="flex items-start gap-3 rounded-lg bg-surface-container-low p-3">
+            <span class="ms text-[20px] text-primary" aria-hidden="true">link</span>
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-headline-sm text-on-surface">{{ c.linkedUserName }}</p>
+              <p class="truncate text-body-sm text-on-surface-variant">{{ c.linkedUserEmail }}</p>
+            </div>
+            <button type="button" class="ops-link shrink-0 text-body-sm font-medium" [disabled]="busy() !== null" (click)="openUnlink()">
+              {{ 'customers.unlink' | translate }}
+            </button>
+          </div>
+          <p class="text-body-sm text-on-surface-variant">{{ 'customers.portalLinkedHelp' | translate }}</p>
+        } @else {
+          <p class="text-body-md text-on-surface-variant">{{ 'customers.portalUnlinkedHelp' | translate }}</p>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" class="ops-btn-secondary" [disabled]="busy() !== null" (click)="invite()">
+              <span class="ms text-[18px]" aria-hidden="true">outgoing_mail</span>{{ 'customers.invite' | translate }}
+            </button>
+            <button type="button" class="ops-btn-secondary" [disabled]="busy() !== null" (click)="openLink()">
+              <span class="ms text-[18px]" aria-hidden="true">link</span>{{ 'customers.linkExisting' | translate }}
+            </button>
+          </div>
+        }
+      </section>
+    </div>
+
+    <!-- Tickets -->
+    <section class="ops-card overflow-hidden" aria-labelledby="tickets-heading" [attr.aria-busy]="tickets.isLoading()">
+      <div class="flex items-center justify-between gap-2 px-4 pt-4 sm:px-6 sm:pt-6">
+        <h2 id="tickets-heading" class="text-headline-lg text-on-surface">{{ 'customers.tickets' | translate }}</h2>
+        @if (ticketTotal()) {
+          <p class="font-mono text-mono-timer text-on-surface-variant">{{ ticketTotal() }}</p>
+        }
+      </div>
+      @if (tickets.status() === 'error') {
+        <div role="alert" class="flex flex-col items-center gap-3 px-4 py-10 text-center">
+          <p class="text-body-md text-on-surface">{{ 'customers.ticketsError' | translate }}</p>
+          <button type="button" class="ops-btn-secondary" (click)="tickets.reload()">
+            <span class="ms text-[18px]" aria-hidden="true">refresh</span>{{ 'common.retry' | translate }}
+          </button>
+        </div>
+      } @else if (!ticketData()) {
+        <p role="status" class="flex items-center justify-center gap-2 px-4 py-10 text-body-md text-on-surface-variant">
+          <span class="ms text-[20px] motion-safe:animate-spin" aria-hidden="true">progress_activity</span
+          >{{ 'common.loading' | translate }}
+        </p>
+      } @else if (!ticketData()!.items.length) {
+        <p class="px-4 py-10 text-center text-body-md text-on-surface-variant">{{ 'customers.ticketsEmpty' | translate }}</p>
+      } @else {
+        <ul class="mt-3 divide-y divide-outline-variant/40" [class.opacity-60]="tickets.isLoading()">
+          @for (t of ticketData()!.items; track t.id) {
+            <li>
+              <a
+                [routerLink]="['/tickets', t.id]"
+                class="flex flex-col gap-1.5 px-4 py-3 hover:bg-surface-container-low focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary-container sm:px-6"
+              >
+                <span class="flex items-center justify-between gap-2">
+                  <span class="font-mono text-mono-data font-semibold text-primary">{{ t.displayNumber }}</span>
+                  <span class="ops-badge" [class]="statusBadge[t.status]">{{ statusLabel(t.status) | translate }}</span>
+                </span>
+                <span class="text-headline-sm text-on-surface">{{ t.title }}</span>
+                <span class="flex flex-wrap items-center gap-2 text-body-sm text-on-surface-variant">
+                  <span class="ops-badge rounded-full uppercase" [class]="priorityBadge[t.priority].badge">{{
+                    priorityLabel(t.priority) | translate
+                  }}</span>
+                  <time class="ml-auto font-mono text-mono-timer" [attr.datetime]="t.updatedAtUtc">{{
+                    t.updatedAtUtc | date: 'short'
+                  }}</time>
+                </span>
+              </a>
+            </li>
+          }
+        </ul>
+        @if (ticketPages() > 1) {
+          <nav class="flex items-center justify-between gap-2 border-t border-outline-variant/40 p-3 text-body-sm sm:px-6" [attr.aria-label]="'tickets.paging' | translate">
+            <button type="button" class="page-btn px-2.5" [disabled]="ticketPage() <= 1" (click)="goToTickets(ticketPage() - 1)">
+              <span class="ms text-[16px]" aria-hidden="true">chevron_left</span>{{ 'common.previous' | translate }}
+            </button>
+            <span class="font-mono text-mono-timer text-on-surface-variant">{{ ticketPage() }} / {{ ticketPages() }}</span>
+            <button type="button" class="page-btn px-2.5" [disabled]="ticketPage() >= ticketPages()" (click)="goToTickets(ticketPage() + 1)">
+              {{ 'common.next' | translate }}<span class="ms text-[16px]" aria-hidden="true">chevron_right</span>
+            </button>
+          </nav>
+        }
+      }
+    </section>
+
+    <app-confirm-dialog
+      #deactivateDialog
+      [title]="'customers.deactivateTitle' | translate"
+      [message]="'customers.deactivateMessage' | translate: { name: c.name }"
+      [confirmLabel]="'customers.stopTickets' | translate"
+      [busy]="busy() !== null"
+      (confirmed)="deactivate()"
+    />
+    <app-confirm-dialog
+      #linkDialog
+      [title]="'customers.linkTitle' | translate"
+      [message]="'customers.linkMessage' | translate: { name: c.name }"
+      [confirmLabel]="'customers.linkConfirm' | translate"
+      [busy]="busy() !== null"
+      [confirmDisabled]="!linkChoice()"
+      (confirmed)="link()"
+      (closed)="linkOpen.set(false)"
+    >
+      @if (linkOpen()) {
+        <app-portal-user-picker (selected)="linkChoice.set($event)" />
+      }
+    </app-confirm-dialog>
+    <app-confirm-dialog
+      #unlinkDialog
+      [title]="'customers.unlinkTitle' | translate"
+      [message]="'customers.unlinkMessage' | translate: { name: c.linkedUserName ?? '' }"
+      [confirmLabel]="'customers.unlink' | translate"
+      [busy]="busy() !== null"
+      (confirmed)="unlink()"
+    />
+  }
+</div>

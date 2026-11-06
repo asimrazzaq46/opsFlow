@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { authGuard, emailLinkGuard, guestGuard, workspaceGuard } from './core/auth/auth.guard';
+import { authGuard, emailLinkGuard, guestGuard, managerGuard, workspaceGuard } from './core/auth/auth.guard';
 
 export const routes: Routes = [
   {
@@ -90,8 +90,26 @@ export const routes: Routes = [
   },
   {
     path: 'customers',
-    canActivate: [authGuard, workspaceGuard],
+    canActivate: [authGuard, managerGuard],
     loadComponent: () => import('./features/customers/customers').then((m) => m.Customers),
+  },
+  {
+    path: 'customers/new',
+    canActivate: [authGuard, managerGuard],
+    loadComponent: () =>
+      import('./features/customers/customer-form').then((m) => m.CustomerForm),
+  },
+  {
+    path: 'customers/:id',
+    canActivate: [authGuard, managerGuard],
+    loadComponent: () =>
+      import('./features/customers/customer-detail').then((m) => m.CustomerDetail),
+  },
+  {
+    path: 'customers/:id/edit',
+    canActivate: [authGuard, managerGuard],
+    loadComponent: () =>
+      import('./features/customers/customer-form').then((m) => m.CustomerForm),
   },
   {
     path: 'account',

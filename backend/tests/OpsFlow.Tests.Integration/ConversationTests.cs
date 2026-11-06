@@ -213,7 +213,8 @@ public class ConversationTests(ApiFactory factory) : IClassFixture<ApiFactory>
 
         await w.AssignAsync(ticket.Id, w.Agent1Membership);
         Assert.Contains(await w.NotificationsAsync(w.Agent1), n => n.Type == "TicketAssigned");
-        Assert.DoesNotContain(await w.NotificationsAsync(w.Agent2), n => n.TicketId == ticket.Id);
+        Assert.Contains(await w.NotificationsAsync(w.Agent2), n => n.Type == "TicketCreated" && n.TicketId == ticket.Id); // every active agent is told about a new ticket
+        Assert.DoesNotContain(await w.NotificationsAsync(w.Agent2), n => n.Type == "TicketAssigned" && n.TicketId == ticket.Id); // but only the assignee about the assignment
         Assert.Contains(await w.NotificationsAsync(w.Customer), n => n.Type == "TicketStatusChanged" && n.Detail == "Assigned");
 
         await w.MoveAsync(w.Agent1, ticket.Id, "InProgress");
@@ -248,6 +249,69 @@ public class ConversationTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(HttpStatusCode.NoContent, (await w.Customer.PostAsync(w.Url("notifications/read-all"))).StatusCode);
         Assert.Equal(0, await w.UnreadAsync(w.Customer));
         Assert.True(await w.UnreadAsync(w.Manager) > 0); // read-all only touched the caller's rows
+    }
+
+    [Fact]
+    public async Task Ticket_creation_notifies_all_other_active_staff_but_never_the_creator_or_a_customer()
+    {
+        var w = await TicketWorld.CreateAsync(factory);
+        var body = new { title = "Created by manager", description = "d", categoryId = w.CategoryId, customerId = w.CustomerContactId };
+        var ticket = await w.CreateTicketAsync(w.Manager, body);
+
+        foreach (var staff in new[] { w.Owner, w.Agent1, w.Agent2 })
+        {
+            Assert.Single(await w.NotificationsAsync(staff), n => n.Type == "TicketCreated" && n.TicketId == ticket.Id);
+        }
+
+        Assert.DoesNotContain(await w.NotificationsAsync(w.Manager), n => n.TicketId == ticket.Id); // the actor is excluded
+        Assert.DoesNotContain(await w.NotificationsAsync(w.Customer), n => n.Type == "TicketCreated"); // even for their own contact
+    }
+
+    [Fact]
+    public async Task The_global_notification_history_returns_only_the_callers_notifications_from_their_active_workspaces()
+    {
+        var w = await TicketWorld.CreateAsync(factory);
+        var other = await TicketWorld.CreateAsync(factory);
+        var ticket = await w.CreateTicketAsync(w.Customer);
+
+        var mine = await w.Agent1.ReadAsync<PagedDto<NotificationJson>>(await w.Agent1.GetAsync("/api/v1/notifications"));
+        Assert.Contains(mine.Items, n => n.TenantId == w.Org.Id && n.TicketId == ticket.Id && n.Type == "TicketCreated");
+        Assert.Equal((await w.NotificationsAsync(w.Agent1)).Count, mine.Items.Count); // same set as the workspace-scoped list
+        var count = await w.Agent1.ReadAsync<UnreadJson>(await w.Agent1.GetAsync("/api/v1/notifications/unread-count"));
+        Assert.Equal(mine.Items.Count(n => !n.IsRead), count.Count);
+
+        // somebody from another workspace sees nothing of this one; nothing without a token
+        var foreign = await other.Agent1.ReadAsync<PagedDto<NotificationJson>>(await other.Agent1.GetAsync("/api/v1/notifications"));
+        Assert.DoesNotContain(foreign.Items, n => n.TenantId == w.Org.Id);
+
+        (await w.Agent1.PostAsync("/api/v1/notifications/read-all")).EnsureSuccessStatusCode();
+        Assert.Equal(0, (await w.Agent1.ReadAsync<UnreadJson>(await w.Agent1.GetAsync("/api/v1/notifications/unread-count"))).Count);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await factory.CreateClient().GetAsync("/api/v1/notifications")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Closing_a_ticket_notifies_the_requesting_customer_once_and_never_an_unrelated_customer()
+    {
+        var w = await TicketWorld.CreateAsync(factory);
+        var ticket = await w.CreateTicketAsync(w.Customer);
+        await w.AssignAsync(ticket.Id, w.Agent1Membership);
+        await w.MoveAsync(w.Agent1, ticket.Id, "InProgress");
+        await w.MoveAsync(w.Agent1, ticket.Id, "Resolved");
+        await w.MoveAsync(w.Manager, ticket.Id, "Closed");
+
+        Assert.Single(await w.NotificationsAsync(w.Customer), n => n.Type == "TicketClosed" && n.TicketId == ticket.Id);
+        Assert.Contains(await w.NotificationsAsync(w.Manager), n => n.Type == "TicketClosed" && n.TicketId == ticket.Id); // staff other than the actor
+
+        // A repeated close is rejected and must not add a second notification.
+        Assert.Equal(HttpStatusCode.Conflict, (await w.Manager.PostAsync(w.Url($"tickets/{ticket.Id}/status"), new { status = "Closed" })).StatusCode);
+        Assert.Single(await w.NotificationsAsync(w.Customer), n => n.Type == "TicketClosed" && n.TicketId == ticket.Id);
+
+        // Tickets of other requesters (or without any customer) never notify this customer.
+        var internalTicket = await w.CreateTicketAsync(w.Agent1);
+        await w.MoveAsync(w.Agent1, internalTicket.Id, "InProgress");
+        await w.MoveAsync(w.Agent1, internalTicket.Id, "Resolved");
+        await w.MoveAsync(w.Manager, internalTicket.Id, "Closed");
+        Assert.DoesNotContain(await w.NotificationsAsync(w.Customer), n => n.TicketId == internalTicket.Id);
     }
 
     [Fact]
