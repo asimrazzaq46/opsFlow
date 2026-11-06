@@ -1,7 +1,14 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { Api } from '../../core/api/generated/api';
-import { getCurrentUser, linkGoogleAccount, listSessions, logoutAll, revokeSession, updateCurrentUser } from '../../core/api/generated/functions';
+import {
+  getCurrentUser,
+  linkGoogleAccount,
+  listSessions,
+  logoutAll,
+  revokeSession,
+  updateCurrentUser,
+} from '../../core/api/generated/functions';
 import { SessionResponse, UserProfileDto } from '../../core/api/generated/models';
 import { GoogleCredential } from '../../core/auth/google-identity.service';
 

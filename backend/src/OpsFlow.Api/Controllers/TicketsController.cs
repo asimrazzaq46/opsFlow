@@ -54,7 +54,7 @@ public sealed class TicketsController(TicketService tickets, TicketWorkflowServi
     [HttpGet(Name = "ListTickets")]
     [EndpointSummary("List tickets")]
     [EndpointDescription(
-        "Returns the tickets visible to the caller, with filters, sorting and capped paging; staff can filter state=Unstaffed. Requires an active membership in the tenant; Customers only see their own tickets."
+        "Returns the tickets visible to the caller, with filters, sorting and capped paging; staff can filter state=Unstaffed or assignedToMe=true (the caller's own open assignments). Active staff see every ticket of the workspace; Customers only see their own tickets."
     )]
     public async Task<ActionResult<PagedResult<TicketSummaryDto>>> ListTickets(
         [FromQuery] TicketListQuery q,
@@ -76,7 +76,8 @@ public sealed class TicketsController(TicketService tickets, TicketWorkflowServi
                     q.SortBy,
                     q.Descending,
                     q.Page,
-                    q.PageSize
+                    q.PageSize,
+                    q.AssignedToMe
                 ),
                 ct
             )

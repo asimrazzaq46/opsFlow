@@ -2,6 +2,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import {
   ChangeDetectionStrategy,
   Component,
+  computed,
   effect,
   inject,
   signal,
@@ -9,6 +10,7 @@ import {
 } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { TranslatePipe } from '@ngx-translate/core';
+import { TimeoutError, timeout } from 'rxjs';
 import { Api } from '../../core/api/generated/api';
 import {
   createInvitation,
@@ -22,114 +24,19 @@ import { TeamMembersDocument, TeamMembersQuery } from '../../core/graphql/genera
 import { pascal } from '../../shared/format';
 
 const PAGE_SIZE = 20;
+/** A request that has not answered by then ends in a retryable error instead of an endless spinner. */
+const REQUEST_TIMEOUT_MS = 20_000;
 
+/**
+ * The team directory is visible to staff (read-only for Agents). Invitations are managed by Owners and Managers only; what each role may
+ * invite follows the server's rules, which remain the real authorization: the UI only avoids offering actions that would be rejected.
+ */
 @Component({
   selector: 'app-team',
   imports: [ReactiveFormsModule, TranslatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <h1 class="text-2xl font-bold tracking-tight">{{ 'team.title' | translate }}</h1>
-
-    <div class="mt-6 overflow-x-auto" aria-live="polite">
-      @if (error()) {
-        <p role="alert" class="text-danger">
-          {{ 'team.loadError' | translate }}
-          <button type="button" class="underline" (click)="load()">
-            {{ 'common.retry' | translate }}
-          </button>
-        </p>
-      } @else if (data(); as d) {
-        <table class="w-full min-w-[30rem] text-left text-sm">
-          <thead class="text-muted">
-            <tr>
-              <th class="py-2">{{ 'team.name' | translate }}</th>
-              <th>{{ 'customers.email' | translate }}</th>
-              <th>{{ 'team.role' | translate }}</th>
-              <th>{{ 'common.status' | translate }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (m of d.items; track m.id) {
-              <tr class="border-t border-border">
-                <td class="py-2 font-medium">{{ m.displayName }}</td>
-                <td>{{ m.email }}</td>
-                <td>{{ 'roles.' + pascal(m.role) | translate }}</td>
-                <td>{{ (m.isActive ? 'common.active' : 'common.inactive') | translate }}</td>
-              </tr>
-            }
-          </tbody>
-        </table>
-        <nav class="mt-4 flex items-center justify-between text-sm">
-          <button
-            type="button"
-            class="rounded-lg border border-border px-3 py-1 disabled:opacity-50"
-            [disabled]="d.page <= 1"
-            (click)="go(d.page - 1)"
-          >
-            ‹ {{ 'common.previous' | translate }}
-          </button>
-          <span>{{ d.page }} / {{ pages(d) }}</span>
-          <button
-            type="button"
-            class="rounded-lg border border-border px-3 py-1 disabled:opacity-50"
-            [disabled]="d.page >= pages(d)"
-            (click)="go(d.page + 1)"
-          >
-            {{ 'common.next' | translate }} ›
-          </button>
-        </nav>
-      } @else {
-        <p class="text-muted">{{ 'common.loading' | translate }}</p>
-      }
-    </div>
-
-    <h2 class="mt-10 text-xl font-bold tracking-tight">{{ 'invitations.title' | translate }}</h2>
-    <form
-      [formGroup]="invite"
-      (ngSubmit)="send()"
-      class="mt-4 flex flex-wrap items-end gap-3 text-sm"
-      novalidate
-    >
-      <label class="grid gap-1"
-        ><span>{{ 'customers.email' | translate }}</span>
-        <input
-          type="email"
-          formControlName="email"
-          class="rounded-lg border border-border bg-card px-2 py-1"
-          [attr.aria-invalid]="invite.controls.email.invalid && invite.controls.email.touched"
-      /></label>
-      <label class="grid gap-1"
-        ><span>{{ 'team.role' | translate }}</span>
-        <select formControlName="role" class="rounded-lg border border-border bg-card px-2 py-1">
-          @for (r of roles(); track r) {
-            <option [value]="r">{{ 'roles.' + r | translate }}</option>
-          }
-        </select></label
-      >
-      <button
-        type="submit"
-        [disabled]="busy()"
-        class="rounded-lg bg-brand px-3 py-1.5 font-semibold text-brand-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:opacity-60"
-      >
-        {{ 'invitations.send' | translate }}
-      </button>
-    </form>
-    @if (message(); as m) {
-      <p role="status" class="mt-2 text-sm">{{ m | translate }}</p>
-    }
-    <ul class="mt-4 divide-y divide-border rounded-xl border border-border bg-card text-sm">
-      @for (i of invitations(); track i.id) {
-        <li class="flex flex-wrap items-center justify-between gap-2 px-4 py-2">
-          <span>{{ i.email }} · {{ 'roles.' + i.role | translate }}</span>
-          <button type="button" class="underline" (click)="revoke(i.id)">
-            {{ 'invitations.revoke' | translate }}
-          </button>
-        </li>
-      } @empty {
-        <li class="px-4 py-3 text-muted">{{ 'invitations.empty' | translate }}</li>
-      }
-    </ul>
-  `,
+  templateUrl: './team.html',
+  styleUrl: './team.css',
 })
 export class Team {
   private readonly gql = inject(GraphqlClient);
@@ -137,11 +44,24 @@ export class Team {
   protected readonly tenant = inject(TenantService);
   protected readonly pascal = pascal;
 
+  protected readonly canView = computed(() => this.tenant.isStaff());
+  protected readonly canInvite = computed(() => {
+    const role = this.tenant.role();
+    return role === 'TenantOwner' || role === 'Manager';
+  });
+  /** Owners may invite any role; Managers only Agents and Customers. */
+  protected readonly roles = computed<TenantRole[]>(() =>
+    this.tenant.role() === 'TenantOwner'
+      ? ['Manager', 'Agent', 'Customer', 'TenantOwner']
+      : ['Agent', 'Customer'],
+  );
+
   protected readonly data = signal<TeamMembersQuery['teamMembers'] | null>(null);
   protected readonly error = signal(false);
   protected readonly invitations = signal<InvitationDto[]>([]);
+  protected readonly invitationsError = signal(false);
   protected readonly busy = signal(false);
-  protected readonly message = signal<string | null>(null);
+  protected readonly message = signal<{ key: string; error: boolean } | null>(null);
   protected readonly invite = new FormGroup({
     email: new FormControl('', {
       nonNullable: true,
@@ -152,20 +72,25 @@ export class Team {
   private page = 1;
 
   constructor() {
+    // Workspace or role changes reset everything that belonged to the previous one.
     effect(() => {
-      if (!this.tenant.tenantId()) return this.data.set(null);
+      const tenantId = this.tenant.tenantId();
+      const canView = this.canView();
+      const canInvite = this.canInvite();
       untracked(() => {
+        this.data.set(null);
+        this.error.set(false);
+        this.invitations.set([]);
+        this.invitationsError.set(false);
+        this.message.set(null);
+        this.invite.reset({ email: '', role: 'Agent' });
+        if (!tenantId || !canView) return;
         this.go(1);
-        this.loadInvitations();
+        if (canInvite) this.loadInvitations();
       });
     });
   }
 
-  // Owners may invite any staff role + customers; Managers only Agents/Customers (the server re-checks).
-  protected roles = (): TenantRole[] =>
-    this.tenant.role() === 'TenantOwner'
-      ? ['Manager', 'Agent', 'Customer', 'TenantOwner']
-      : ['Agent', 'Customer'];
   protected pages = (d: NonNullable<TeamMembersQuery['teamMembers']>) =>
     Math.max(1, Math.ceil(d.totalCount / PAGE_SIZE));
 
@@ -175,54 +100,83 @@ export class Team {
   }
 
   protected load(): void {
+    const tenantId = this.tenant.tenantId();
     this.error.set(false);
-    this.gql
-      .query(TeamMembersDocument, { page: this.page, pageSize: PAGE_SIZE })
-      .subscribe({ next: (r) => this.data.set(r.teamMembers), error: () => this.error.set(true) });
+    this.gql.query(TeamMembersDocument, { page: this.page, pageSize: PAGE_SIZE }).subscribe({
+      next: (r) => {
+        if (tenantId === this.tenant.tenantId()) this.data.set(r.teamMembers);
+      },
+      error: () => {
+        if (tenantId === this.tenant.tenantId()) this.error.set(true);
+      },
+    });
   }
 
-  private loadInvitations(): void {
+  protected loadInvitations(): void {
     const tenantId = this.tenant.tenantId();
-    if (tenantId)
-      this.api
-        .invoke(listInvitations, { tenantId })
-        .subscribe({ next: (l) => this.invitations.set(l), error: () => this.invitations.set([]) });
+    if (!tenantId || !this.canInvite()) return;
+    this.invitationsError.set(false);
+    this.api
+      .invoke(listInvitations, { tenantId })
+      .pipe(timeout(REQUEST_TIMEOUT_MS))
+      .subscribe({
+        next: (l) => {
+          if (tenantId === this.tenant.tenantId()) this.invitations.set(l);
+        },
+        error: () => {
+          if (tenantId === this.tenant.tenantId()) this.invitationsError.set(true);
+        },
+      });
   }
 
   protected send(): void {
     this.invite.markAllAsTouched();
     const tenantId = this.tenant.tenantId();
-    if (this.invite.invalid || !tenantId || this.busy()) return;
+    if (!this.canInvite() || this.invite.invalid || !tenantId || this.busy()) return;
     this.busy.set(true);
     this.message.set(null);
-    this.api.invoke(createInvitation, { tenantId, body: this.invite.getRawValue() }).subscribe({
-      next: () => {
-        this.busy.set(false);
-        this.invite.controls.email.reset();
-        this.message.set('invitations.sent');
-        this.loadInvitations();
-      },
-      error: (e: unknown) => {
-        this.busy.set(false);
-        this.message.set(
-          e instanceof HttpErrorResponse && e.status === 403
-            ? 'common.forbidden'
-            : e instanceof HttpErrorResponse && e.status === 409
-              ? 'invitations.duplicate'
-              : 'invitations.error',
-        );
-      },
-    });
+    this.api
+      .invoke(createInvitation, { tenantId, body: this.invite.getRawValue() })
+      .pipe(timeout(REQUEST_TIMEOUT_MS))
+      .subscribe({
+        next: () => {
+          this.busy.set(false);
+          if (tenantId !== this.tenant.tenantId()) return;
+          this.invite.controls.email.reset();
+          this.message.set({ key: 'invitations.sent', error: false });
+          this.loadInvitations();
+        },
+        error: (e: unknown) => {
+          this.busy.set(false);
+          if (tenantId === this.tenant.tenantId())
+            this.message.set({ key: this.errorKey(e), error: true });
+        },
+      });
   }
 
   protected revoke(invitationId: string): void {
     const tenantId = this.tenant.tenantId();
-    if (tenantId)
-      this.api
-        .invoke(revokeInvitation, { tenantId, invitationId })
-        .subscribe({
-          next: () => this.loadInvitations(),
-          error: () => this.message.set('invitations.error'),
-        });
+    if (!tenantId || !this.canInvite()) return;
+    this.api
+      .invoke(revokeInvitation, { tenantId, invitationId })
+      .pipe(timeout(REQUEST_TIMEOUT_MS))
+      .subscribe({
+        next: () => {
+          if (tenantId !== this.tenant.tenantId()) return;
+          this.message.set({ key: 'invitations.revoked', error: false });
+          this.loadInvitations();
+        },
+        error: (e: unknown) => {
+          if (tenantId === this.tenant.tenantId())
+            this.message.set({ key: this.errorKey(e), error: true });
+        },
+      });
+  }
+
+  private errorKey(e: unknown): string {
+    if (e instanceof TimeoutError) return 'invitations.timeout';
+    if (e instanceof HttpErrorResponse && e.status === 403) return 'common.forbidden';
+    if (e instanceof HttpErrorResponse && e.status === 409) return 'invitations.duplicate';
+    return 'invitations.error';
   }
 }

@@ -1,83 +1,215 @@
-<div class="mb-4 flex flex-wrap items-center gap-2 font-mono text-mono-timer uppercase tracking-wider text-on-surface-variant">
-  <span class="font-semibold text-primary">{{ 'authFlow.register.crumbStep' | translate }}</span>
-  <span aria-hidden="true">/</span>
-  <span>{{ 'authFlow.register.crumbName' | translate }}</span>
-</div>
+<app-flow-steps [current]="1" [invited]="!!inviteToken()" />
 
 <div class="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
-  <section class="rounded-lg bg-surface-container-lowest p-4 shadow-[0_4px_24px_-4px_rgba(19,27,46,0.06)] sm:p-6 md:p-8 lg:col-span-7" aria-labelledby="register-title">
+  <section
+    class="rounded-lg bg-surface-container-lowest p-4 shadow-[0_4px_24px_-4px_rgba(19,27,46,0.06)] sm:p-6 md:p-8 lg:col-span-7"
+    aria-labelledby="register-title"
+  >
     <div class="mb-6">
-      <div class="mb-2 inline-flex items-center gap-1 rounded-xs bg-surface-container px-2 py-0.5 font-mono text-mono-timer uppercase text-primary">
+      <div
+        class="mb-2 inline-flex items-center gap-1 rounded-xs bg-surface-container px-2 py-0.5 font-mono text-mono-timer uppercase text-primary"
+      >
         <span class="ms text-[14px]" aria-hidden="true">person_add</span>
         <span>{{ 'authFlow.register.eyebrow' | translate }}</span>
       </div>
-      <h1 id="register-title" class="text-headline-lg tracking-tight text-on-surface sm:text-headline-xl">{{ 'authFlow.register.title' | translate }}</h1>
-      <p class="mt-1 text-body-md text-on-surface-variant">{{ 'authFlow.register.subtitle' | translate }}</p>
+      <h1
+        id="register-title"
+        class="text-headline-lg tracking-tight text-on-surface sm:text-headline-xl"
+      >
+        {{ 'authFlow.register.title' | translate }}
+      </h1>
+      <p class="mt-1 text-body-md text-on-surface-variant">
+        {{ 'authFlow.register.subtitle' | translate }}
+      </p>
     </div>
+
+    @if (invite(); as inv) {
+      @if (inv.state === 'Valid') {
+        <p
+          class="mb-4 flex items-start gap-2 rounded-sm bg-secondary-container/50 p-3 text-body-sm text-on-secondary-container"
+          role="note"
+        >
+          <span class="ms text-[16px]" aria-hidden="true">mark_email_unread</span>
+          <span>{{
+            'authFlow.register.inviteBanner'
+              | translate: { workspace: inv.workspaceName, role: ('roles.' + inv.role | translate) }
+          }}</span>
+        </p>
+      } @else {
+        <p
+          class="mb-4 flex items-start gap-2 rounded-sm bg-error-container p-3 text-body-sm text-on-error-container"
+          role="alert"
+        >
+          <span class="ms text-[16px]" aria-hidden="true">link_off</span>
+          <span>{{ 'authFlow.register.inviteUnavailable' | translate }}</span>
+        </p>
+      }
+    }
 
     <form class="space-y-4" [formGroup]="form" (ngSubmit)="submit()" novalidate>
       <div>
-        <label class="ops-label mb-1" for="reg-name">{{ 'authFlow.register.name' | translate }} <span class="text-error" aria-hidden="true">*</span></label>
+        <label class="ops-label mb-1" for="reg-name"
+          >{{ 'authFlow.register.name' | translate }}
+          <span class="text-error" aria-hidden="true">*</span></label
+        >
         <div class="relative flex items-center">
-          <span class="ms pointer-events-none absolute left-3 text-[18px] text-on-surface-variant" aria-hidden="true">badge</span>
-          <input id="reg-name" type="text" autocomplete="name" formControlName="displayName" [placeholder]="'authFlow.register.namePlaceholder' | translate"
-            [attr.aria-invalid]="showError('displayName') ? 'true' : null" [attr.aria-describedby]="showError('displayName') ? 'reg-name-error' : null"
-            class="ops-input pl-10" />
+          <span
+            class="ms pointer-events-none absolute left-3 text-[18px] text-on-surface-variant"
+            aria-hidden="true"
+            >badge</span
+          >
+          <input
+            id="reg-name"
+            type="text"
+            autocomplete="name"
+            formControlName="displayName"
+            [placeholder]="'authFlow.register.namePlaceholder' | translate"
+            [attr.aria-invalid]="showError('displayName') ? 'true' : null"
+            [attr.aria-describedby]="showError('displayName') ? 'reg-name-error' : null"
+            class="ops-input pl-10"
+          />
         </div>
         @if (showError('displayName')) {
-          <p id="reg-name-error" class="ops-error">{{ (form.controls.displayName.hasError('required') ? 'validation.required' : 'authFlow.validation.name') | translate }}</p>
+          <p id="reg-name-error" class="ops-error">
+            {{
+              (form.controls.displayName.hasError('required')
+                ? 'validation.required'
+                : 'authFlow.validation.name'
+              ) | translate
+            }}
+          </p>
         }
       </div>
 
       <div>
-        <label class="ops-label mb-1" for="reg-email">{{ 'auth.email' | translate }} <span class="text-error" aria-hidden="true">*</span></label>
+        <label class="ops-label mb-1" for="reg-email"
+          >{{ 'auth.email' | translate }}
+          <span class="text-error" aria-hidden="true">*</span></label
+        >
         <div class="relative flex items-center">
-          <span class="ms pointer-events-none absolute left-3 text-[18px] text-on-surface-variant" aria-hidden="true">mail</span>
-          <input id="reg-email" type="email" autocomplete="email" inputmode="email" formControlName="email" [placeholder]="'authFlow.emailPlaceholder' | translate"
-            [attr.aria-invalid]="showError('email') ? 'true' : null" aria-describedby="reg-email-hint" class="ops-input pl-10" />
+          <span
+            class="ms pointer-events-none absolute left-3 text-[18px] text-on-surface-variant"
+            aria-hidden="true"
+            >mail</span
+          >
+          <input
+            id="reg-email"
+            type="email"
+            autocomplete="email"
+            inputmode="email"
+            formControlName="email"
+            [placeholder]="'authFlow.emailPlaceholder' | translate"
+            [attr.aria-invalid]="showError('email') ? 'true' : null"
+            aria-describedby="reg-email-hint"
+            class="ops-input pl-10"
+          />
         </div>
         @if (showError('email')) {
-          <p class="ops-error" role="alert">{{ (form.controls.email.hasError('required') ? 'validation.required' : 'authFlow.validation.email') | translate }}</p>
+          <p class="ops-error" role="alert">
+            {{
+              (form.controls.email.hasError('required')
+                ? 'validation.required'
+                : 'authFlow.validation.email'
+              ) | translate
+            }}
+          </p>
         }
-        <p id="reg-email-hint" class="mt-1 flex items-start gap-1.5 text-body-sm text-on-surface-variant">
+        <p
+          id="reg-email-hint"
+          class="mt-1 flex items-start gap-1.5 text-body-sm text-on-surface-variant"
+        >
           <span class="ms mt-px text-[15px] text-primary" aria-hidden="true">info</span>
-          <span>{{ 'authFlow.register.emailHint' | translate }}</span>
+          <span>{{
+            (form.controls.email.disabled
+              ? 'authFlow.register.emailLocked'
+              : 'authFlow.register.emailHint'
+            ) | translate
+          }}</span>
         </p>
       </div>
 
       <div class="space-y-2 pt-1">
-        <label class="ops-label" for="reg-password">{{ 'auth.password' | translate }} <span class="text-error" aria-hidden="true">*</span></label>
-        <app-password-field [control]="form.controls.password" inputId="reg-password" autocomplete="new-password" icon="key"
-          [placeholder]="'authFlow.newPasswordPlaceholder' | translate" [invalid]="showError('password')" describedBy="reg-password-rules" />
-        <div id="reg-password-rules" class="flex items-center gap-1.5 rounded-sm p-1.5 text-body-sm transition-colors"
-          [class]="lengthOk() ? 'bg-secondary-container/40 text-secondary' : 'bg-surface-container-low text-on-surface-variant'">
-          <span class="ms text-[15px]" aria-hidden="true">{{ lengthOk() ? 'check_circle' : 'radio_button_unchecked' }}</span>
-          <span class="font-mono text-mono-timer">{{ 'authFlow.password.minLength' | translate: { min: min } }}</span>
+        <label class="ops-label" for="reg-password"
+          >{{ 'auth.password' | translate }}
+          <span class="text-error" aria-hidden="true">*</span></label
+        >
+        <app-password-field
+          [control]="form.controls.password"
+          inputId="reg-password"
+          autocomplete="new-password"
+          icon="key"
+          [placeholder]="'authFlow.newPasswordPlaceholder' | translate"
+          [invalid]="showError('password')"
+          describedBy="reg-password-rules"
+        />
+        <div
+          id="reg-password-rules"
+          class="flex items-center gap-1.5 rounded-sm p-1.5 text-body-sm transition-colors"
+          [class]="
+            lengthOk()
+              ? 'bg-secondary-container/40 text-secondary'
+              : 'bg-surface-container-low text-on-surface-variant'
+          "
+        >
+          <span class="ms text-[15px]" aria-hidden="true">{{
+            lengthOk() ? 'check_circle' : 'radio_button_unchecked'
+          }}</span>
+          <span class="font-mono text-mono-timer">{{
+            'authFlow.password.minLength' | translate: { min: min }
+          }}</span>
         </div>
       </div>
 
       <div>
         <div class="mb-1 flex items-center justify-between gap-2">
-          <label class="ops-label" for="reg-confirm">{{ 'authFlow.password.confirm' | translate }} <span class="text-error" aria-hidden="true">*</span></label>
+          <label class="ops-label" for="reg-confirm"
+            >{{ 'authFlow.password.confirm' | translate }}
+            <span class="text-error" aria-hidden="true">*</span></label
+          >
           @if (matchState() !== 'pending') {
-            <span class="flex items-center gap-1 font-mono text-mono-timer" [class]="matchState() === 'match' ? 'text-secondary' : 'text-error'" aria-live="polite">
-              <span class="ms text-[14px]" aria-hidden="true">{{ matchState() === 'match' ? 'verified' : 'error' }}</span>
-              {{ (matchState() === 'match' ? 'authFlow.password.match' : 'authFlow.password.mismatch') | translate }}
+            <span
+              class="flex items-center gap-1 font-mono text-mono-timer"
+              [class]="matchState() === 'match' ? 'text-secondary' : 'text-error'"
+              aria-live="polite"
+            >
+              <span class="ms text-[14px]" aria-hidden="true">{{
+                matchState() === 'match' ? 'verified' : 'error'
+              }}</span>
+              {{
+                (matchState() === 'match'
+                  ? 'authFlow.password.match'
+                  : 'authFlow.password.mismatch'
+                ) | translate
+              }}
             </span>
           }
         </div>
-        <app-password-field [control]="form.controls.confirm" inputId="reg-confirm" autocomplete="new-password" icon="lock_reset"
-          [placeholder]="'authFlow.password.confirmPlaceholder' | translate" [invalid]="showError('confirm')" />
+        <app-password-field
+          [control]="form.controls.confirm"
+          inputId="reg-confirm"
+          autocomplete="new-password"
+          icon="lock_reset"
+          [placeholder]="'authFlow.password.confirmPlaceholder' | translate"
+          [invalid]="showError('confirm')"
+        />
       </div>
 
       @if (error(); as key) {
-        <p role="alert" class="flex items-start gap-2 rounded-sm bg-error-container p-3 text-body-sm text-on-error-container">
+        <p
+          role="alert"
+          class="flex items-start gap-2 rounded-sm bg-error-container p-3 text-body-sm text-on-error-container"
+        >
           <span class="ms text-[16px]" aria-hidden="true">error</span>{{ key | translate }}
         </p>
       }
 
       <div class="space-y-3 pt-2">
-        <button type="submit" class="ops-btn-primary w-full" [disabled]="busy()" [attr.aria-busy]="busy()">
+        <button
+          type="submit"
+          class="ops-btn-primary w-full"
+          [disabled]="busy()"
+          [attr.aria-busy]="busy()"
+        >
           @if (busy()) {
             <span class="ms animate-spin text-[18px]" aria-hidden="true">progress_activity</span>
             <span>{{ 'authFlow.register.submitting' | translate }}</span>
@@ -89,55 +221,112 @@
       </div>
     </form>
 
-    <app-google-sign-in [showDivider]="true" [busy]="busy()" (credential)="signUpWithGoogle($event)" />
+    <app-google-sign-in
+      [showDivider]="true"
+      [busy]="busy()"
+      (credential)="signUpWithGoogle($event)"
+    />
     @if (googleError(); as key) {
-      <p role="alert" class="mt-3 rounded-sm bg-error-container p-3 text-body-sm text-on-error-container">{{ key | translate }}</p>
+      <p
+        role="alert"
+        class="mt-3 rounded-sm bg-error-container p-3 text-body-sm text-on-error-container"
+      >
+        {{ key | translate }}
+      </p>
     }
     @if (verifyEmail()) {
-      <p role="status" class="mt-3 rounded-sm bg-secondary-container p-3 text-body-sm text-on-secondary-container">{{ 'google.verifyEmail' | translate }}</p>
+      <p
+        role="status"
+        class="mt-3 rounded-sm bg-secondary-container p-3 text-body-sm text-on-secondary-container"
+      >
+        {{ 'google.verifyEmail' | translate }}
+      </p>
     }
 
-    <p class="mt-5 flex flex-wrap items-center justify-center gap-1 text-center text-body-sm text-on-surface-variant">
+    <p
+      class="mt-5 flex flex-wrap items-center justify-center gap-1 text-center text-body-sm text-on-surface-variant"
+    >
       <span>{{ 'authFlow.register.haveAccount' | translate }}</span>
-      <a routerLink="/login" [queryParams]="{ returnUrl: safeReturn() }" class="ops-link flex items-center gap-0.5 font-semibold">
-        {{ 'authFlow.register.signIn' | translate }}<span class="ms text-[14px]" aria-hidden="true">arrow_outward</span>
+      <a
+        routerLink="/login"
+        [queryParams]="{ returnUrl: safeReturn() }"
+        class="ops-link flex items-center gap-0.5 font-semibold"
+      >
+        {{ 'authFlow.register.signIn' | translate
+        }}<span class="ms text-[14px]" aria-hidden="true">arrow_outward</span>
       </a>
     </p>
   </section>
 
   <aside class="space-y-4 lg:col-span-5">
-    <div class="relative overflow-hidden rounded-lg bg-surface-container-lowest p-6 shadow-[0_4px_24px_-4px_rgba(19,27,46,0.06)]">
-      <div class="pointer-events-none absolute -top-12 -right-12 size-36 rounded-full bg-secondary-container/30 blur-2xl" aria-hidden="true"></div>
+    <div
+      class="relative overflow-hidden rounded-lg bg-surface-container-lowest p-6 shadow-[0_4px_24px_-4px_rgba(19,27,46,0.06)]"
+    >
+      <div
+        class="pointer-events-none absolute -top-12 -right-12 size-36 rounded-full bg-secondary-container/30 blur-2xl"
+        aria-hidden="true"
+      ></div>
       <div class="mb-3 flex items-center gap-2">
-        <div class="grid size-8 place-items-center rounded-sm bg-secondary/10 text-secondary"><span class="ms text-[20px]" aria-hidden="true">hub</span></div>
+        <div class="grid size-8 place-items-center rounded-sm bg-secondary/10 text-secondary">
+          <span class="ms text-[20px]" aria-hidden="true">hub</span>
+        </div>
         <div>
-          <span class="text-label-caps uppercase text-secondary">{{ 'authFlow.register.multiEyebrow' | translate }}</span>
-          <h2 class="text-headline-md text-on-surface">{{ 'authFlow.register.multiTitle' | translate }}</h2>
+          <span class="text-label-caps uppercase text-secondary">{{
+            'authFlow.register.multiEyebrow' | translate
+          }}</span>
+          <h2 class="text-headline-md text-on-surface">
+            {{ 'authFlow.register.multiTitle' | translate }}
+          </h2>
         </div>
       </div>
-      <p class="text-body-md text-on-surface-variant">{{ 'authFlow.register.multiText' | translate }}</p>
+      <p class="text-body-md text-on-surface-variant">
+        {{ 'authFlow.register.multiText' | translate }}
+      </p>
     </div>
 
-    <div class="rounded-lg bg-surface-container-lowest p-6 shadow-[0_4px_24px_-4px_rgba(19,27,46,0.06)]">
+    <div
+      class="rounded-lg bg-surface-container-lowest p-6 shadow-[0_4px_24px_-4px_rgba(19,27,46,0.06)]"
+    >
       <div class="mb-3 flex items-center gap-2">
-        <div class="grid size-8 place-items-center rounded-sm bg-primary/10 text-primary"><span class="ms text-[20px]" aria-hidden="true">checklist</span></div>
-        <h2 class="text-headline-md text-on-surface">{{ 'authFlow.register.nextTitle' | translate }}</h2>
+        <div class="grid size-8 place-items-center rounded-sm bg-primary/10 text-primary">
+          <span class="ms text-[20px]" aria-hidden="true">checklist</span>
+        </div>
+        <h2 class="text-headline-md text-on-surface">
+          {{ 'authFlow.register.nextTitle' | translate }}
+        </h2>
       </div>
       <ol class="space-y-2">
-        @for (step of ['confirm', 'signIn', 'workspace']; track step; let i = $index) {
+        @for (
+          step of ['confirm', 'signIn', inviteToken() ? 'join' : 'workspace'];
+          track step;
+          let i = $index
+        ) {
           <li class="flex items-start gap-3 rounded-sm bg-surface-container-low p-3">
-            <span class="grid size-6 shrink-0 place-items-center rounded-sm bg-primary-fixed font-mono text-mono-timer text-on-primary-fixed">{{ i + 1 }}</span>
-            <span class="text-body-sm text-on-surface-variant">{{ 'authFlow.register.next.' + step | translate }}</span>
+            <span
+              class="grid size-6 shrink-0 place-items-center rounded-sm bg-primary-fixed font-mono text-mono-timer text-on-primary-fixed"
+              >{{ i + 1 }}</span
+            >
+            <span class="text-body-sm text-on-surface-variant">{{
+              'authFlow.register.next.' + step | translate
+            }}</span>
           </li>
         }
       </ol>
     </div>
 
     <div class="flex items-start gap-3 rounded-lg bg-surface-container-low p-4">
-      <div class="grid size-10 shrink-0 place-items-center rounded-full bg-primary-container text-on-primary"><span class="ms text-[20px]" aria-hidden="true">group_add</span></div>
+      <div
+        class="grid size-10 shrink-0 place-items-center rounded-full bg-primary-container text-on-primary"
+      >
+        <span class="ms text-[20px]" aria-hidden="true">group_add</span>
+      </div>
       <div>
-        <h2 class="text-headline-sm text-on-surface">{{ 'authFlow.register.teamTitle' | translate }}</h2>
-        <p class="mt-0.5 text-body-sm text-on-surface-variant">{{ 'authFlow.register.teamText' | translate }}</p>
+        <h2 class="text-headline-sm text-on-surface">
+          {{ 'authFlow.register.teamTitle' | translate }}
+        </h2>
+        <p class="mt-0.5 text-body-sm text-on-surface-variant">
+          {{ 'authFlow.register.teamText' | translate }}
+        </p>
       </div>
     </div>
   </aside>

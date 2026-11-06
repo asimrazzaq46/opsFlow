@@ -103,7 +103,7 @@
       "chooseAgent": "Scegli un agente",
       "noAgents": "Nessun altro agente attivo",
       "inactiveAgent": "Inattivo",
-      "reopenHint": "La riapertura avvia un nuovo ciclo SLA."
+      "reopenHint": "La riapertura avvia un nuovo ciclo di scadenze."
     },
     "errors": {
       "conflict": "Il ticket è stato modificato da qualcun altro. È stato ricaricato.",
@@ -111,12 +111,12 @@
       "generic": "Azione non riuscita."
     },
     "sla": {
-      "title": "Storico SLA",
+      "title": "Scadenze ticket",
       "cycle": "Ciclo {{n}}",
       "started": "Inizio",
-      "responseDue": "Risposta entro",
+      "responseDue": "Scadenza prima risposta",
       "firstResponse": "Prima risposta",
-      "resolutionDue": "Risoluzione entro",
+      "resolutionDue": "Scadenza risoluzione",
       "resolvedAt": "Risolto",
       "reason": {
         "Initial": "Iniziale",
@@ -128,6 +128,10 @@
         "Met": "Rispettato",
         "Missed": "Mancato",
         "NotApplicable": "N/D"
+      },
+      "hint": {
+        "response": "Quando il team dovrebbe rispondere per la prima volta.",
+        "resolution": "Quando il ticket dovrebbe essere risolto."
       }
     },
     "breadcrumb": "Percorso",
@@ -137,7 +141,7 @@
       "views": {
         "all": "Tutti i ticket",
         "open": "Aperti",
-        "overdue": "SLA scaduto",
+        "overdue": "Risoluzione in ritardo",
         "unstaffed": "Da assegnare",
         "finished": "Risolti e chiusi"
       },
@@ -149,7 +153,7 @@
       "caption": "Ticket corrispondenti ai filtri attuali",
       "col": {
         "id": "Ticket",
-        "slaDue": "Scadenza risoluzione SLA",
+        "slaDue": "Scadenza risoluzione",
         "updated": "Aggiornato"
       },
       "internal": "Interno",
@@ -158,7 +162,12 @@
       "noMatches": "Nessun ticket corrisponde a questi filtri.",
       "invalidFilter": "Questi filtri non sono supportati. Azzerali e riprova.",
       "pageSize": "Righe per pagina",
-      "pageN": "Pagina {{n}}"
+      "pageN": "Pagina {{n}}",
+      "scope": {
+        "all": "Tutti i ticket",
+        "mine": "I miei ticket"
+      },
+      "scopeLabel": "Ambito dei ticket"
     },
     "create": {
       "title": "Crea ticket",
@@ -173,7 +182,7 @@
       "agentSelfAssigned": "I ticket che crei vengono assegnati automaticamente a te.",
       "customerRouting": "Il nostro team imposta la priorità e assegna l'agente più adatto.",
       "afterTitle": "Cosa succede dopo",
-      "afterText": "Il ticket riceve un numero e uno SLA in base alla priorità. Risposte e cambi di stato compaiono nella pagina del ticket appena avvengono.",
+      "afterText": "Il ticket riceve un numero e delle scadenze in base alla priorità. Risposte e cambi di stato compaiono nella pagina del ticket appena avvengono.",
       "priorityHint": {
         "Low": "Problema minore o domanda",
         "Medium": "Impatto normale sul lavoro",
@@ -187,8 +196,10 @@
       "sections": "Sezioni del ticket",
       "properties": "Proprietà",
       "created": "Creato",
-      "slaState": "Stato SLA",
-      "remaining": "{{time}} rimanenti"
+      "slaState": "Stato scadenze",
+      "remaining": "{{time}} rimanenti",
+      "notAssigned": "Questo ticket non è assegnato a te. Puoi leggerne il riepilogo e le scadenze; solo gli agenti assegnati possono lavorarci.",
+      "restricted": "Questa sezione è disponibile agli agenti assegnati al ticket."
     },
     "activity": {
       "title": "Attività",
@@ -205,14 +216,39 @@
         "StatusChanged": "Stato modificato",
         "Resolved": "Ticket risolto",
         "Reopened": "Ticket riaperto",
-        "SlaCycleStarted": "Ciclo SLA avviato",
-        "SlaCycleCompleted": "Ciclo SLA completato",
+        "SlaCycleStarted": "Ciclo di scadenze avviato",
+        "SlaCycleCompleted": "Ciclo di scadenze completato",
         "AttachmentAdded": "Allegato aggiunto",
         "TaskCreated": "Attività figlia creata",
         "TaskDetailsUpdated": "Attività figlia aggiornata",
         "TaskStatusChanged": "Stato dell'attività figlia modificato",
         "TaskAssigned": "Attività figlia riassegnata",
         "TasksReordered": "Attività figlie riordinate"
+      },
+      "actor": {
+        "system": "Sistema",
+        "support": "Team di supporto",
+        "unknown": "Ex membro del team"
+      },
+      "did": {
+        "Created": "ha creato il ticket",
+        "DetailsUpdated": "ha aggiornato i dettagli del ticket",
+        "PriorityChanged": "ha cambiato la priorità da {{from}} a {{to}}",
+        "CategoryChanged": "ha cambiato la categoria",
+        "AgentAssigned": "ha assegnato {{agent}} al ticket",
+        "Claimed": "ha preso in carico il ticket",
+        "AgentUnassigned": "ha rimosso {{agent}} dal ticket",
+        "StatusChanged": "ha cambiato lo stato da {{from}} a {{to}}",
+        "Resolved": "ha risolto il ticket",
+        "Reopened": "ha riaperto il ticket",
+        "SlaCycleStarted": "ha avviato un nuovo ciclo di scadenze",
+        "SlaCycleCompleted": "ha completato il ciclo di scadenze",
+        "AttachmentAdded": "ha aggiunto un allegato",
+        "TaskCreated": "ha creato un'attività figlia",
+        "TaskDetailsUpdated": "ha modificato un'attività figlia",
+        "TaskStatusChanged": "ha cambiato lo stato di un'attività figlia",
+        "TaskAssigned": "ha assegnato un'attività figlia",
+        "TasksReordered": "ha riordinato le attività figlie"
       }
     },
     "edit": {
@@ -222,7 +258,7 @@
       "basedOn": "Modifica della versione {{version}}",
       "unsaved": "Modifiche non salvate",
       "save": "Salva modifiche",
-      "priorityHint": "Cambiare la priorità ricalcola gli obiettivi dello SLA attivo.",
+      "priorityHint": "Cambiare la priorità ricalcola le scadenze attive.",
       "customerHint": "Puoi modificare titolo e descrizione finché il ticket è aperto.",
       "staleWarning": "Qualcuno ha aggiornato questo ticket mentre lo modificavi. Il salvataggio potrebbe segnalare un conflitto.",
       "conflictTitle": "Conflitto di versione: la versione {{from}} è stata sostituita dalla {{to}}",
@@ -348,12 +384,12 @@
       "TicketReopened": "Riaperto: {{subject}}",
       "MessageReceived": "Nuovo messaggio su {{subject}}",
       "NoteAdded": "Nuova nota interna su {{subject}}",
-      "SlaWarning": "Scadenza SLA in arrivo: {{subject}}",
-      "SlaBreached": "SLA violato: {{subject}}"
+      "SlaWarning": "In scadenza: {{subject}}",
+      "SlaBreached": "In ritardo: {{subject}}"
     },
     "slaKinds": {
-      "FirstResponse": "prima risposta",
-      "Resolution": "risoluzione"
+      "FirstResponse": "scadenza prima risposta",
+      "Resolution": "scadenza risoluzione"
     }
   },
   "realtime": {
@@ -383,22 +419,34 @@
     "currentState": "Situazione attuale",
     "period": "Periodo selezionato",
     "sample": "Su {{n}} ticket con risposta",
-    "slaDetail": "{{met}} rispettati · {{breached}} violati",
+    "slaDetail": "{{met}} nei tempi · {{breached}} in ritardo",
     "kpi": {
       "open": "Ticket aperti",
       "unassigned": "Non assegnati",
-      "overdue": "In ritardo",
+      "overdue": "Risoluzione in ritardo",
       "resolvedToday": "Risolti oggi",
       "avgFirstResponse": "Prima risposta media",
-      "slaCompliance": "Conformità SLA",
+      "slaCompliance": "Risolti nei tempi",
       "created": "Creati",
-      "resolved": "Risolti"
+      "resolved": "Risolti",
+      "openWorkspace": "Aperti nel workspace",
+      "assignedToMe": "Assegnati a me"
     },
     "charts": {
       "trend": "Creati e risolti",
       "status": "Ticket aperti per stato",
       "priority": "Distribuzione per priorità",
       "workload": "Carico degli agenti"
+    },
+    "hint": {
+      "open": "I tuoi ticket aperti.",
+      "openWorkspace": "Ticket aperti di tutto il workspace.",
+      "assignedToMe": "Ticket aperti assegnati a te.",
+      "unassigned": "Ticket aperti senza ancora un agente attivo.",
+      "overdue": "Ticket aperti la cui scadenza di risoluzione è passata.",
+      "resolvedToday": "Ticket risolti oggi nel fuso orario del workspace.",
+      "avgFirstResponse": "Tempo medio prima che il team risponda al cliente.",
+      "slaCompliance": "Quota di ticket risolti entro la scadenza di risoluzione nel periodo selezionato."
     }
   },
   "kanban": {
@@ -408,14 +456,57 @@
     "empty": "Nessun ticket",
     "more": "Altri {{n}} non mostrati — restringi i filtri",
     "assignees": "{{n}} assegnati",
-    "due": "Scadenza",
+    "due": "Scadenza risoluzione",
     "overdue": "In ritardo dal",
     "moveTo": "Sposta in",
     "errors": {
       "conflict": "Qualcun altro ha modificato questo ticket. La bacheca è stata aggiornata.",
       "forbidden": "Non puoi spostare questo ticket.",
       "invalid": "Questo cambio di stato non è consentito.",
-      "generic": "Impossibile spostare il ticket."
+      "generic": "Impossibile spostare il ticket.",
+      "reopen": "Impossibile riaprire il ticket."
+    },
+    "reopening": "Riapertura in corso…",
+    "reopened": "Ticket riaperto. È iniziato un nuovo ciclo SLA.",
+    "mineOnly": "Solo i miei ticket",
+    "notAssignedToYou": "Non assegnato a te",
+    "assign": {
+      "open": "Assegna agenti",
+      "unassigned": "Non assegnato",
+      "search": "Cerca agenti",
+      "agents": "Agenti",
+      "you": "tu",
+      "assigned": "Già assegnato",
+      "none": "Nessun agente corrispondente.",
+      "loadError": "Impossibile caricare gli agenti.",
+      "saving": "Assegnazione in corso…",
+      "errors": {
+        "conflict": "Il ticket è cambiato o l'agente è già assegnato. La bacheca è stata aggiornata.",
+        "forbidden": "Non puoi assegnare agenti a questo ticket.",
+        "invalid": "Si possono assegnare solo Agenti attivi di questo workspace.",
+        "generic": "Impossibile salvare l'assegnazione."
+      }
+    },
+    "tasks": {
+      "summary": "Attività figlie {{done}}/{{total}} completate",
+      "list": "Attività figlie",
+      "complete": "Segna \"{{title}}\" come completata",
+      "reopen": "Riapri \"{{title}}\"",
+      "titleLabel": "Titolo della nuova attività figlia",
+      "placeholder": "Titolo dell'attività, poi Invio",
+      "assignee": "Assegnatario",
+      "claimFirst": "Prendi prima in carico il ticket per aggiungere attività figlie. Il testo scritto viene conservato.",
+      "claim": "Prendi in carico",
+      "claiming": "Presa in carico…",
+      "save": "Aggiungi",
+      "saving": "Aggiunta in corso…",
+      "cancel": "Annulla",
+      "errors": {
+        "conflict": "Le attività sono cambiate e sono state ricaricate.",
+        "forbidden": "Non puoi modificare queste attività.",
+        "invalid": "Inserisci un titolo da 1 a 200 caratteri.",
+        "generic": "Operazione sull'attività non riuscita. Riprova."
+      }
     }
   },
   "reports": {
@@ -466,7 +557,8 @@
     "title": "Team",
     "name": "Nome",
     "role": "Ruolo",
-    "loadError": "Impossibile caricare il team."
+    "loadError": "Impossibile caricare il team.",
+    "readOnly": "Solo proprietari e manager possono invitare persone in questa organizzazione."
   },
   "invitations": {
     "title": "Inviti",
@@ -498,7 +590,7 @@
       "signInText": "Accedi con l'indirizzo email invitato. Tornerai qui per accettare.",
       "signIn": "Accedi per accettare",
       "register": "Crea un account",
-      "registerHint": "Nuovo su OpsFlow? Registrati con l'indirizzo invitato, conferma l'email e poi apri di nuovo questo link di invito.",
+      "registerHint": "Nuovo su OpsFlow? Crea un account con l'indirizzo invitato e conferma l'email. Dopo l'accesso tornerai a questo invito.",
       "joinedTitle": "Sei entrato in {{name}}",
       "joinedText": "La tua iscrizione è attiva.",
       "open": "Apri workspace",
@@ -509,8 +601,17 @@
       "mismatchText": "L'invito è stato inviato a un altro indirizzo oppure la tua email non è ancora confermata. Accedi con l'account invitato.",
       "conflictTitle": "Impossibile entrare",
       "conflictText": "Il workspace è stato modificato nel frattempo. Riprova.",
-      "failedTitle": "Impossibile accettare l'invito"
-    }
+      "failedTitle": "Impossibile accettare l'invito",
+      "titleFor": "Sei stato invitato in {{name}}",
+      "invitedEmail": "Indirizzo invitato",
+      "expiredText": "Questo invito è scaduto. Chiedi a chi ti ha invitato di inviarne uno nuovo.",
+      "unavailableText": "Questo invito non è valido, è già stato usato o è stato revocato. Chiedi a chi ti ha invitato un nuovo invito.",
+      "mismatchKnown": "Questo invito è stato inviato a {{invited}}, ma hai effettuato l'accesso come {{current}}. Usa un altro account per continuare."
+    },
+    "sending": "Invio in corso…",
+    "revoked": "Invito revocato.",
+    "timeout": "La richiesta sta impiegando troppo tempo. Controlla la connessione e riprova.",
+    "loadError": "Impossibile caricare gli inviti in sospeso."
   },
   "google": {
     "or": "oppure",
@@ -594,7 +695,8 @@
     "errors": {
       "generic": "Si è verificato un errore. Riprova.",
       "network": "Impossibile raggiungere il server. Controlla la connessione e riprova.",
-      "rateLimited": "Troppi tentativi. Attendi un minuto e riprova."
+      "rateLimited": "Troppi tentativi. Attendi un minuto e riprova.",
+      "timeout": "La richiesta sta impiegando troppo tempo. Controlla la connessione e riprova."
     },
     "password": {
       "new": "Nuova password",
@@ -626,7 +728,7 @@
         "text": "I clienti aprono ticket; i manager li smistano e li assegnano agli agenti."
       },
       "sla": {
-        "title": "Monitoraggio SLA",
+        "title": "Scadenze ticket",
         "text": "Obiettivi di risposta e risoluzione per priorità, con avvisi di ritardo."
       },
       "board": {
@@ -639,8 +741,6 @@
       }
     },
     "register": {
-      "crumbStep": "Passo 1",
-      "crumbName": "Crea account",
       "eyebrow": "Nuovo account",
       "title": "Crea il tuo account OpsFlow",
       "subtitle": "L'account è personale. Dopo l'accesso potrai creare un workspace o accettare un invito.",
@@ -659,14 +759,16 @@
       "next": {
         "confirm": "Apri il link di conferma che ti inviamo via email.",
         "signIn": "Accedi con email e password.",
-        "workspace": "Crea il tuo workspace oppure accetta un invito del tuo team."
+        "workspace": "Crea il tuo workspace oppure accetta un invito del tuo team.",
+        "join": "Torna al tuo invito e accettalo per unirti all'organizzazione."
       },
       "teamTitle": "Entri in un team esistente?",
-      "teamText": "Chiedi a un proprietario o a un manager di invitare il tuo indirizzo email, poi apri il link dell'invito dopo l'accesso."
+      "teamText": "Chiedi a un proprietario o a un manager di invitare il tuo indirizzo email, poi apri il link dell'invito dopo l'accesso.",
+      "inviteBanner": "Sei stato invitato a unirti a {{workspace}} come {{role}}. Registrati con l'indirizzo invitato per continuare.",
+      "inviteUnavailable": "Questo invito non può più essere usato. Puoi comunque creare un account; chiedi poi un nuovo invito.",
+      "emailLocked": "L'invito è stato inviato a questo indirizzo, quindi non può essere modificato. Qui inviamo un link di conferma prima che tu possa accedere."
     },
     "confirm": {
-      "step": "Passo 2 di 3",
-      "stepName": "Conferma email",
       "inboxTitle": "Conferma il tuo indirizzo email",
       "inboxText": "Se l'indirizzo può essere registrato, ti abbiamo inviato un link di conferma. Apri il link per attivare l'account.",
       "verifyingTitle": "Conferma dell'email in corso…",
@@ -676,11 +778,15 @@
       "invalidTitle": "Questo link non può essere usato",
       "invalidText": "Il link di conferma non è valido, è già stato usato o è scaduto. Richiedine uno nuovo qui sotto.",
       "continue": "Continua all'accesso",
-      "resendLabel": "Invia un nuovo link di conferma",
-      "resend": "Invia link",
+      "resendLabel": "Reinvia l'email di conferma",
+      "resend": "Reinvia l'email di conferma",
       "resent": "Se esiste un account non confermato per questo indirizzo, è in arrivo un nuovo link.",
       "spamHint": "Non lo trovi? Controlla la cartella spam o posta indesiderata.",
-      "otherEmail": "Usa un'altra email"
+      "otherEmail": "Usa un'altra email",
+      "inboxNext": "Abbiamo già inviato l'email di conferma quando hai creato l'account. Apri il link al suo interno oppure reinviala qui sotto.",
+      "inboxInvited": "Abbiamo già inviato l'email di conferma quando hai creato l'account. Dopo la conferma, accedi e tornerai al tuo invito.",
+      "confirmedInvited": "Dopo aver effettuato l'accesso tornerai al tuo invito per accettarlo.",
+      "confirmedOtherDevice": "Ti unisci a un team? Dopo l'accesso, apri di nuovo il link di invito ricevuto via email."
     },
     "forgot": {
       "crumb": "Recupero account",
@@ -736,6 +842,13 @@
       },
       "notYouTitle": "Non l'hai richiesto tu?",
       "notYouText": "Ignora l'email. La password cambia solo quando invii questo modulo."
+    },
+    "steps": {
+      "label": "Avanzamento della configurazione account",
+      "create": "Crea account",
+      "verify": "Verifica l'email",
+      "join": "Unisciti all'organizzazione",
+      "workspace": "Configura l'organizzazione"
     }
   },
   "workspaces": {
@@ -755,9 +868,11 @@
       "clear": "Cancella ricerca",
       "newEyebrow": "Nuovo workspace",
       "newTitle": "Ti serve uno spazio separato per un altro team o cliente?",
-      "newText": "Crea un workspace con ticket, membri, categorie e policy SLA propri. Ne diventerai il proprietario.",
+      "newText": "Crea un workspace con ticket, membri, categorie e obiettivi di risposta e risoluzione propri. Ne diventerai il proprietario.",
       "create": "Crea workspace",
-      "signedInAs": "Accesso effettuato come"
+      "signedInAs": "Accesso effettuato come",
+      "pendingInvitation": "Hai un invito in attesa. Continua per unirti all'organizzazione.",
+      "continueInvitation": "Continua con l'invito"
     },
     "setup": {
       "eyebrow": "Nuovo workspace",
@@ -783,7 +898,7 @@
           "text": "Impostazioni e categorie dei ticket vengono create automaticamente."
         },
         "sla": {
-          "title": "Policy SLA predefinite",
+          "title": "Obiettivi di risposta e risoluzione predefiniti",
           "text": "Obiettivi di risposta e risoluzione per priorità, pronti da modificare."
         },
         "team": {

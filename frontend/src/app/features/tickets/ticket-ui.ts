@@ -1,7 +1,14 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { TicketPriority, TicketStatus } from '../../core/api/generated/models';
 
-export const TICKET_STATUSES: TicketStatus[] = ['Open', 'Assigned', 'InProgress', 'OnHold', 'Resolved', 'Closed'];
+export const TICKET_STATUSES: TicketStatus[] = [
+  'Open',
+  'Assigned',
+  'InProgress',
+  'OnHold',
+  'Resolved',
+  'Closed',
+];
 export const TICKET_PRIORITIES: TicketPriority[] = ['Low', 'Medium', 'High', 'Urgent'];
 
 // Badges always carry their text label; color only reinforces it.
@@ -25,7 +32,9 @@ export const httpStatus = (e: unknown): number => (e instanceof HttpErrorRespons
 
 /** Stable `code` of an RFC 9457 problem body, when the server sent one. */
 export const problemCode = (e: unknown): string | undefined =>
-  e instanceof HttpErrorResponse ? ((e.error as { code?: string } | null)?.code ?? undefined) : undefined;
+  e instanceof HttpErrorResponse
+    ? ((e.error as { code?: string } | null)?.code ?? undefined)
+    : undefined;
 
 /** First message per field of a 400 validation problem, keyed by the server's (PascalCase) field name. */
 export function fieldErrors(e: unknown): Record<string, string> {

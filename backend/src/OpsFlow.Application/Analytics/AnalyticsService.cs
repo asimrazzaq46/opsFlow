@@ -66,6 +66,7 @@ public sealed class AnalyticsService(IOpsFlowDbContext db, TicketAccess access, 
         var openCount = await open.CountAsync(ct);
 
         int unassigned = 0, overdue = 0, firstSample = 0;
+        int? assignedToMe = null;
         SlaComplianceDto? sla = null;
         double? avgFirst = null;
         IReadOnlyList<WorkloadDto>? workload = null;
@@ -73,6 +74,8 @@ public sealed class AnalyticsService(IOpsFlowDbContext db, TicketAccess access, 
         {
             var effective = access.EffectiveAssignments();
             unassigned = await open.CountAsync(t => !effective.Any(a => a.TicketId == t.Id), ct);
+            var me = actor.MembershipId;
+            assignedToMe = await open.CountAsync(t => db.TicketAssignments.Any(a => a.TicketId == t.Id && a.MembershipId == me && a.UnassignedAtUtc == null), ct);
             var overdueIds = OverdueTicketIds(now);
             overdue = await open.CountAsync(t => overdueIds.Contains(t.Id), ct);
             sla = await SlaAsync(cycles, range, ct);
@@ -87,7 +90,7 @@ public sealed class AnalyticsService(IOpsFlowDbContext db, TicketAccess access, 
         var byPriority = (await scope.Where(t => t.CreatedAtUtc >= range.FromUtc && t.CreatedAtUtc < range.ToUtc).GroupBy(t => t.Priority).Select(g => new { g.Key, N = g.Count() }).ToListAsync(ct))
             .OrderBy(x => x.Key).Select(x => new CountByDto(x.Key.ToString(), x.N)).ToList();
 
-        return new DashboardDto(now, tz.Id, range.FromUtc, range.ToUtc, range.Monthly ? "month" : "day", new CurrentStateDto(openCount, unassigned, overdue, resolvedToday),
+        return new DashboardDto(now, tz.Id, range.FromUtc, range.ToUtc, range.Monthly ? "month" : "day", new CurrentStateDto(openCount, unassigned, overdue, resolvedToday, assignedToMe),
             created, trend.Sum(p => p.Resolved), avgFirst, firstSample, sla, trend, byStatus, byPriority, workload);
     }
 

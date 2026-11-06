@@ -1,5 +1,13 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnInit,
+  computed,
+  inject,
+  input,
+  signal,
+} from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
@@ -36,13 +44,24 @@ export class ResetPassword implements OnInit {
   protected readonly error = signal<string | null>(null);
   protected readonly form = new FormGroup(
     {
-      password: new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.minLength(PASSWORD_MIN), Validators.maxLength(PASSWORD_MAX)] }),
+      password: new FormControl('', {
+        nonNullable: true,
+        validators: [
+          Validators.required,
+          Validators.minLength(PASSWORD_MIN),
+          Validators.maxLength(PASSWORD_MAX),
+        ],
+      }),
       confirm: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
     },
     { validators: passwordsMatch },
   );
-  private readonly value = toSignal(this.form.valueChanges, { initialValue: this.form.getRawValue() });
-  protected readonly lengthOk = computed(() => (this.value().password ?? '').length >= PASSWORD_MIN);
+  private readonly value = toSignal(this.form.valueChanges, {
+    initialValue: this.form.getRawValue(),
+  });
+  protected readonly lengthOk = computed(
+    () => (this.value().password ?? '').length >= PASSWORD_MIN,
+  );
   protected readonly matchState = computed(() => {
     const { password, confirm } = this.value();
     return !confirm ? 'pending' : password === confirm ? 'match' : 'mismatch';
@@ -57,7 +76,8 @@ export class ResetPassword implements OnInit {
     } else {
       this.view.set('invalid');
     }
-    if (email !== undefined || token !== undefined) void this.router.navigate([], { queryParams: {}, replaceUrl: true });
+    if (email !== undefined || token !== undefined)
+      void this.router.navigate([], { queryParams: {}, replaceUrl: true });
   }
 
   protected showError(name: 'password' | 'confirm'): boolean {
@@ -71,23 +91,25 @@ export class ResetPassword implements OnInit {
     if (this.form.invalid || this.busy() || !this.link) return;
     this.busy.set(true);
     this.error.set(null);
-    this.api.resetPassword(this.link.email, this.link.token, this.form.controls.password.value).subscribe({
-      next: () => {
-        this.link = null;
-        this.form.reset();
-        this.view.set('done');
-        this.busy.set(false);
-      },
-      error: (err: unknown) => {
-        this.busy.set(false);
-        if (err instanceof HttpErrorResponse && err.status === 400) {
-          // A field error means the password broke the server policy; anything else is a used, expired or forged link.
-          if (err.error?.errors?.newPassword) return this.error.set('authFlow.reset.policy');
+    this.api
+      .resetPassword(this.link.email, this.link.token, this.form.controls.password.value)
+      .subscribe({
+        next: () => {
           this.link = null;
-          return this.view.set('invalid');
-        }
-        this.error.set(requestErrorKey(err));
-      },
-    });
+          this.form.reset();
+          this.view.set('done');
+          this.busy.set(false);
+        },
+        error: (err: unknown) => {
+          this.busy.set(false);
+          if (err instanceof HttpErrorResponse && err.status === 400) {
+            // A field error means the password broke the server policy; anything else is a used, expired or forged link.
+            if (err.error?.errors?.newPassword) return this.error.set('authFlow.reset.policy');
+            this.link = null;
+            return this.view.set('invalid');
+          }
+          this.error.set(requestErrorKey(err));
+        },
+      });
   }
 }

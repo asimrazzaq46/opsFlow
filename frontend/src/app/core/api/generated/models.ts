@@ -31,6 +31,8 @@ export type { GoogleLinkChallengeRequest } from './models/google-link-challenge-
 export type { HealthResponse } from './models/health-response';
 export type { IFormFile } from './models/i-form-file';
 export type { InvitationDto } from './models/invitation-dto';
+export type { InvitationPreviewDto } from './models/invitation-preview-dto';
+export type { InvitationPreviewState } from './models/invitation-preview-state';
 export type { LoginRequest } from './models/login-request';
 export type { LogoutRequest } from './models/logout-request';
 export type { MemberDto } from './models/member-dto';
@@ -44,6 +46,7 @@ export type { PagedResultOfTicketActivityDto } from './models/paged-result-of-ti
 export type { PagedResultOfTicketMessageDto } from './models/paged-result-of-ticket-message-dto';
 export type { PagedResultOfTicketNoteDto } from './models/paged-result-of-ticket-note-dto';
 export type { PagedResultOfTicketSummaryDto } from './models/paged-result-of-ticket-summary-dto';
+export type { PreviewInvitationRequest } from './models/preview-invitation-request';
 export type { ProblemResponse } from './models/problem-response';
 export type { ReassignTicketTaskRequest } from './models/reassign-ticket-task-request';
 export type { RefreshRequest } from './models/refresh-request';

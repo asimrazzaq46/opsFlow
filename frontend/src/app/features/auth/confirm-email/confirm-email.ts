@@ -1,11 +1,21 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnInit,
+  computed,
+  inject,
+  input,
+  signal,
+} from '@angular/core';
 import { Location } from '@angular/common';
 import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { TranslatePipe } from '@ngx-translate/core';
+import { PendingInvitation, invitationTokenFrom } from '../../../core/auth/pending-invitation';
 import { safeReturnUrl } from '../../../core/auth/return-url';
 import { AuthApi, requestErrorKey } from '../auth-api';
+import { FlowSteps } from '../ui/flow-steps/flow-steps';
 
 type View = 'inbox' | 'verifying' | 'confirmed' | 'invalid';
 
@@ -16,7 +26,7 @@ type View = 'inbox' | 'verifying' | 'confirmed' | 'invalid';
  */
 @Component({
   selector: 'app-confirm-email',
-  imports: [ReactiveFormsModule, RouterLink, TranslatePipe],
+  imports: [ReactiveFormsModule, RouterLink, TranslatePipe, FlowSteps],
   templateUrl: './confirm-email.html',
   styleUrl: './confirm-email.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -25,18 +35,26 @@ export class ConfirmEmail implements OnInit {
   private readonly api = inject(AuthApi);
   private readonly router = inject(Router);
   private readonly location = inject(Location);
+  private readonly pending = inject(PendingInvitation);
 
   readonly userId = input<string | undefined>();
   readonly token = input<string | undefined>();
   readonly returnUrl = input<string | undefined>();
   protected readonly safeReturn = computed(() => safeReturnUrl(this.returnUrl()));
+  /** An invitation continues after sign-in: from this tab's return URL or, after a link opened in another tab, the pending invitation. */
+  protected readonly invited = computed(
+    () => invitationTokenFrom(this.safeReturn()) !== null || this.pending.token() !== null,
+  );
 
   protected readonly view = signal<View>('inbox');
   protected readonly sentTo = signal<string | null>(null);
   protected readonly error = signal<string | null>(null);
   protected readonly resendBusy = signal(false);
   protected readonly resendResult = signal<'sent' | string | null>(null);
-  protected readonly email = new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.email] });
+  protected readonly email = new FormControl('', {
+    nonNullable: true,
+    validators: [Validators.required, Validators.email],
+  });
 
   ngOnInit(): void {
     const state = this.location.getState() as { email?: unknown } | null;
@@ -48,7 +66,10 @@ export class ConfirmEmail implements OnInit {
     const userId = this.userId();
     const token = this.token();
     if (userId === undefined && token === undefined) return;
-    void this.router.navigate([], { queryParams: { returnUrl: this.safeReturn() }, replaceUrl: true });
+    void this.router.navigate([], {
+      queryParams: { returnUrl: this.safeReturn() },
+      replaceUrl: true,
+    });
     if (!userId || !token) return this.view.set('invalid');
 
     this.view.set('verifying');
@@ -56,7 +77,8 @@ export class ConfirmEmail implements OnInit {
       next: () => this.view.set('confirmed'),
       error: (err: unknown) => {
         this.view.set('invalid');
-        if (!(err instanceof HttpErrorResponse && err.status === 400)) this.error.set(requestErrorKey(err));
+        if (!(err instanceof HttpErrorResponse && err.status === 400))
+          this.error.set(requestErrorKey(err));
       },
     });
   }

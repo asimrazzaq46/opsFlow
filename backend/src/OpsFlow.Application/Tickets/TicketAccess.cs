@@ -108,20 +108,26 @@ public sealed class TicketAccess(
     public IQueryable<Ticket> Visible(TicketActor actor) =>
         actor.Role switch
         {
-            TenantRole.TenantOwner or TenantRole.Manager => db.Tickets,
-            TenantRole.Agent => db.Tickets.Where(t =>
-                t.CreatedByUserId == actor.UserId
-                || db.TicketAssignments.Any(a =>
-                    a.TicketId == t.Id
-                    && a.MembershipId == actor.MembershipId
-                    && a.UnassignedAtUtc == null
-                )
-            ),
+            // Active staff discover every ticket of the (query-filtered) current tenant; assignment decides responsibility, not discovery.
+            TenantRole.TenantOwner or TenantRole.Manager or TenantRole.Agent => db.Tickets,
             _ => db.Tickets.Where(t =>
                 t.CustomerId != null
                 && db.Customers.Any(c => c.Id == t.CustomerId && c.UserId == actor.UserId)
             ),
         };
+
+    /// <summary>
+    /// Whether the actor may change, or open the responsibility-sensitive parts of (customer chat, internal notes, attachments, child tasks),
+    /// a ticket they can see. Owners and Managers manage every ticket and Customers are governed by their own rules; an Agent needs an
+    /// OPEN assignment on it, because seeing a ticket in the workspace is not responsibility for it (a former assignment grants nothing).
+    /// </summary>
+    public async Task<bool> MayWorkOnAsync(TicketActor actor, Guid ticketId, CancellationToken ct) =>
+        actor.Role != TenantRole.Agent
+        || await IsActiveAssigneeAsync(ticketId, actor.MembershipId, ct);
+
+    public const string AgentMustBeAssigned = "Agents can only change tickets assigned to them.";
+
+    public const string AgentMustBeAssignedToOpen = "Agents can open this part of a ticket only while it is assigned to them.";
 
     public Task<bool> IsActiveAssigneeAsync(
         Guid ticketId,

@@ -35,7 +35,9 @@ export class TicketCreate {
   protected readonly priorityBadge = PRIORITY_BADGE;
   protected readonly titleMax = TITLE_MAX;
   protected readonly descriptionMax = DESCRIPTION_MAX;
-  protected readonly isManager = computed(() => this.tenant.role() === 'TenantOwner' || this.tenant.role() === 'Manager');
+  protected readonly isManager = computed(
+    () => this.tenant.role() === 'TenantOwner' || this.tenant.role() === 'Manager',
+  );
 
   protected readonly categories = rxResource({
     params: () => this.tenant.tenantId() ?? undefined,
@@ -43,11 +45,15 @@ export class TicketCreate {
   });
   protected readonly customers = rxResource({
     params: () => (this.isManager() ? this.tenant.tenantId() : null) ?? undefined,
-    stream: () => this.gql.query(CustomersDocument, { isActive: true, pageSize: 100 }).pipe(map((r) => r.customers.items)),
+    stream: () =>
+      this.gql
+        .query(CustomersDocument, { isActive: true, pageSize: 100 })
+        .pipe(map((r) => r.customers.items)),
   });
   protected readonly agents = rxResource({
     params: () => (this.isManager() ? this.tenant.tenantId() : null) ?? undefined,
-    stream: () => this.api.members().pipe(map((m) => m.filter((x) => x.role === 'Agent' && x.isActive))),
+    stream: () =>
+      this.api.members().pipe(map((m) => m.filter((x) => x.role === 'Agent' && x.isActive))),
   });
 
   protected readonly selected = signal<ReadonlySet<string>>(new Set());
@@ -55,14 +61,26 @@ export class TicketCreate {
   protected readonly error = signal<string | null>(null);
   protected readonly serverErrors = signal<Record<string, string>>({});
   protected readonly form = new FormGroup({
-    title: new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.minLength(3), Validators.maxLength(TITLE_MAX)] }),
-    description: new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.maxLength(DESCRIPTION_MAX)] }),
+    title: new FormControl('', {
+      nonNullable: true,
+      validators: [Validators.required, Validators.minLength(3), Validators.maxLength(TITLE_MAX)],
+    }),
+    description: new FormControl('', {
+      nonNullable: true,
+      validators: [Validators.required, Validators.maxLength(DESCRIPTION_MAX)],
+    }),
     categoryId: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
     priority: new FormControl<TicketPriority>('Medium', { nonNullable: true }),
     customerId: new FormControl('', { nonNullable: true }),
   });
-  protected readonly titleLength = toSignal(this.form.controls.title.valueChanges.pipe(map((v) => v.length)), { initialValue: 0 });
-  protected readonly descriptionLength = toSignal(this.form.controls.description.valueChanges.pipe(map((v) => v.length)), { initialValue: 0 });
+  protected readonly titleLength = toSignal(
+    this.form.controls.title.valueChanges.pipe(map((v) => v.length)),
+    { initialValue: 0 },
+  );
+  protected readonly descriptionLength = toSignal(
+    this.form.controls.description.valueChanges.pipe(map((v) => v.length)),
+    { initialValue: 0 },
+  );
 
   protected invalid(name: 'title' | 'description' | 'categoryId'): boolean {
     const c = this.form.controls[name];
@@ -101,7 +119,13 @@ export class TicketCreate {
           this.saving.set(false); // the typed input is kept for a correction or retry
           this.serverErrors.set(fieldErrors(e));
           const status = httpStatus(e);
-          this.error.set(status === 403 ? 'tickets.form.forbidden' : status === 400 ? 'tickets.form.invalid' : 'tickets.form.error');
+          this.error.set(
+            status === 403
+              ? 'tickets.form.forbidden'
+              : status === 400
+                ? 'tickets.form.invalid'
+                : 'tickets.form.error',
+          );
         },
       });
   }

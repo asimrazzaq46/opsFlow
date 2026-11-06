@@ -8,26 +8,67 @@ import { TenantService } from '../../core/auth/tenant.service';
 import { TicketList, parseTicketQuery } from './ticket-list';
 import { TicketQuery, TicketsApi } from './tickets-api';
 
-const page = (n: number): PagedResultOfTicketSummaryDto => ({ items: [], page: 1, pageSize: 25, totalCount: n });
+const page = (n: number): PagedResultOfTicketSummaryDto => ({
+  items: [],
+  page: 1,
+  pageSize: 25,
+  totalCount: n,
+});
 
 describe('parseTicketQuery', () => {
+  it('reads the My Tickets scope without any membership id', () => {
+    expect(parseTicketQuery(convertToParamMap({ scope: 'mine' })).assignedToMe).toBe(true);
+    expect(parseTicketQuery(convertToParamMap({ scope: 'other' })).assignedToMe).toBeUndefined();
+  });
+
   it('uses safe defaults', () => {
     expect(parseTicketQuery(convertToParamMap({}))).toEqual({
-      search: undefined, status: undefined, priority: undefined, categoryId: undefined, state: undefined,
-      sortBy: 'updatedAt', descending: true, page: 1, pageSize: 25,
+      search: undefined,
+      status: undefined,
+      priority: undefined,
+      categoryId: undefined,
+      state: undefined,
+      sortBy: 'updatedAt',
+      descending: true,
+      page: 1,
+      pageSize: 25,
     });
   });
 
   it('keeps only whitelisted values from the URL', () => {
-    const q = parseTicketQuery(convertToParamMap({
-      q: '  vpn  ', status: 'OnHold', priority: 'Urgent', category: '0b7e1c1a-4b9e-4c55-9a1e-6f0f0a5b2c11',
-      state: 'Overdue', sort: 'priority', dir: 'asc', page: '3', size: '50',
-    }));
+    const q = parseTicketQuery(
+      convertToParamMap({
+        q: '  vpn  ',
+        status: 'OnHold',
+        priority: 'Urgent',
+        category: '0b7e1c1a-4b9e-4c55-9a1e-6f0f0a5b2c11',
+        state: 'Overdue',
+        sort: 'priority',
+        dir: 'asc',
+        page: '3',
+        size: '50',
+      }),
+    );
     expect(q).toEqual({
-      search: 'vpn', status: 'OnHold', priority: 'Urgent', categoryId: '0b7e1c1a-4b9e-4c55-9a1e-6f0f0a5b2c11',
-      state: 'Overdue', sortBy: 'priority', descending: false, page: 3, pageSize: 50,
+      search: 'vpn',
+      status: 'OnHold',
+      priority: 'Urgent',
+      categoryId: '0b7e1c1a-4b9e-4c55-9a1e-6f0f0a5b2c11',
+      state: 'Overdue',
+      sortBy: 'priority',
+      descending: false,
+      page: 3,
+      pageSize: 50,
     });
-    const bad = parseTicketQuery(convertToParamMap({ status: 'Hacked', sort: 'password', page: '-2', size: '5000', category: "1' or 1=1" }));
+    const bad = parseTicketQuery(
+      convertToParamMap({
+        status: 'Hacked',
+        sort: 'password',
+        page: '-2',
+        size: '5000',
+        category: "1' or 1=1",
+      }),
+    );
     expect(bad.status).toBeUndefined();
     expect(bad.sortBy).toBe('updatedAt');
     expect(bad.page).toBe(1);
@@ -48,7 +89,10 @@ describe('TicketList', () => {
         provideRouter([{ path: 'tickets', component: TicketList }]),
         provideTranslateService(),
         { provide: TicketsApi, useValue: { list, categories: () => of([]) } },
-        { provide: TenantService, useValue: { tenantId, current: signal(null), isStaff: signal(true) } },
+        {
+          provide: TenantService,
+          useValue: { tenantId, current: signal(null), isStaff: signal(true) },
+        },
       ],
     });
   });
@@ -71,7 +115,9 @@ describe('TicketList', () => {
     await TestBed.inject(Router).navigateByUrl('/tickets');
     const fixture = TestBed.createComponent(TicketList);
     await fixture.whenStable();
-    const cmp = fixture.componentInstance as unknown as { page: () => PagedResultOfTicketSummaryDto | null };
+    const cmp = fixture.componentInstance as unknown as {
+      page: () => PagedResultOfTicketSummaryDto | null;
+    };
     expect(cmp.page()?.totalCount).toBe(5);
 
     tenantId.set('W2'); // the W2 request is still running

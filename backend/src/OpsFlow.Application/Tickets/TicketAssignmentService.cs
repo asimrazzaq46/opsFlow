@@ -5,6 +5,7 @@ using OpsFlow.Application.Abstractions;
 using OpsFlow.Application.Common;
 using OpsFlow.Application.Memberships;
 using OpsFlow.Application.Notifications;
+using OpsFlow.Application.Outbox;
 using OpsFlow.Domain.Notifications;
 using OpsFlow.Domain.Tickets;
 using OpsFlow.Domain.Users;
@@ -21,6 +22,7 @@ public sealed partial class TicketAssignmentService(
     TicketAccess access,
     TicketService tickets,
     NotificationService notifications,
+    OutboxWriter outbox,
     TimeProvider clock,
     ILogger<TicketAssignmentService> logger
 )
@@ -42,6 +44,12 @@ public sealed partial class TicketAssignmentService(
             if (await access.TryResolveAsync(ct) is not { } actor)
             {
                 return ActorAccess.AccessNoLongerValid();
+            }
+
+            // Staff may add assignees (an Agent claiming the ticket or adding a teammate); removal stays with Owners and Managers.
+            if (actor.IsCustomer)
+            {
+                return ActorAccess.Forbidden("Customers cannot assign agents.");
             }
 
             var loaded = await LoadAsync(actor, ticketId, expectedVersion, ct);
@@ -152,6 +160,7 @@ public sealed partial class TicketAssignmentService(
             }
 
             tenant.RotateOwnerChangeStamp();
+            outbox.StageTicketChanged(ticket.TenantId, ticketId, TicketChanges.Assignment);
             try
             {
                 await db.SaveChangesAsync(ct);
@@ -303,6 +312,7 @@ public sealed partial class TicketAssignmentService(
                 ct: ct
             );
             tenant.RotateOwnerChangeStamp();
+            outbox.StageTicketChanged(ticket.TenantId, ticketId, TicketChanges.Assignment);
             try
             {
                 await db.SaveChangesAsync(ct);
@@ -379,11 +389,6 @@ public sealed partial class TicketAssignmentService(
         CancellationToken ct
     )
     {
-        if (!actor.IsManager)
-        {
-            return ActorAccess.Forbidden("Only Owners and Managers can change assignments.");
-        }
-
         var ticket = await access.Visible(actor).Where(t => t.Id == ticketId).SingleOrDefaultAsync(ct);
         if (ticket is null)
         {

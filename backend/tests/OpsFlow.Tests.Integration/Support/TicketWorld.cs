@@ -18,7 +18,7 @@ public sealed record SlaPolicyJson(Guid Id, string Priority, int ResponseMinutes
 public sealed record TicketSummaryJson(
     Guid Id, long Number, string DisplayNumber, string Title, string Priority, string Status, Guid CategoryId, string CategoryName,
     Guid? CustomerId, string? CustomerName, DateTime CreatedAtUtc, DateTime UpdatedAtUtc, DateTime? ResolvedAtUtc, int Version,
-    int? AssigneeCount, int? EligibleAssigneeCount, DateTime? ResolutionDueAtUtc, bool? IsOverdue);
+    int? AssigneeCount, int? EligibleAssigneeCount, DateTime? ResolutionDueAtUtc, bool? IsOverdue, bool? AssignedToMe = null);
 
 public sealed record AssigneeJson(Guid MembershipId, Guid UserId, string DisplayName, DateTime AssignedAtUtc, bool IsAgentActive);
 

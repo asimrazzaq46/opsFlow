@@ -231,7 +231,7 @@ public class TicketWorkflowTests(ApiFactory factory) : IClassFixture<ApiFactory>
 
         Assert.Equal(HttpStatusCode.Conflict, (await w.Manager.PostAsync(Reopen(ticket.Id), new { })).StatusCode); // not finished yet
         await w.MoveAsync(w.Agent1, ticket.Id, "Resolved");
-        Assert.Equal(HttpStatusCode.NotFound, (await w.Agent2.PostAsync(Reopen(ticket.Id), new { })).StatusCode); // not visible to an unrelated agent
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Agent2.PostAsync(Reopen(ticket.Id), new { })).StatusCode); // visible, but not assigned
         await w.MoveAsync(w.Manager, ticket.Id, "Closed");
         Assert.Equal(HttpStatusCode.Forbidden, (await w.Customer.PostAsync(Reopen(ticket.Id), new { })).StatusCode); // customers only reopen RESOLVED tickets
         Assert.Equal(HttpStatusCode.OK, (await w.Agent1.PostAsync(Reopen(ticket.Id), new { })).StatusCode); // assigned agent may

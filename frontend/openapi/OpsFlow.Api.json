@@ -1599,6 +1599,58 @@
         }
       }
     },
+    "/api/v1/invitations/preview": {
+      "post": {
+        "tags": [
+          "Invitations"
+        ],
+        "summary": "Preview invitation",
+        "description": "Anonymous. Shows the workspace name, role, invited email and expiry for a valid invitation token so the recipient can register or sign in with the right address. The token travels in the body, never in the URL. Revoked, used and unknown tokens are reported alike as Unavailable. Nothing is changed.",
+        "operationId": "PreviewInvitation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewInvitationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationPreviewDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed; see `errors` for the offending fields.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded; retry later.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/invitations/accept": {
       "post": {
         "tags": [
@@ -3541,7 +3593,7 @@
           "Tickets"
         ],
         "summary": "Assign agents",
-        "description": "Assigns one or more eligible agents to the ticket. Requires the Owner or Manager role in the tenant.",
+        "description": "Adds one or more eligible agents (active Agents of this tenant) to the ticket without removing anyone. Owners and Managers may assign anyone; an Agent may add themselves (claim) or a teammate. Customers are rejected. Removing an assignee stays with Owners and Managers.",
         "operationId": "AssignTicketAgents",
         "parameters": [
           {
@@ -4979,7 +5031,7 @@
           "Tickets"
         ],
         "summary": "List tickets",
-        "description": "Returns the tickets visible to the caller, with filters, sorting and capped paging; staff can filter state=Unstaffed. Requires an active membership in the tenant; Customers only see their own tickets.",
+        "description": "Returns the tickets visible to the caller, with filters, sorting and capped paging; staff can filter state=Unstaffed or assignedToMe=true (the caller's own open assignments). Active staff see every ticket of the workspace; Customers only see their own tickets.",
         "operationId": "ListTickets",
         "parameters": [
           {
@@ -5089,6 +5141,13 @@
                 "string"
               ],
               "format": "int32"
+            }
+          },
+          {
+            "name": "AssignedToMe",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
             }
           },
           {
@@ -7093,6 +7152,53 @@
           }
         }
       },
+      "InvitationPreviewDto": {
+        "required": [
+          "state",
+          "workspaceName",
+          "role",
+          "email",
+          "expiresAtUtc"
+        ],
+        "type": "object",
+        "properties": {
+          "state": {
+            "$ref": "#/components/schemas/InvitationPreviewState"
+          },
+          "workspaceName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "role": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "email": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "expiresAtUtc": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "InvitationPreviewState": {
+        "enum": [
+          "Valid",
+          "Expired",
+          "Unavailable"
+        ]
+      },
       "LoginRequest": {
         "required": [
           "email",
@@ -7525,6 +7631,17 @@
               "string"
             ],
             "format": "int32"
+          }
+        }
+      },
+      "PreviewInvitationRequest": {
+        "required": [
+          "token"
+        ],
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
           }
         }
       },
@@ -8003,6 +8120,18 @@
               "null",
               "string"
             ]
+          },
+          "actorDisplayName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "relatedDisplayName": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -8260,7 +8389,8 @@
           "assigneeCount",
           "eligibleAssigneeCount",
           "resolutionDueAtUtc",
-          "isOverdue"
+          "isOverdue",
+          "assignedToMe"
         ],
         "type": "object",
         "properties": {
@@ -8361,6 +8491,21 @@
               "null",
               "boolean"
             ]
+          },
+          "assignedToMe": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "assignees": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/AssigneeDto"
+            }
           }
         }
       },

@@ -3,11 +3,13 @@
 
 import { TicketActivityType } from '../models/ticket-activity-type';
 export interface TicketActivityDto {
+  actorDisplayName?: (string | null);
   actorUserId: (string | null);
   id: string;
   newValue: (string | null);
   occurredAtUtc: string;
   oldValue: (string | null);
+  relatedDisplayName?: (string | null);
   sequence: (number | string);
   type: TicketActivityType;
 }

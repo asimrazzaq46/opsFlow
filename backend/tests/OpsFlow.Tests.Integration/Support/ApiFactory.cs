@@ -38,6 +38,19 @@ public sealed class FakeEmailService : IEmailService
     /// <summary>Test switch: every send takes this long.</summary>
     public TimeSpan Delay { get; set; }
 
+    /// <summary>Detached sends are recorded synchronously so tests stay deterministic; an outage is swallowed like in production.</summary>
+    public void SendDetached(string recipient, string subject, string body)
+    {
+        try
+        {
+            SendAsync(recipient, subject, body, CancellationToken.None).GetAwaiter().GetResult();
+        }
+        catch (IOException)
+        {
+            // logged and not retried in production
+        }
+    }
+
     public async Task SendAsync(string recipient, string subject, string body, CancellationToken cancellationToken)
     {
         OnSend?.Invoke(recipient);

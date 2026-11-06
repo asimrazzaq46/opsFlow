@@ -83,6 +83,11 @@ public sealed class TicketMessageService(
             return new NotFoundObjectResult(new ProblemDetails { Title = "Ticket not found." });
         }
 
+        if (!await access.MayWorkOnAsync(actor, ticketId, ct))
+        {
+            return ActorAccess.Forbidden(TicketAccess.AgentMustBeAssignedToOpen);
+        }
+
         (page, pageSize, var skip) = Paging.Normalize(page, pageSize, MaxPageSize);
         var query = db.TicketMessages.AsNoTracking().Where(m => m.TicketId == ticketId);
         if (afterSequence is { } after)

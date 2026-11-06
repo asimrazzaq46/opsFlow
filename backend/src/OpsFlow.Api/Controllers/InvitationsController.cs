@@ -13,6 +13,19 @@ namespace OpsFlow.Api.Controllers;
 [Route("api/v1")]
 public sealed class InvitationsController(InvitationService invitations) : ControllerBase
 {
+    [HttpPost("invitations/preview", Name = "PreviewInvitation")]
+    [AllowAnonymous]
+    [EnableRateLimiting(RateLimitPolicies.Sensitive)]
+    [EndpointSummary("Preview invitation")]
+    [EndpointDescription(
+        "Anonymous. Shows the workspace name, role, invited email and expiry for a valid invitation token so the recipient can register or sign in with the right address. The token travels in the body, never in the URL. Revoked, used and unknown tokens are reported alike as Unavailable. Nothing is changed."
+    )]
+    [ProducesResponseType<InvitationPreviewDto>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<InvitationPreviewDto>> PreviewInvitation(
+        PreviewInvitationRequest request,
+        CancellationToken ct
+    ) => Ok(await invitations.PreviewAsync(request.Token, ct));
+
     [HttpPost("invitations/accept", Name = "AcceptInvitation")]
     [Authorize]
     [EnableRateLimiting(RateLimitPolicies.Sensitive)]

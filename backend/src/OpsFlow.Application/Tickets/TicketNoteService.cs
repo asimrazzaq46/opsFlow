@@ -88,6 +88,11 @@ public sealed class TicketNoteService(
             return TicketNotFound();
         }
 
+        if (!await access.MayWorkOnAsync(actor, ticketId, ct))
+        {
+            return ActorAccess.Forbidden(TicketAccess.AgentMustBeAssigned);
+        }
+
         var existing = await db
             .TicketNotes.AsNoTracking()
             .SingleOrDefaultAsync(
@@ -180,6 +185,11 @@ public sealed class TicketNoteService(
         if (!await access.Visible(actor).AnyAsync(t => t.Id == ticketId, ct))
         {
             return TicketNotFound();
+        }
+
+        if (!await access.MayWorkOnAsync(actor, ticketId, ct))
+        {
+            return ActorAccess.Forbidden(TicketAccess.AgentMustBeAssignedToOpen);
         }
 
         (page, pageSize, var skip) = Paging.Normalize(page, pageSize, MaxPageSize);

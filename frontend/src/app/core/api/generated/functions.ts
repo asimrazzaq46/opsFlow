@@ -51,6 +51,8 @@ export type { SetCustomerStatus$Params as SetCustomerStatus$Params } from './fn/
 export { setCustomerStatus as setCustomerStatus } from './fn/customers/set-customer-status';
 export type { GetHealth$Params as GetHealth$Params } from './fn/health/get-health';
 export { getHealth as getHealth } from './fn/health/get-health';
+export type { PreviewInvitation$Params as PreviewInvitation$Params } from './fn/invitations/preview-invitation';
+export { previewInvitation as previewInvitation } from './fn/invitations/preview-invitation';
 export type { AcceptInvitation$Params as AcceptInvitation$Params } from './fn/invitations/accept-invitation';
 export { acceptInvitation as acceptInvitation } from './fn/invitations/accept-invitation';
 export type { ListInvitations$Params as ListInvitations$Params } from './fn/invitations/list-invitations';

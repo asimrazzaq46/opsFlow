@@ -78,6 +78,11 @@ public sealed partial class TicketAttachmentService(
             return TicketNotFound();
         }
 
+        if (!await access.MayWorkOnAsync(preActor, ticketId, ct))
+        {
+            return ActorAccess.Forbidden(TicketAccess.AgentMustBeAssigned);
+        }
+
         var key = await storage.SaveAsync(content, ct);
         try
         {
@@ -126,6 +131,11 @@ public sealed partial class TicketAttachmentService(
         if (ticket is null)
         {
             return TicketNotFound();
+        }
+
+        if (!await access.MayWorkOnAsync(actor, ticketId, ct))
+        {
+            return ActorAccess.Forbidden(TicketAccess.AgentMustBeAssigned);
         }
 
         if (ticket.Status == TicketStatus.Closed)
@@ -216,6 +226,11 @@ public sealed partial class TicketAttachmentService(
             return TicketNotFound();
         }
 
+        if (!await access.MayWorkOnAsync(actor, ticketId, ct))
+        {
+            return ActorAccess.Forbidden(TicketAccess.AgentMustBeAssignedToOpen);
+        }
+
         var rows = await db
             .TicketAttachments.AsNoTracking()
             .Where(a => a.TicketId == ticketId && (!actor.IsCustomer || !a.IsInternal))
@@ -247,6 +262,11 @@ public sealed partial class TicketAttachmentService(
         if (attachment is null || !await access.Visible(actor).AnyAsync(t => t.Id == ticketId, ct))
         {
             return AttachmentNotFound();
+        }
+
+        if (!await access.MayWorkOnAsync(actor, ticketId, ct))
+        {
+            return ActorAccess.Forbidden(TicketAccess.AgentMustBeAssignedToOpen);
         }
 
         var stream = await storage.OpenReadAsync(attachment.StorageKey, ct);

@@ -4,14 +4,26 @@
     <div class="ops-card flex flex-col gap-4 p-6 sm:p-8">
       <div class="flex flex-col gap-1">
         <div class="flex items-center gap-1">
-          <span class="ops-chip bg-primary-fixed uppercase tracking-wider text-on-primary-fixed">{{ 'authFlow.login.eyebrow' | translate }}</span>
+          <span class="ops-chip bg-primary-fixed uppercase tracking-wider text-on-primary-fixed">{{
+            'authFlow.login.eyebrow' | translate
+          }}</span>
         </div>
-        <h1 id="login-title" class="mt-1 text-headline-lg tracking-tight text-on-surface sm:text-headline-xl">{{ 'authFlow.login.title' | translate }}</h1>
-        <p class="text-body-md text-on-surface-variant">{{ 'authFlow.login.subtitle' | translate }}</p>
+        <h1
+          id="login-title"
+          class="mt-1 text-headline-lg tracking-tight text-on-surface sm:text-headline-xl"
+        >
+          {{ 'authFlow.login.title' | translate }}
+        </h1>
+        <p class="text-body-md text-on-surface-variant">
+          {{ 'authFlow.login.subtitle' | translate }}
+        </p>
       </div>
 
-      @if (safeReturn()?.startsWith('/invitations/')) {
-        <p class="flex items-start gap-2 rounded-sm bg-surface-container-low p-3 text-body-sm text-on-surface-variant" role="note">
+      @if (safeReturn()?.startsWith('/invitations/') || (!safeReturn() && invitationPending)) {
+        <p
+          class="flex items-start gap-2 rounded-sm bg-surface-container-low p-3 text-body-sm text-on-surface-variant"
+          role="note"
+        >
           <span class="ms text-[16px] text-primary" aria-hidden="true">mark_email_unread</span>
           {{ 'authFlow.login.invitationHint' | translate }}
         </p>
@@ -19,37 +31,77 @@
 
       <form class="flex flex-col gap-3" [formGroup]="form" (ngSubmit)="submit()" novalidate>
         <div class="flex flex-col gap-1.5">
-          <label for="login-email" class="text-headline-sm text-on-surface">{{ 'auth.email' | translate }}</label>
+          <label for="login-email" class="text-headline-sm text-on-surface">{{
+            'auth.email' | translate
+          }}</label>
           <div class="relative flex items-center">
-            <span class="ms pointer-events-none absolute left-3 text-[18px] text-on-surface-variant" aria-hidden="true">alternate_email</span>
-            <input id="login-email" type="email" autocomplete="username" inputmode="email" formControlName="email"
-              [placeholder]="'authFlow.emailPlaceholder' | translate" [attr.aria-invalid]="showError('email') ? 'true' : null"
-              [attr.aria-describedby]="showError('email') ? 'login-email-error' : null" class="ops-input pl-9 font-mono text-mono-data" />
+            <span
+              class="ms pointer-events-none absolute left-3 text-[18px] text-on-surface-variant"
+              aria-hidden="true"
+              >alternate_email</span
+            >
+            <input
+              id="login-email"
+              type="email"
+              autocomplete="username"
+              inputmode="email"
+              formControlName="email"
+              [placeholder]="'authFlow.emailPlaceholder' | translate"
+              [attr.aria-invalid]="showError('email') ? 'true' : null"
+              [attr.aria-describedby]="showError('email') ? 'login-email-error' : null"
+              class="ops-input pl-9 font-mono text-mono-data"
+            />
           </div>
           @if (showError('email')) {
-            <p id="login-email-error" class="ops-error">{{ (form.controls.email.hasError('required') ? 'validation.required' : 'authFlow.validation.email') | translate }}</p>
+            <p id="login-email-error" class="ops-error">
+              {{
+                (form.controls.email.hasError('required')
+                  ? 'validation.required'
+                  : 'authFlow.validation.email'
+                ) | translate
+              }}
+            </p>
           }
         </div>
 
         <div class="flex flex-col gap-1.5">
           <div class="flex items-center justify-between gap-2">
-            <label for="login-password" class="text-headline-sm text-on-surface">{{ 'auth.password' | translate }}</label>
-            <a routerLink="/forgot-password" class="ops-link text-body-sm">{{ 'authFlow.login.forgot' | translate }}</a>
+            <label for="login-password" class="text-headline-sm text-on-surface">{{
+              'auth.password' | translate
+            }}</label>
+            <a routerLink="/forgot-password" class="ops-link text-body-sm">{{
+              'authFlow.login.forgot' | translate
+            }}</a>
           </div>
-          <app-password-field [control]="form.controls.password" inputId="login-password" autocomplete="current-password"
-            [invalid]="showError('password')" [describedBy]="showError('password') ? 'login-password-error' : null" />
+          <app-password-field
+            [control]="form.controls.password"
+            inputId="login-password"
+            autocomplete="current-password"
+            [invalid]="showError('password')"
+            [describedBy]="showError('password') ? 'login-password-error' : null"
+          />
           @if (showError('password')) {
-            <p id="login-password-error" class="ops-error">{{ 'validation.required' | translate }}</p>
+            <p id="login-password-error" class="ops-error">
+              {{ 'validation.required' | translate }}
+            </p>
           }
         </div>
 
         @if (error(); as key) {
-          <p role="alert" class="flex items-start gap-2 rounded-sm bg-error-container p-3 text-body-sm text-on-error-container">
+          <p
+            role="alert"
+            class="flex items-start gap-2 rounded-sm bg-error-container p-3 text-body-sm text-on-error-container"
+          >
             <span class="ms text-[16px]" aria-hidden="true">error</span>{{ key | translate }}
           </p>
         }
 
-        <button type="submit" class="ops-btn-primary mt-1 w-full" [disabled]="busy()" [attr.aria-busy]="busy()">
+        <button
+          type="submit"
+          class="ops-btn-primary mt-1 w-full"
+          [disabled]="busy()"
+          [attr.aria-busy]="busy()"
+        >
           @if (busy()) {
             <span class="ms animate-spin text-[18px]" aria-hidden="true">progress_activity</span>
             <span>{{ 'auth.signingIn' | translate }}</span>
@@ -60,49 +112,97 @@
         </button>
       </form>
 
-      <app-google-sign-in [showDivider]="true" [busy]="busy()" (credential)="signInWithGoogle($event)">
-        <p class="mt-2 text-center text-body-sm text-on-surface-variant">{{ 'google.signUpHint' | translate }}</p>
+      <app-google-sign-in
+        [showDivider]="true"
+        [busy]="busy()"
+        (credential)="signInWithGoogle($event)"
+      >
+        <p class="mt-2 text-center text-body-sm text-on-surface-variant">
+          {{ 'google.signUpHint' | translate }}
+        </p>
       </app-google-sign-in>
 
       @if (googleError(); as key) {
-        <p role="alert" class="rounded-sm bg-error-container p-3 text-body-sm text-on-error-container">{{ key | translate }}</p>
+        <p
+          role="alert"
+          class="rounded-sm bg-error-container p-3 text-body-sm text-on-error-container"
+        >
+          {{ key | translate }}
+        </p>
       }
       @if (verifyEmail()) {
-        <p role="status" class="rounded-sm bg-secondary-container p-3 text-body-sm text-on-secondary-container">{{ 'google.verifyEmail' | translate }}</p>
+        <p
+          role="status"
+          class="rounded-sm bg-secondary-container p-3 text-body-sm text-on-secondary-container"
+        >
+          {{ 'google.verifyEmail' | translate }}
+        </p>
       }
 
       <p class="pt-1 text-center text-body-sm text-on-surface-variant">
         {{ 'authFlow.login.noAccount' | translate }}
-        <a routerLink="/register" [queryParams]="{ returnUrl: safeReturn() }" class="ops-link ml-1 text-headline-sm">{{ 'authFlow.login.register' | translate }}</a>
+        <a
+          routerLink="/register"
+          [queryParams]="{ returnUrl: safeReturn() }"
+          class="ops-link ml-1 text-headline-sm"
+          >{{ 'authFlow.login.register' | translate }}</a
+        >
       </p>
 
-      <div class="-mx-6 -mb-6 mt-1 flex flex-wrap items-center justify-between gap-2 rounded-b-lg bg-surface-container-low/60 px-6 pt-3 pb-4 font-mono text-mono-timer text-on-surface-variant sm:-mx-8 sm:-mb-8 sm:px-8">
-        <span class="flex items-center gap-1.5"><span class="ms text-[14px] text-secondary" aria-hidden="true">devices</span>{{ 'authFlow.login.deviceSession' | translate }}</span>
-        <span class="flex items-center gap-1.5"><span class="ms text-[14px] text-secondary" aria-hidden="true">lan</span>{{ 'authFlow.login.isolation' | translate }}</span>
+      <div
+        class="-mx-6 -mb-6 mt-1 flex flex-wrap items-center justify-between gap-2 rounded-b-lg bg-surface-container-low/60 px-6 pt-3 pb-4 font-mono text-mono-timer text-on-surface-variant sm:-mx-8 sm:-mb-8 sm:px-8"
+      >
+        <span class="flex items-center gap-1.5"
+          ><span class="ms text-[14px] text-secondary" aria-hidden="true">devices</span
+          >{{ 'authFlow.login.deviceSession' | translate }}</span
+        >
+        <span class="flex items-center gap-1.5"
+          ><span class="ms text-[14px] text-secondary" aria-hidden="true">lan</span
+          >{{ 'authFlow.login.isolation' | translate }}</span
+        >
       </div>
     </div>
   </section>
 
   <!-- Product overview (static, truthful capabilities only) -->
-  <aside class="relative flex flex-col justify-between overflow-hidden rounded-lg bg-inverse-surface p-6 text-inverse-on-surface shadow-xl sm:p-8 lg:col-span-6 xl:col-span-7" aria-labelledby="login-aside-title">
-    <div class="pointer-events-none absolute -top-24 -right-24 size-96 rounded-full bg-primary-container/25 blur-3xl" aria-hidden="true"></div>
-    <div class="pointer-events-none absolute -bottom-12 -left-12 size-80 rounded-full bg-[#006a61]/25 blur-2xl" aria-hidden="true"></div>
+  <aside
+    class="relative flex flex-col justify-between overflow-hidden rounded-lg bg-inverse-surface p-6 text-inverse-on-surface shadow-xl sm:p-8 lg:col-span-6 xl:col-span-7"
+    aria-labelledby="login-aside-title"
+  >
+    <div
+      class="pointer-events-none absolute -top-24 -right-24 size-96 rounded-full bg-primary-container/25 blur-3xl"
+      aria-hidden="true"
+    ></div>
+    <div
+      class="pointer-events-none absolute -bottom-12 -left-12 size-80 rounded-full bg-[#006a61]/25 blur-2xl"
+      aria-hidden="true"
+    ></div>
 
     <div class="relative z-10 flex flex-col gap-6">
-      <span class="font-mono text-mono-timer uppercase tracking-wider text-[#89f5e7]">{{ 'authFlow.aside.eyebrow' | translate }}</span>
-      <h2 id="login-aside-title" class="text-headline-lg text-white sm:text-headline-xl">{{ 'authFlow.aside.title' | translate }}</h2>
+      <span class="font-mono text-mono-timer uppercase tracking-wider text-[#89f5e7]">{{
+        'authFlow.aside.eyebrow' | translate
+      }}</span>
+      <h2 id="login-aside-title" class="text-headline-lg text-white sm:text-headline-xl">
+        {{ 'authFlow.aside.title' | translate }}
+      </h2>
       <ul class="grid grid-cols-1 gap-3 sm:grid-cols-2">
         @for (f of features; track f.key) {
           <li class="flex flex-col gap-2 rounded-sm bg-white/5 p-4 backdrop-blur-sm">
             <span class="ms text-[20px] text-[#b4c5ff]" aria-hidden="true">{{ f.icon }}</span>
-            <span class="text-headline-sm text-white">{{ 'authFlow.aside.' + f.key + '.title' | translate }}</span>
-            <span class="text-body-sm text-[#dae2fd]">{{ 'authFlow.aside.' + f.key + '.text' | translate }}</span>
+            <span class="text-headline-sm text-white">{{
+              'authFlow.aside.' + f.key + '.title' | translate
+            }}</span>
+            <span class="text-body-sm text-[#dae2fd]">{{
+              'authFlow.aside.' + f.key + '.text' | translate
+            }}</span>
           </li>
         }
       </ul>
     </div>
 
-    <div class="relative z-10 mt-6 flex items-center gap-2 border-t border-white/10 pt-6 font-mono text-mono-timer text-[#dae2fd]/80">
+    <div
+      class="relative z-10 mt-6 flex items-center gap-2 border-t border-white/10 pt-6 font-mono text-mono-timer text-[#dae2fd]/80"
+    >
       <span class="ms text-[16px]" aria-hidden="true">terminal</span>
       <span>{{ 'authFlow.aside.footer' | translate }}</span>
     </div>

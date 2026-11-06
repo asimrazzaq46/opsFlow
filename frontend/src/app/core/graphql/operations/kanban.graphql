@@ -4,6 +4,7 @@ fragment BoardTicket on TicketSummaryDto {
   title
   priority
   status
+  assignedToMe
   categoryName
   customerName
   updatedAtUtc
@@ -11,6 +12,7 @@ fragment BoardTicket on TicketSummaryDto {
   assigneeCount
   resolutionDueAtUtc
   isOverdue
+  assignees { membershipId userId displayName isAgentActive }
 }
 
 query KanbanBoard($filter: KanbanFilterInput, $perColumn: Int) {

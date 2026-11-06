@@ -27,6 +27,39 @@ public class InvitationTests(ApiFactory factory) : IClassFixture<ApiFactory>
         await owner.ReadAsync<Invite>(await owner.PostAsync($"/api/v1/tenants/{tenantId}/invitations", new { email, role }));
 
     [Fact]
+    public async Task Agents_and_customers_cannot_manage_invitations_or_memberships_and_a_rejected_attempt_changes_nothing()
+    {
+        var (owner, org) = await NewTenantAsync();
+        var agent = await ApiClient.AddMemberAsync(factory, owner, org.Id, "Agent");
+        var customer = await ApiClient.AddMemberAsync(factory, owner, org.Id, "Customer");
+        var pendingEmail = $"pending-{Guid.NewGuid():N}@example.com";
+        var pending = await InviteAsync(owner, org.Id, pendingEmail);
+        var members = await owner.MembersAsync(org.Id);
+        var target = members.First(m => m.UserId == agent.UserId).Id;
+        var rejectedEmail = $"rejected-{Guid.NewGuid():N}@example.com";
+        var emailsBefore = factory.Emails.Count(pendingEmail);
+        var tenant = $"/api/v1/tenants/{org.Id}";
+
+        foreach (var user in new[] { agent, customer })
+        {
+            Assert.Equal(HttpStatusCode.Forbidden, (await user.PostAsync($"{tenant}/invitations", new { email = rejectedEmail, role = "Agent" })).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await user.GetAsync($"{tenant}/invitations")).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await user.PostAsync(Resend(org.Id, pending.Id))).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await user.DeleteAsync($"{tenant}/invitations/{pending.Id}")).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await user.PutAsync($"{tenant}/members/{target}/role", new { role = "Manager" })).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await user.PutAsync($"{tenant}/members/{target}/status", new { isActive = false })).StatusCode);
+        }
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await customer.GetAsync($"{tenant}/members")).StatusCode);
+        Assert.Equal(0, factory.Emails.Count(rejectedEmail)); // nothing was sent for a rejected invitation
+        Assert.Equal(emailsBefore, factory.Emails.Count(pendingEmail)); // a rejected resend sent nothing and rotated nothing
+        var stillPending = await owner.ReadAsync<List<Invite>>(await owner.GetAsync($"{tenant}/invitations"));
+        Assert.Equal(pending.Id, stillPending.Single().Id); // no new invitation, the existing one was not revoked
+        var after = await owner.MembersAsync(org.Id);
+        Assert.Equal(members.Select(m => (m.Id, m.Role, m.IsActive)), after.Select(m => (m.Id, m.Role, m.IsActive)));
+    }
+
+    [Fact]
     public async Task Invited_user_can_accept_once_and_the_token_is_only_stored_hashed()
     {
         var (owner, org) = await NewTenantAsync();
@@ -48,6 +81,54 @@ public class InvitationTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var hashes = await scope.ServiceProvider.GetRequiredService<OpsFlowDbContext>().Invitations.IgnoreQueryFilters().Select(i => i.TokenHash).ToListAsync();
         Assert.DoesNotContain(token, hashes);
         Assert.Contains(SecureToken.Hash(token), hashes);
+    }
+
+    private sealed record Preview(string State, string? WorkspaceName, string? Role, string? Email, DateTime? ExpiresAtUtc);
+
+    [Fact]
+    public async Task Preview_shows_a_valid_invitation_to_the_token_holder_only_and_never_changes_it()
+    {
+        var (owner, org) = await NewTenantAsync();
+        var email = $"preview-{Guid.NewGuid():N}@example.com";
+        await InviteAsync(owner, org.Id, email, "Customer");
+        var token = ApiClient.InvitationTokenFrom(factory, email);
+        var anonymous = factory.CreateApiClient();
+
+        var preview = await anonymous.ReadAsync<Preview>(await anonymous.PostAsync("/api/v1/invitations/preview", new { token }));
+
+        Assert.Equal("Valid", preview.State);
+        Assert.Equal(org.Name, preview.WorkspaceName);
+        Assert.Equal("Customer", preview.Role);
+        Assert.Equal(email, preview.Email);
+        Assert.NotNull(preview.ExpiresAtUtc);
+
+        var unknown = await anonymous.ReadAsync<Preview>(await anonymous.PostAsync("/api/v1/invitations/preview", new { token = "not-a-real-token" }));
+        Assert.Equal(new Preview("Unavailable", null, null, null, null), unknown);
+
+        var invitee = await ApiClient.RegisterAsync(factory, email);
+        Assert.Equal(org.Id, (await invitee.ReadAsync<OrgDto>(await invitee.PostAsync("/api/v1/invitations/accept", new { token }))).Id); // preview did not consume it
+        var used = await anonymous.ReadAsync<Preview>(await anonymous.PostAsync("/api/v1/invitations/preview", new { token }));
+        Assert.Equal(new Preview("Unavailable", null, null, null, null), used);
+    }
+
+    [Fact]
+    public async Task Preview_reports_expired_invitations_without_details_and_revoked_ones_as_unavailable()
+    {
+        var (owner, org) = await NewTenantAsync();
+        var expiredEmail = $"pexp-{Guid.NewGuid():N}@example.com";
+        await InviteAsync(owner, org.Id, expiredEmail);
+        var expiredToken = ApiClient.InvitationTokenFrom(factory, expiredEmail);
+        var revokedEmail = $"prev-{Guid.NewGuid():N}@example.com";
+        var revoked = await InviteAsync(owner, org.Id, revokedEmail);
+        var revokedToken = ApiClient.InvitationTokenFrom(factory, revokedEmail);
+        Assert.True((await owner.DeleteAsync($"/api/v1/tenants/{org.Id}/invitations/{revoked.Id}")).IsSuccessStatusCode);
+        var anonymous = factory.CreateApiClient();
+
+        Assert.Equal("Unavailable", (await anonymous.ReadAsync<Preview>(await anonymous.PostAsync("/api/v1/invitations/preview", new { token = revokedToken }))).State);
+
+        factory.Clock.Advance(TimeSpan.FromHours(73));
+        var expired = await anonymous.ReadAsync<Preview>(await anonymous.PostAsync("/api/v1/invitations/preview", new { token = expiredToken }));
+        Assert.Equal(new Preview("Expired", null, null, null, null), expired);
     }
 
     [Fact]

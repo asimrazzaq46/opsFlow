@@ -5,6 +5,7 @@ import { RouterLink } from '@angular/router';
 import { TranslatePipe } from '@ngx-translate/core';
 import { AuthService } from '../../core/auth/auth.service';
 import { GoogleCredential, googleErrorKey } from '../../core/auth/google-identity.service';
+import { PendingInvitation } from '../../core/auth/pending-invitation';
 import { PostSignIn } from '../../core/auth/post-sign-in';
 import { safeReturnUrl } from '../../core/auth/return-url';
 import { requestErrorKey } from './auth-api';
@@ -30,6 +31,7 @@ const AUTH_FEATURES = [
 export class Login {
   private readonly auth = inject(AuthService);
   private readonly postSignIn = inject(PostSignIn);
+  protected readonly invitationPending = inject(PendingInvitation).token() !== null;
 
   /** Bound from the query string; only an in-app path is ever used. */
   readonly returnUrl = input<string | undefined>();
@@ -42,7 +44,10 @@ export class Login {
   protected readonly googleError = signal<string | null>(null);
   protected readonly verifyEmail = signal(false);
   protected readonly form = new FormGroup({
-    email: new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.email] }),
+    email: new FormControl('', {
+      nonNullable: true,
+      validators: [Validators.required, Validators.email],
+    }),
     password: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
   });
 
@@ -60,7 +65,11 @@ export class Login {
       next: () => this.postSignIn.enter(this.safeReturn()),
       error: (err: unknown) => {
         // 400/401 are deliberately one generic message: the API never says which part was wrong.
-        this.error.set(err instanceof HttpErrorResponse && (err.status === 400 || err.status === 401) ? 'auth.invalid' : requestErrorKey(err));
+        this.error.set(
+          err instanceof HttpErrorResponse && (err.status === 400 || err.status === 401)
+            ? 'auth.invalid'
+            : requestErrorKey(err),
+        );
         this.busy.set(false);
       },
     });

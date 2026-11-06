@@ -25,7 +25,14 @@ export class AccountPassword {
   protected readonly form = new FormGroup(
     {
       current: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
-      password: new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.minLength(PASSWORD_MIN), Validators.maxLength(PASSWORD_MAX)] }),
+      password: new FormControl('', {
+        nonNullable: true,
+        validators: [
+          Validators.required,
+          Validators.minLength(PASSWORD_MIN),
+          Validators.maxLength(PASSWORD_MAX),
+        ],
+      }),
       confirm: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
     },
     { validators: passwordsMatch },
@@ -33,7 +40,10 @@ export class AccountPassword {
 
   protected invalid(name: 'current' | 'password' | 'confirm'): boolean {
     const c = this.form.controls[name];
-    return (c.invalid || (name === 'confirm' && this.form.hasError('mismatch'))) && (c.touched || this.submitted());
+    return (
+      (c.invalid || (name === 'confirm' && this.form.hasError('mismatch'))) &&
+      (c.touched || this.submitted())
+    );
   }
 
   protected submit(): void {
@@ -52,9 +62,14 @@ export class AccountPassword {
       },
       error: (err: unknown) => {
         this.busy.set(false);
-        const errors = err instanceof HttpErrorResponse && err.status === 400 ? err.error?.errors : null;
+        const errors =
+          err instanceof HttpErrorResponse && err.status === 400 ? err.error?.errors : null;
         this.status.set(
-          errors?.currentPassword ? 'account.password.wrongCurrent' : errors?.newPassword ? 'authFlow.reset.policy' : requestErrorKey(err, 'account.password.failed'),
+          errors?.currentPassword
+            ? 'account.password.wrongCurrent'
+            : errors?.newPassword
+              ? 'authFlow.reset.policy'
+              : requestErrorKey(err, 'account.password.failed'),
         );
       },
     });

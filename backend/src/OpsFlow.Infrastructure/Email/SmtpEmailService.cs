@@ -1,5 +1,7 @@
 using System.Net;
 using System.Net.Mail;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using OpsFlow.Application.Abstractions;
 
@@ -22,8 +24,37 @@ public sealed class SmtpOptions
     public int TimeoutSeconds { get; set; } = 30;
 }
 
-internal sealed class SmtpEmailService(IOptions<SmtpOptions> options) : IEmailService
+internal sealed partial class SmtpEmailService : IEmailService
 {
+    private readonly IOptions<SmtpOptions> options;
+    private readonly ILogger<SmtpEmailService> logger;
+
+    public SmtpEmailService(IOptions<SmtpOptions> options)
+        : this(options, NullLogger<SmtpEmailService>.Instance) { }
+
+    public SmtpEmailService(IOptions<SmtpOptions> options, ILogger<SmtpEmailService> logger)
+    {
+        this.options = options;
+        this.logger = logger;
+    }
+
+    // The send keeps its own deadline, so a stuck server cannot hold a thread-pool worker for longer than TimeoutSeconds.
+    public void SendDetached(string recipient, string subject, string body) =>
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await SendAsync(recipient, subject, body, CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                LogDetachedFailed(logger, ex);
+            }
+        });
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Detached email delivery failed")]
+    private static partial void LogDetachedFailed(ILogger logger, Exception exception);
+
     public async Task SendAsync(
         string recipient,
         string subject,

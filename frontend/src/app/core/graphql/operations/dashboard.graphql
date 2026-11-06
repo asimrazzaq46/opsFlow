@@ -5,7 +5,7 @@ query Dashboard($filter: AnalyticsFilterInput) {
     fromUtc
     toUtc
     grouping
-    current { openTickets unassignedTickets overdueTickets resolvedToday }
+    current { openTickets unassignedTickets overdueTickets resolvedToday assignedToMe }
     createdInPeriod
     resolvedInPeriod
     avgFirstResponseMinutes

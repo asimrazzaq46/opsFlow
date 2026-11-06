@@ -1,55 +1,123 @@
 <div class="flex flex-col gap-4">
   <nav [attr.aria-label]="'tickets.breadcrumb' | translate">
     <ol class="flex items-center gap-1 text-body-sm text-on-surface-variant">
-      <li><a routerLink="/tickets" class="ops-link">{{ 'tickets.title' | translate }}</a></li>
+      <li>
+        <a routerLink="/tickets" class="ops-link">{{ 'tickets.title' | translate }}</a>
+      </li>
       <li aria-hidden="true"><span class="ms text-[14px]">chevron_right</span></li>
-      <li aria-current="page" class="font-medium text-on-surface">{{ 'tickets.new' | translate }}</li>
+      <li aria-current="page" class="font-medium text-on-surface">
+        {{ 'tickets.new' | translate }}
+      </li>
     </ol>
   </nav>
-  <h1 class="text-headline-lg tracking-tight text-on-surface sm:text-headline-xl">{{ 'tickets.create.title' | translate }}</h1>
+  <h1 class="text-headline-lg tracking-tight text-on-surface sm:text-headline-xl">
+    {{ 'tickets.create.title' | translate }}
+  </h1>
 
-  <form [formGroup]="form" (ngSubmit)="submit()" class="grid grid-cols-1 gap-4 lg:grid-cols-12" novalidate>
+  <form
+    [formGroup]="form"
+    (ngSubmit)="submit()"
+    class="grid grid-cols-1 gap-4 lg:grid-cols-12"
+    novalidate
+  >
     <div class="ops-card flex flex-col gap-5 p-4 sm:p-6 lg:col-span-8">
       <!-- Title -->
       <div class="flex flex-col gap-1.5">
         <div class="flex items-center justify-between gap-2">
-          <label for="ticket-title" class="text-headline-sm text-on-surface">{{ 'tickets.form.title' | translate }} <span class="text-error" aria-hidden="true">*</span></label>
-          <span class="font-mono text-mono-timer text-on-surface-variant" aria-hidden="true">{{ titleLength() }} / {{ titleMax }}</span>
+          <label for="ticket-title" class="text-headline-sm text-on-surface"
+            >{{ 'tickets.form.title' | translate }}
+            <span class="text-error" aria-hidden="true">*</span></label
+          >
+          <span class="font-mono text-mono-timer text-on-surface-variant" aria-hidden="true"
+            >{{ titleLength() }} / {{ titleMax }}</span
+          >
         </div>
-        <input id="ticket-title" formControlName="title" [maxlength]="titleMax" required autocomplete="off" class="ops-input h-11"
-          [placeholder]="'tickets.create.titlePlaceholder' | translate" [attr.aria-invalid]="invalid('title') || !!serverErrors()['Title']"
-          [attr.aria-describedby]="invalid('title') || serverErrors()['Title'] ? 'ticket-title-error' : null" />
+        <input
+          id="ticket-title"
+          formControlName="title"
+          [maxlength]="titleMax"
+          required
+          autocomplete="off"
+          class="ops-input h-11"
+          [placeholder]="'tickets.create.titlePlaceholder' | translate"
+          [attr.aria-invalid]="invalid('title') || !!serverErrors()['Title']"
+          [attr.aria-describedby]="
+            invalid('title') || serverErrors()['Title'] ? 'ticket-title-error' : null
+          "
+        />
         @if (invalid('title') || serverErrors()['Title']) {
           <p id="ticket-title-error" class="ops-error">
-            {{ serverErrors()['Title'] ?? ((form.controls.title.hasError('required') ? 'validation.required' : 'tickets.form.titleLength') | translate) }}</p>
+            {{
+              serverErrors()['Title'] ??
+                ((form.controls.title.hasError('required')
+                  ? 'validation.required'
+                  : 'tickets.form.titleLength'
+                ) | translate)
+            }}
+          </p>
         }
       </div>
 
       <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
         <!-- Category -->
         <div class="flex flex-col gap-1.5">
-          <label for="ticket-category" class="text-headline-sm text-on-surface">{{ 'tickets.form.category' | translate }} <span class="text-error" aria-hidden="true">*</span></label>
-          <select id="ticket-category" formControlName="categoryId" required class="ops-input h-11"
-            [attr.aria-invalid]="invalid('categoryId') || !!serverErrors()['CategoryId']" [attr.aria-describedby]="invalid('categoryId') ? 'ticket-category-error' : null">
-            <option value="">{{ (categories.isLoading() ? 'common.loading' : 'tickets.create.chooseCategory') | translate }}</option>
-            @for (c of categories.value() ?? []; track c.id) { <option [value]="c.id">{{ c.name }}</option> }
+          <label for="ticket-category" class="text-headline-sm text-on-surface"
+            >{{ 'tickets.form.category' | translate }}
+            <span class="text-error" aria-hidden="true">*</span></label
+          >
+          <select
+            id="ticket-category"
+            formControlName="categoryId"
+            required
+            class="ops-input h-11"
+            [attr.aria-invalid]="invalid('categoryId') || !!serverErrors()['CategoryId']"
+            [attr.aria-describedby]="invalid('categoryId') ? 'ticket-category-error' : null"
+          >
+            <option value="">
+              {{
+                (categories.isLoading() ? 'common.loading' : 'tickets.create.chooseCategory')
+                  | translate
+              }}
+            </option>
+            @for (c of categories.value() ?? []; track c.id) {
+              <option [value]="c.id">{{ c.name }}</option>
+            }
           </select>
-          @if (invalid('categoryId')) { <p id="ticket-category-error" class="ops-error">{{ 'validation.required' | translate }}</p> }
+          @if (invalid('categoryId')) {
+            <p id="ticket-category-error" class="ops-error">
+              {{ 'validation.required' | translate }}
+            </p>
+          }
           @if (categories.error()) {
-            <p class="ops-error">{{ 'tickets.create.categoriesError' | translate }}
-              <button type="button" class="ops-link ml-1" (click)="categories.reload()">{{ 'common.retry' | translate }}</button></p>
+            <p class="ops-error">
+              {{ 'tickets.create.categoriesError' | translate }}
+              <button type="button" class="ops-link ml-1" (click)="categories.reload()">
+                {{ 'common.retry' | translate }}
+              </button>
+            </p>
           }
         </div>
 
         <!-- Requester: managers choose the customer contact; others are the requester themselves -->
         @if (isManager()) {
           <div class="flex flex-col gap-1.5">
-            <label for="ticket-customer" class="text-headline-sm text-on-surface">{{ 'tickets.form.customer' | translate }}</label>
-            <select id="ticket-customer" formControlName="customerId" class="ops-input h-11" aria-describedby="ticket-customer-hint">
+            <label for="ticket-customer" class="text-headline-sm text-on-surface">{{
+              'tickets.form.customer' | translate
+            }}</label>
+            <select
+              id="ticket-customer"
+              formControlName="customerId"
+              class="ops-input h-11"
+              aria-describedby="ticket-customer-hint"
+            >
               <option value="">{{ 'tickets.create.noCustomer' | translate }}</option>
-              @for (c of customers.value() ?? []; track c.id) { <option [value]="c.id">{{ c.name }}</option> }
+              @for (c of customers.value() ?? []; track c.id) {
+                <option [value]="c.id">{{ c.name }}</option>
+              }
             </select>
-            <p id="ticket-customer-hint" class="text-body-sm text-on-surface-variant">{{ 'tickets.create.customerHint' | translate }}</p>
+            <p id="ticket-customer-hint" class="text-body-sm text-on-surface-variant">
+              {{ 'tickets.create.customerHint' | translate }}
+            </p>
           </div>
         }
       </div>
@@ -57,16 +125,26 @@
       <!-- Priority (staff only: customers cannot set it) -->
       @if (tenant.isStaff()) {
         <fieldset class="flex flex-col gap-2">
-          <legend class="mb-2 text-headline-sm text-on-surface">{{ 'tickets.form.priority' | translate }}</legend>
+          <legend class="mb-2 text-headline-sm text-on-surface">
+            {{ 'tickets.form.priority' | translate }}
+          </legend>
           <div class="grid grid-cols-2 gap-2 md:grid-cols-4">
             @for (p of priorities; track p) {
               <label class="priority-card" [class.is-selected]="form.controls.priority.value === p">
                 <input type="radio" class="sr-only" formControlName="priority" [value]="p" />
                 <span class="flex items-center justify-between gap-2">
-                  <span class="text-label-caps font-semibold uppercase">{{ 'tickets.priority.' + p | translate }}</span>
-                  <span class="size-2 rounded-full" [class]="priorityBadge[p].dot" aria-hidden="true"></span>
+                  <span class="text-label-caps font-semibold uppercase">{{
+                    'tickets.priority.' + p | translate
+                  }}</span>
+                  <span
+                    class="size-2 rounded-full"
+                    [class]="priorityBadge[p].dot"
+                    aria-hidden="true"
+                  ></span>
                 </span>
-                <span class="text-body-sm text-on-surface-variant">{{ 'tickets.create.priorityHint.' + p | translate }}</span>
+                <span class="text-body-sm text-on-surface-variant">{{
+                  'tickets.create.priorityHint.' + p | translate
+                }}</span>
               </label>
             }
           </div>
@@ -76,15 +154,33 @@
       <!-- Description -->
       <div class="flex flex-col gap-1.5">
         <div class="flex items-center justify-between gap-2">
-          <label for="ticket-description" class="text-headline-sm text-on-surface">{{ 'tickets.form.description' | translate }} <span class="text-error" aria-hidden="true">*</span></label>
-          <span class="font-mono text-mono-timer text-on-surface-variant" aria-hidden="true">{{ descriptionLength() }} / {{ descriptionMax }}</span>
+          <label for="ticket-description" class="text-headline-sm text-on-surface"
+            >{{ 'tickets.form.description' | translate }}
+            <span class="text-error" aria-hidden="true">*</span></label
+          >
+          <span class="font-mono text-mono-timer text-on-surface-variant" aria-hidden="true"
+            >{{ descriptionLength() }} / {{ descriptionMax }}</span
+          >
         </div>
-        <textarea id="ticket-description" formControlName="description" rows="8" [maxlength]="descriptionMax" required
-          class="ops-input h-auto min-h-40 py-2.5 leading-relaxed" [placeholder]="'tickets.create.descriptionPlaceholder' | translate"
+        <textarea
+          id="ticket-description"
+          formControlName="description"
+          rows="8"
+          [maxlength]="descriptionMax"
+          required
+          class="ops-input h-auto min-h-40 py-2.5 leading-relaxed"
+          [placeholder]="'tickets.create.descriptionPlaceholder' | translate"
           [attr.aria-invalid]="invalid('description') || !!serverErrors()['Description']"
-          [attr.aria-describedby]="invalid('description') || serverErrors()['Description'] ? 'ticket-description-error' : null"></textarea>
+          [attr.aria-describedby]="
+            invalid('description') || serverErrors()['Description']
+              ? 'ticket-description-error'
+              : null
+          "
+        ></textarea>
         @if (invalid('description') || serverErrors()['Description']) {
-          <p id="ticket-description-error" class="ops-error">{{ serverErrors()['Description'] ?? ('validation.required' | translate) }}</p>
+          <p id="ticket-description-error" class="ops-error">
+            {{ serverErrors()['Description'] ?? ('validation.required' | translate) }}
+          </p>
         }
       </div>
     </div>
@@ -93,45 +189,79 @@
       <!-- Assignment: managers pick agents; agents are assigned automatically by the server -->
       <section class="ops-card flex flex-col gap-3 p-4 sm:p-5" aria-labelledby="assign-title">
         <h2 id="assign-title" class="flex items-center gap-2 text-headline-sm text-on-surface">
-          <span class="ms text-[18px] text-primary" aria-hidden="true">assignment_ind</span>{{ 'tickets.create.routing' | translate }}</h2>
+          <span class="ms text-[18px] text-primary" aria-hidden="true">assignment_ind</span
+          >{{ 'tickets.create.routing' | translate }}
+        </h2>
         @if (isManager()) {
           <fieldset>
-            <legend class="mb-2 text-body-sm text-on-surface-variant">{{ 'tickets.form.assignees' | translate }}</legend>
+            <legend class="mb-2 text-body-sm text-on-surface-variant">
+              {{ 'tickets.form.assignees' | translate }}
+            </legend>
             <ul class="flex max-h-64 flex-col gap-1 overflow-y-auto">
               @for (a of agents.value() ?? []; track a.id) {
                 <li>
-                  <label class="flex min-h-10 cursor-pointer items-center gap-2 rounded-lg px-2 hover:bg-surface-container-low">
-                    <input type="checkbox" class="size-4 accent-[var(--ops-primary-container)]" [checked]="selected().has(a.id)" (change)="toggle(a.id)" />
+                  <label
+                    class="flex min-h-10 cursor-pointer items-center gap-2 rounded-lg px-2 hover:bg-surface-container-low"
+                  >
+                    <input
+                      type="checkbox"
+                      class="size-4 accent-[var(--ops-primary-container)]"
+                      [checked]="selected().has(a.id)"
+                      (change)="toggle(a.id)"
+                    />
                     <span class="text-body-md text-on-surface">{{ a.displayName }}</span>
                   </label>
                 </li>
               } @empty {
-                <li class="text-body-sm text-on-surface-variant">{{ (agents.isLoading() ? 'common.loading' : 'tickets.create.noAgents') | translate }}</li>
+                <li class="text-body-sm text-on-surface-variant">
+                  {{
+                    (agents.isLoading() ? 'common.loading' : 'tickets.create.noAgents') | translate
+                  }}
+                </li>
               }
             </ul>
           </fieldset>
         } @else if (tenant.role() === 'Agent') {
-          <p class="text-body-sm text-on-surface-variant">{{ 'tickets.create.agentSelfAssigned' | translate }}</p>
+          <p class="text-body-sm text-on-surface-variant">
+            {{ 'tickets.create.agentSelfAssigned' | translate }}
+          </p>
         } @else {
-          <p class="text-body-sm text-on-surface-variant">{{ 'tickets.create.customerRouting' | translate }}</p>
+          <p class="text-body-sm text-on-surface-variant">
+            {{ 'tickets.create.customerRouting' | translate }}
+          </p>
         }
       </section>
 
       <section class="ops-card flex flex-col gap-2 p-4 sm:p-5" aria-labelledby="next-title">
         <h2 id="next-title" class="flex items-center gap-2 text-headline-sm text-on-surface">
-          <span class="ms text-[18px] text-primary" aria-hidden="true">info</span>{{ 'tickets.create.afterTitle' | translate }}</h2>
-        <p class="text-body-sm text-on-surface-variant">{{ 'tickets.create.afterText' | translate }}</p>
+          <span class="ms text-[18px] text-primary" aria-hidden="true">info</span
+          >{{ 'tickets.create.afterTitle' | translate }}
+        </h2>
+        <p class="text-body-sm text-on-surface-variant">
+          {{ 'tickets.create.afterText' | translate }}
+        </p>
       </section>
 
       @if (error(); as e) {
-        <p role="alert" class="flex items-start gap-2 rounded-lg bg-error-container p-3 text-body-sm text-on-error-container">
-          <span class="ms text-[18px]" aria-hidden="true">error</span>{{ e | translate }}</p>
+        <p
+          role="alert"
+          class="flex items-start gap-2 rounded-lg bg-error-container p-3 text-body-sm text-on-error-container"
+        >
+          <span class="ms text-[18px]" aria-hidden="true">error</span>{{ e | translate }}
+        </p>
       }
       <div class="flex flex-col gap-2 sm:flex-row lg:flex-col">
         <button type="submit" class="ops-btn-primary w-full" [disabled]="saving()">
-          @if (saving()) { <span class="ms text-[18px] motion-safe:animate-spin" aria-hidden="true">progress_activity</span> }
-          {{ (saving() ? 'common.saving' : 'tickets.form.submit') | translate }}</button>
-        <a routerLink="/tickets" class="ops-btn-secondary h-11 w-full">{{ 'common.cancel' | translate }}</a>
+          @if (saving()) {
+            <span class="ms text-[18px] motion-safe:animate-spin" aria-hidden="true"
+              >progress_activity</span
+            >
+          }
+          {{ (saving() ? 'common.saving' : 'tickets.form.submit') | translate }}
+        </button>
+        <a routerLink="/tickets" class="ops-btn-secondary h-11 w-full">{{
+          'common.cancel' | translate
+        }}</a>
       </div>
     </aside>
   </form>

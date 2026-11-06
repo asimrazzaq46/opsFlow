@@ -10,8 +10,26 @@ import { AccountApi } from '../account-api';
 /** Short "Browser · OS" label; the raw user agent stays available as a tooltip. */
 export function deviceLabel(userAgent: string | null | undefined): string | null {
   if (!userAgent) return null;
-  const browser = /Edg\//.test(userAgent) ? 'Edge' : /Firefox\//.test(userAgent) ? 'Firefox' : /Chrome\//.test(userAgent) ? 'Chrome' : /Safari\//.test(userAgent) ? 'Safari' : null;
-  const os = /Windows/.test(userAgent) ? 'Windows' : /Android/.test(userAgent) ? 'Android' : /iPhone|iPad/.test(userAgent) ? 'iOS' : /Mac OS/.test(userAgent) ? 'macOS' : /Linux/.test(userAgent) ? 'Linux' : null;
+  const browser = /Edg\//.test(userAgent)
+    ? 'Edge'
+    : /Firefox\//.test(userAgent)
+      ? 'Firefox'
+      : /Chrome\//.test(userAgent)
+        ? 'Chrome'
+        : /Safari\//.test(userAgent)
+          ? 'Safari'
+          : null;
+  const os = /Windows/.test(userAgent)
+    ? 'Windows'
+    : /Android/.test(userAgent)
+      ? 'Android'
+      : /iPhone|iPad/.test(userAgent)
+        ? 'iOS'
+        : /Mac OS/.test(userAgent)
+          ? 'macOS'
+          : /Linux/.test(userAgent)
+            ? 'Linux'
+            : null;
   return [browser, os].filter(Boolean).join(' · ') || null;
 }
 
@@ -39,7 +57,10 @@ export class AccountSessions {
   }
 
   protected when(iso: string): string {
-    return new Date(iso).toLocaleString(this.language.current(), { dateStyle: 'medium', timeStyle: 'short' });
+    return new Date(iso).toLocaleString(this.language.current(), {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    });
   }
 
   protected revoke(s: SessionResponse): void {

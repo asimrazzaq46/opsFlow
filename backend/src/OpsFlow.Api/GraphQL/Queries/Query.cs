@@ -139,7 +139,8 @@ public sealed class Query
                     "updatedAt",
                     true,
                     Math.Max(f.Page ?? 1, 1),
-                    take
+                    take,
+                    f.AssignedToMe
                 ),
                 ct
             );

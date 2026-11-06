@@ -36,6 +36,8 @@ services:
     image: axllent/mailpit:latest
     container_name: opsflow-mailpit
     restart: unless-stopped
+    # Without this Mailpit does a reverse-DNS lookup of every client before it greets, which stalls each SMTP connection for ~10 s.
+    command: ["--smtp-disable-rdns"]
     ports:
       - "127.0.0.1:1025:1025" # SMTP
       - "127.0.0.1:8025:8025" # web UI

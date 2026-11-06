@@ -6,6 +6,7 @@ using OpsFlow.Application.Abstractions;
 using OpsFlow.Application.Common;
 using OpsFlow.Application.Memberships;
 using OpsFlow.Application.Notifications;
+using OpsFlow.Application.Outbox;
 using OpsFlow.Domain.Notifications;
 using OpsFlow.Domain.Tenants;
 using OpsFlow.Domain.Tickets;
@@ -18,6 +19,7 @@ public sealed partial class TicketService(
     TicketAccess access,
     ITenantContext tenantContext,
     NotificationService notifications,
+    OutboxWriter outbox,
     TimeProvider clock,
     ILogger<TicketService> logger
 )
@@ -250,6 +252,7 @@ public sealed partial class TicketService(
             );
         }
 
+        outbox.StageTicketChanged(ticket.TenantId, ticket.Id, TicketChanges.Created);
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         LogCreated(logger, ticket.Id, ticket.TenantId);
@@ -280,7 +283,7 @@ public sealed partial class TicketService(
         var actor = await access.ResolveAsync(ct);
         var now = Now;
         var row =
-            await Project(access.Visible(actor).Where(t => t.Id == id)).SingleOrDefaultAsync(ct)
+            await Project(access.Visible(actor).Where(t => t.Id == id), actor.MembershipId).SingleOrDefaultAsync(ct)
             ?? throw NotFound();
         var prefix = await PrefixAsync(ct);
         var meta = await db
@@ -336,6 +339,7 @@ public sealed partial class TicketService(
             actor.IsCustomer
             && (
                 filter.AssignedMembershipId is not null
+                || filter.AssignedToMe
                 || filter.CustomerId is not null
                 || filter.State is TicketState.Overdue or TicketState.Unstaffed
             )
@@ -371,6 +375,16 @@ public sealed partial class TicketService(
         if (filter.CustomerId is { } customerId)
         {
             query = query.Where(t => t.CustomerId == customerId);
+        }
+
+        if (filter.AssignedToMe)
+        {
+            var me = actor.MembershipId; // the caller's own membership, resolved server-side
+            query = query.Where(t =>
+                db.TicketAssignments.Any(a =>
+                    a.TicketId == t.Id && a.MembershipId == me && a.UnassignedAtUtc == null
+                )
+            );
         }
 
         if (filter.AssignedMembershipId is { } assignee)
@@ -428,12 +442,19 @@ public sealed partial class TicketService(
 
         var total = await query.CountAsync(ct);
         var rows = await Project(
-                Order(query, filter.SortBy, filter.Descending).Skip(skip).Take(pageSize)
+                Order(query, filter.SortBy, filter.Descending).Skip(skip).Take(pageSize),
+                actor.MembershipId
             )
             .ToListAsync(ct);
         var prefix = await PrefixAsync(ct);
+        var assignees = actor.IsCustomer ? null : await AssigneesOfAsync(rows.ConvertAll(r => r.Id), ct);
         return new PagedResult<TicketSummaryDto>(
-            rows.ConvertAll(r => ToSummary(r, prefix, now, !actor.IsCustomer)),
+            rows.ConvertAll(r =>
+                ToSummary(r, prefix, now, !actor.IsCustomer) with
+                {
+                    Assignees = assignees is null ? null : assignees.GetValueOrDefault(r.Id) ?? [],
+                }
+            ),
             page,
             pageSize,
             total
@@ -455,24 +476,50 @@ public sealed partial class TicketService(
 
         (page, pageSize, var skip) = Paging.Normalize(page, pageSize, MaxPageSize);
         var customer = actor.IsCustomer;
+        // Internal entries (staffing, child tasks, attachments, SLA) are for people responsible for the ticket; others get the lifecycle.
+        var lifecycleOnly = customer || !await access.MayWorkOnAsync(actor, ticketId, ct);
         var query = db
             .TicketActivities.AsNoTracking()
-            .Where(a => a.TicketId == ticketId && (!customer || a.CustomerVisible));
+            .Where(a => a.TicketId == ticketId && (!lifecycleOnly || a.CustomerVisible));
         var total = await query.CountAsync(ct);
-        var items = await query
-            .OrderBy(a => a.Sequence)
-            .Skip(skip)
-            .Take(pageSize)
-            .Select(a => new TicketActivityDto(
+        var rows = await query.OrderBy(a => a.Sequence).Skip(skip).Take(pageSize).ToListAsync(ct);
+
+        // Names for the whole page in two queries (never one per entry). The audit row keeps the user id, so a deactivated or removed
+        // member is still named.
+        var actorIds = rows.Where(a => a.ActorUserId is not null).Select(a => a.ActorUserId!.Value).Distinct().ToList();
+        Dictionary<Guid, string> actorNames = actorIds.Count == 0
+            ? new()
+            : await db.Users.AsNoTracking().Where(u => actorIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.DisplayName, ct);
+        var assignedIds = rows
+            .Where(a => a.Type is TicketActivityType.AgentAssigned or TicketActivityType.AgentUnassigned && a.RelatedId is not null)
+            .Select(a => a.RelatedId!.Value)
+            .Distinct()
+            .ToList();
+        Dictionary<Guid, string> assignedNames = customer || assignedIds.Count == 0
+            ? new()
+            : await (
+                from m in db.Memberships.AsNoTracking()
+                join u in db.Users on m.UserId equals u.Id
+                where assignedIds.Contains(m.Id)
+                select new { m.Id, u.DisplayName }
+            ).ToDictionaryAsync(x => x.Id, x => x.DisplayName, ct);
+
+        var items = rows.ConvertAll(a =>
+        {
+            var own = a.ActorUserId == actor.UserId;
+            var name = a.ActorUserId is { } id && (!customer || own) ? actorNames.GetValueOrDefault(id) : null;
+            return new TicketActivityDto(
                 a.Id,
                 a.Sequence,
                 a.Type,
                 a.OccurredAtUtc,
                 customer ? null : a.ActorUserId,
                 a.OldValue,
-                a.NewValue
-            ))
-            .ToListAsync(ct);
+                a.NewValue,
+                name,
+                a.RelatedId is { } related && assignedNames.TryGetValue(related, out var assigned) ? assigned : null
+            );
+        });
         return new PagedResult<TicketActivityDto>(items, page, pageSize, total);
     }
 
@@ -524,6 +571,11 @@ public sealed partial class TicketService(
         if (ticket is null)
         {
             return new NotFoundObjectResult(new ProblemDetails { Title = "Ticket not found." });
+        }
+
+        if (!await access.MayWorkOnAsync(actor, id, ct))
+        {
+            return ActorAccess.Forbidden(TicketAccess.AgentMustBeAssigned);
         }
 
         if (cmd.Version is { } expected && expected != ticket.Version)
@@ -622,6 +674,7 @@ public sealed partial class TicketService(
 
         if (changed)
         {
+            outbox.StageTicketChanged(ticket.TenantId, ticket.Id, TicketChanges.Updated);
             try
             {
                 await db.SaveChangesAsync(ct);
@@ -693,11 +746,12 @@ public sealed partial class TicketService(
         int Version,
         int AssigneeCount,
         DateTime? ResolutionDueAtUtc,
-        int EligibleAssigneeCount
+        int EligibleAssigneeCount,
+        bool AssignedToMe
     );
 
     // One query per page: correlated sub-selects instead of Include chains or per-row follow-up queries.
-    private IQueryable<TicketRow> Project(IQueryable<Ticket> query)
+    private IQueryable<TicketRow> Project(IQueryable<Ticket> query, Guid actorMembershipId)
     {
         var effective = access.EffectiveAssignments();
         return query.Select(t => new TicketRow(
@@ -720,8 +774,42 @@ public sealed partial class TicketService(
             db.TicketSlaCycles.Where(c => c.TicketId == t.Id && c.ResolvedAtUtc == null)
                 .Select(c => (DateTime?)c.ResolutionDueAtUtc)
                 .FirstOrDefault(),
-            effective.Count(a => a.TicketId == t.Id)
+            effective.Count(a => a.TicketId == t.Id),
+            db.TicketAssignments.Any(a =>
+                a.TicketId == t.Id && a.MembershipId == actorMembershipId && a.UnassignedAtUtc == null
+            )
         ));
+    }
+
+    /// <summary>The current assignees of every ticket on a page in ONE query, so board cards need no per-card request.</summary>
+    private async Task<Dictionary<Guid, IReadOnlyList<AssigneeDto>>> AssigneesOfAsync(
+        List<Guid> ticketIds,
+        CancellationToken ct
+    )
+    {
+        var rows = await (
+            from a in db.TicketAssignments.AsNoTracking()
+            join m in db.Memberships on a.MembershipId equals m.Id
+            join u in db.Users on m.UserId equals u.Id
+            where ticketIds.Contains(a.TicketId) && a.UnassignedAtUtc == null
+            orderby a.AssignedAtUtc, a.Id
+            select new
+            {
+                a.TicketId,
+                Dto = new AssigneeDto(
+                    m.Id,
+                    u.Id,
+                    u.DisplayName,
+                    a.AssignedAtUtc,
+                    m.Role == TenantRole.Agent
+                        && m.Status == MembershipStatus.Active
+                        && u.Status == Domain.Users.UserStatus.Active
+                ),
+            }
+        ).ToListAsync(ct);
+        return rows
+            .GroupBy(r => r.TicketId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<AssigneeDto>)g.Select(r => r.Dto).ToList());
     }
 
     private async Task<string> PrefixAsync(CancellationToken ct) =>
@@ -756,7 +844,8 @@ public sealed partial class TicketService(
                 ? r.ResolutionDueAtUtc is { } due
                     && !TicketWorkflow.IsFinished(r.Status)
                     && now > due
-                : null
+                : null,
+            staff ? r.AssignedToMe : null
         );
 
     internal static SlaCycleDto ToDto(TicketSlaCycle c, DateTime now) =>

@@ -22,7 +22,7 @@
 }
 
 /* The arrow of an unsorted column stays faint; the sorted one is announced through aria-sort. */
-th[aria-sort="none"] .sort-btn .ms {
+th[aria-sort='none'] .sort-btn .ms {
   opacity: 0.35;
 }
 

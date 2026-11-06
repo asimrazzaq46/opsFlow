@@ -82,8 +82,8 @@ public class TicketTaskTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(w.Agent1Membership, own.AssigneeMembershipId);
         await HttpAssert.StatusAsync(HttpStatusCode.Created, await TryCreateAsync(w, w.Agent1, t.Id, assignee: w.Agent1Membership));
         await HttpAssert.StatusAsync(HttpStatusCode.Forbidden, await TryCreateAsync(w, w.Agent1, t.Id, assignee: w.Agent2Membership));
-        await HttpAssert.StatusAsync(HttpStatusCode.NotFound, await TryCreateAsync(w, w.Agent2, t.Id)); // not assigned to the parent ticket
-        await HttpAssert.StatusAsync(HttpStatusCode.NotFound, await w.Agent2.GetAsync(Tasks(w, t.Id)));
+        await HttpAssert.StatusAsync(HttpStatusCode.Forbidden, await TryCreateAsync(w, w.Agent2, t.Id)); // not assigned to the parent ticket
+        await HttpAssert.StatusAsync(HttpStatusCode.Forbidden, await w.Agent2.GetAsync(Tasks(w, t.Id)));
 
         await HttpAssert.StatusAsync(HttpStatusCode.Conflict, await TryCreateAsync(w, w.Manager, t.Id, assignee: w.Agent2Membership)); // active agent, not on the ticket
         await HttpAssert.StatusAsync(HttpStatusCode.BadRequest, await TryCreateAsync(w, w.Manager, t.Id, assignee: w.ManagerMembership)); // not an Agent
@@ -285,7 +285,7 @@ public class TicketTaskTests(ApiFactory factory) : IClassFixture<ApiFactory>
 
         var list = await ListAsync(w, w.Manager, t.Id);
         Assert.False(list.Tasks.Single(x => x.Title == "Done one").IsAssigneeEligible); // completed task keeps its historical owner
-        await HttpAssert.StatusAsync(HttpStatusCode.NotFound, await w.Agent1.GetAsync(Tasks(w, t.Id))); // access ends with the assignment
+        await HttpAssert.StatusAsync(HttpStatusCode.Forbidden, await w.Agent1.GetAsync(Tasks(w, t.Id))); // access ends with the assignment
     }
 
     [Fact]

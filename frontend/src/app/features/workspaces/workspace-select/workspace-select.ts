@@ -3,6 +3,7 @@ import { Router, RouterLink } from '@angular/router';
 import { TranslatePipe } from '@ngx-translate/core';
 import { OrganizationDto } from '../../../core/api/generated/models';
 import { AuthService } from '../../../core/auth/auth.service';
+import { PendingInvitation } from '../../../core/auth/pending-invitation';
 import { TenantService } from '../../../core/auth/tenant.service';
 import { initials } from '../workspace-api';
 
@@ -21,13 +22,16 @@ export class WorkspaceSelect {
   protected readonly auth = inject(AuthService);
   protected readonly tenant = inject(TenantService);
   private readonly router = inject(Router);
+  protected readonly invitationToken = inject(PendingInvitation).token();
 
   protected readonly initials = initials;
   protected readonly query = signal('');
   protected readonly filtered = computed(() => {
     const q = this.query().trim().toLowerCase();
     const orgs = this.tenant.organizations();
-    return q ? orgs.filter((o) => o.name.toLowerCase().includes(q) || o.slug.toLowerCase().includes(q)) : orgs;
+    return q
+      ? orgs.filter((o) => o.name.toLowerCase().includes(q) || o.slug.toLowerCase().includes(q))
+      : orgs;
   });
 
   constructor() {

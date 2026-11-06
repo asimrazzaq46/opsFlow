@@ -4,10 +4,17 @@ import { rxResource, takeUntilDestroyed, toSignal } from '@angular/core/rxjs-int
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { ActivatedRoute, ParamMap, Params, Router, RouterLink } from '@angular/router';
 import { TranslatePipe } from '@ngx-translate/core';
-import { debounceTime, distinctUntilChanged, map } from 'rxjs';
+import { debounceTime, distinctUntilChanged, map, merge } from 'rxjs';
 import { TicketState, TicketStatus, TicketPriority } from '../../core/api/generated/models';
 import { TenantService } from '../../core/auth/tenant.service';
-import { PRIORITY_BADGE, STATUS_BADGE, TICKET_PRIORITIES, TICKET_STATUSES, httpStatus } from './ticket-ui';
+import { RealtimeService } from '../../core/realtime/realtime.service';
+import {
+  PRIORITY_BADGE,
+  STATUS_BADGE,
+  TICKET_PRIORITIES,
+  TICKET_STATUSES,
+  httpStatus,
+} from './ticket-ui';
 import { TicketQuery, TicketSort, TicketsApi } from './tickets-api';
 
 export const PAGE_SIZES = [10, 25, 50] as const;
@@ -29,6 +36,7 @@ export function parseTicketQuery(p: ParamMap): TicketQuery {
     priority: pick('priority', TICKET_PRIORITIES),
     categoryId: category && /^[0-9a-f-]{36}$/i.test(category) ? category : undefined,
     state: pick<ViewState>('state', ['Open', 'Finished', 'Overdue', 'Unstaffed']),
+    assignedToMe: p.get('scope') === 'mine' || undefined,
     sortBy: pick('sort', SORTS) ?? 'updatedAt',
     descending: p.get('dir') !== 'asc',
     page: Number.isInteger(page) && page > 0 ? page : 1,
@@ -48,6 +56,7 @@ export class TicketList {
   private readonly api = inject(TicketsApi);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
+  private readonly realtime = inject(RealtimeService);
 
   protected readonly statuses = TICKET_STATUSES;
   protected readonly priorities = TICKET_PRIORITIES;
@@ -55,9 +64,17 @@ export class TicketList {
   protected readonly statusBadge = STATUS_BADGE;
   protected readonly priorityBadge = PRIORITY_BADGE;
 
-  protected readonly query = toSignal(this.route.queryParamMap.pipe(map(parseTicketQuery)), { requireSync: true });
+  protected readonly query = toSignal(this.route.queryParamMap.pipe(map(parseTicketQuery)), {
+    requireSync: true,
+  });
   protected searchFocused = false;
   protected readonly search = new FormControl(this.query().search ?? '', { nonNullable: true });
+
+  /** All Tickets: everything the caller may see in this workspace. My Tickets: the caller's own open assignments (resolved by the server). */
+  protected readonly scopes = [
+    { key: null, label: 'tickets.list.scope.all' },
+    { key: 'mine', label: 'tickets.list.scope.mine' },
+  ] as const;
 
   // Staff-only views: customers never receive SLA or staffing data, so those filters are not offered to them.
   protected readonly views = computed<{ key: ViewState | null; label: string }[]>(() => [
@@ -78,7 +95,8 @@ export class TicketList {
       const tenantId = this.tenant.tenantId();
       return tenantId ? { tenantId, query: this.query() } : undefined;
     },
-    stream: ({ params }) => this.api.list(params.query).pipe(map((page) => ({ tenantId: params.tenantId, page }))),
+    stream: ({ params }) =>
+      this.api.list(params.query).pipe(map((page) => ({ tenantId: params.tenantId, page }))),
   });
   protected readonly categories = rxResource({
     params: () => this.tenant.tenantId() ?? undefined,
@@ -90,7 +108,9 @@ export class TicketList {
     return r && r.tenantId === this.tenant.tenantId() ? r.page : null;
   });
   protected readonly total = computed(() => Number(this.page()?.totalCount ?? 0));
-  protected readonly pages = computed(() => Math.max(1, Math.ceil(this.total() / this.query().pageSize)));
+  protected readonly pages = computed(() =>
+    Math.max(1, Math.ceil(this.total() / this.query().pageSize)),
+  );
   protected readonly range = computed(() => {
     const q = this.query();
     const from = this.total() ? (q.page - 1) * q.pageSize + 1 : 0;
@@ -104,15 +124,23 @@ export class TicketList {
   });
   protected readonly filtered = computed(() => {
     const q = this.query();
-    return !!(q.search || q.status || q.priority || q.categoryId || q.state);
+    return !!(q.search || q.status || q.priority || q.categoryId || q.state || q.assignedToMe);
   });
   protected readonly loadError = computed(() => {
     if (this.tickets.status() !== 'error') return null;
     const status = httpStatus(this.tickets.error());
-    return status === 403 ? 'common.forbidden' : status === 400 ? 'tickets.list.invalidFilter' : 'tickets.loadError';
+    return status === 403
+      ? 'common.forbidden'
+      : status === 400
+        ? 'tickets.list.invalidFilter'
+        : 'tickets.loadError';
   });
 
   constructor() {
+    // Any staff change in this workspace (and a reconnect) refreshes the current page; the server decides what the caller may see.
+    merge(this.realtime.on('ticket.changed'), this.realtime.reconnected)
+      .pipe(debounceTime(1000), takeUntilDestroyed())
+      .subscribe(() => this.tickets.reload());
     this.search.valueChanges
       .pipe(
         debounceTime(350),
@@ -126,12 +154,19 @@ export class TicketList {
     // keeps the box in sync when the URL changes on its own (back/forward), never while the user is typing
     this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe((p) => {
       const q = p.get('q') ?? '';
-      if (!this.searchFocused && q.trim() !== this.search.value.trim()) this.search.setValue(q, { emitEvent: false });
+      if (!this.searchFocused && q.trim() !== this.search.value.trim())
+        this.search.setValue(q, { emitEvent: false });
     });
   }
 
-  protected setFilter(key: 'status' | 'priority' | 'category' | 'state' | 'size', event: Event | string | null): void {
-    const value = typeof event === 'string' || event === null ? event : (event.target as HTMLSelectElement).value;
+  protected setFilter(
+    key: 'status' | 'priority' | 'category' | 'state' | 'size' | 'scope',
+    event: Event | string | null,
+  ): void {
+    const value =
+      typeof event === 'string' || event === null
+        ? event
+        : (event.target as HTMLSelectElement).value;
     this.navigate({ [key]: value || null, page: null });
   }
 
@@ -139,7 +174,11 @@ export class TicketList {
   protected sort(field: TicketSort): void {
     const q = this.query();
     const descending = q.sortBy === field ? !q.descending : true;
-    this.navigate({ sort: field === 'updatedAt' ? null : field, dir: descending ? null : 'asc', page: null });
+    this.navigate({
+      sort: field === 'updatedAt' ? null : field,
+      dir: descending ? null : 'asc',
+      page: null,
+    });
   }
 
   protected ariaSort(field: TicketSort): 'ascending' | 'descending' | 'none' {
@@ -153,7 +192,15 @@ export class TicketList {
 
   protected reset(): void {
     this.search.setValue('', { emitEvent: false });
-    this.navigate({ q: null, status: null, priority: null, category: null, state: null, page: null });
+    this.navigate({
+      q: null,
+      status: null,
+      priority: null,
+      category: null,
+      state: null,
+      scope: null,
+      page: null,
+    });
   }
 
   protected count = (v: number | string | null) => Number(v ?? 0);
@@ -161,6 +208,11 @@ export class TicketList {
   protected priorityLabel = (p: TicketPriority) => 'tickets.priority.' + p;
 
   private navigate(params: Params, replaceUrl = false): void {
-    void this.router.navigate([], { relativeTo: this.route, queryParams: params, queryParamsHandling: 'merge', replaceUrl });
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: params,
+      queryParamsHandling: 'merge',
+      replaceUrl,
+    });
   }
 }

@@ -58,6 +58,7 @@ type CurrentStateDto {
   unassignedTickets: Int!
   overdueTickets: Int!
   resolvedToday: Int!
+  assignedToMe: Int
 }
 
 type CustomerAnalysisDto {
@@ -205,6 +206,8 @@ type TicketActivityDto {
   actorUserId: UUID
   oldValue: String
   newValue: String
+  actorDisplayName: String
+  relatedDisplayName: String
 }
 
 type TicketDetailDto {
@@ -239,6 +242,8 @@ type TicketSummaryDto {
   eligibleAssigneeCount: Int
   resolutionDueAtUtc: DateTime
   isOverdue: Boolean
+  assignedToMe: Boolean
+  assignees: [AssigneeDto!]
 }
 
 type TicketTaskProgressDto {
@@ -278,6 +283,7 @@ input KanbanFilterInput {
   overdue: Boolean
   includeClosed: Boolean! = false
   page: Int
+  assignedToMe: Boolean! = false
 }
 
 input TicketFilterInput {
@@ -294,6 +300,7 @@ input TicketFilterInput {
   descending: Boolean! = true
   page: Int! = 1
   pageSize: Int! = 20
+  assignedToMe: Boolean! = false
 }
 
 enum SlaCycleReason {

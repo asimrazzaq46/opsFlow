@@ -135,11 +135,10 @@ public sealed partial class AccountService(
         {
             var link =
                 $"{Base}/auth/reset-password?email={Uri.EscapeDataString(user.Email)}&token={raw}";
-            await SendAsync(
+            email.SendDetached(
                 user.Email,
                 "Reset your OpsFlow password",
-                $"Reset your password: {link}\n\nIf you did not request this, ignore this email.",
-                ct
+                $"Reset your password: {link}\n\nIf you did not request this, ignore this email."
             );
         }
     }
@@ -374,11 +373,10 @@ public sealed partial class AccountService(
         if (await TrySaveAsync(ct))
         {
             var link = $"{Base}/auth/confirm-email?userId={user.Id}&token={raw}";
-            await SendAsync(
+            email.SendDetached(
                 user.Email,
                 "Confirm your OpsFlow email",
-                $"Welcome to OpsFlow. Confirm your email: {link}",
-                ct
+                $"Welcome to OpsFlow. Confirm your email: {link}"
             );
         }
     }
@@ -413,24 +411,6 @@ public sealed partial class AccountService(
         }
     }
 
-    // Delivery failures are logged, never surfaced: a 500 for new accounts only would reveal which emails exist.
-    private async Task SendAsync(
-        string recipient,
-        string subject,
-        string body,
-        CancellationToken ct
-    )
-    {
-        try
-        {
-            await email.SendAsync(recipient, subject, body, ct);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            LogEmailFailed(logger, ex);
-        }
-    }
-
     private string Base => app.Value.BaseUrl.TrimEnd('/');
 
     [LoggerMessage(
@@ -447,7 +427,4 @@ public sealed partial class AccountService(
 
     [LoggerMessage(Level = LogLevel.Information, Message = "User {UserId} changed their display name")]
     private static partial void LogDisplayNameChanged(ILogger logger, Guid userId);
-
-    [LoggerMessage(Level = LogLevel.Error, Message = "Sending an authentication email failed")]
-    private static partial void LogEmailFailed(ILogger logger, Exception exception);
 }

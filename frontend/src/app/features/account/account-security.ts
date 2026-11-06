@@ -18,7 +18,14 @@ import { AccountSessions } from './account-sessions/account-sessions';
  */
 @Component({
   selector: 'app-account-security',
-  imports: [ReactiveFormsModule, TranslatePipe, GoogleSignIn, AccountProfile, AccountPassword, AccountSessions],
+  imports: [
+    ReactiveFormsModule,
+    TranslatePipe,
+    GoogleSignIn,
+    AccountProfile,
+    AccountPassword,
+    AccountSessions,
+  ],
   templateUrl: './account-security.html',
   styleUrl: './account-security.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -30,7 +37,10 @@ export class AccountSecurity {
   private readonly sessionList = viewChild(AccountSessions);
 
   protected readonly profile = rxResource({ stream: () => this.account.profile() });
-  protected readonly password = new FormControl('', { nonNullable: true, validators: [Validators.required] });
+  protected readonly password = new FormControl('', {
+    nonNullable: true,
+    validators: [Validators.required],
+  });
   /** Set once the user confirmed the password; renders the Google button with a link challenge. */
   protected readonly confirmedPassword = signal<string | null>(null);
   protected readonly busy = signal(false);

@@ -26,6 +26,7 @@ export interface ListTickets$Params {
   Descending?: boolean;
   Page?: (number | string);
   PageSize?: (number | string);
+  AssignedToMe?: boolean;
 
 /**
  * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
@@ -49,6 +50,7 @@ export function listTickets(http: HttpClient, rootUrl: string, params: ListTicke
     rb.query('Descending', params.Descending, {});
     rb.query('Page', params.Page, {});
     rb.query('PageSize', params.PageSize, {});
+    rb.query('AssignedToMe', params.AssignedToMe, {});
     rb.path('tenantId', params.tenantId, {});
   }
 

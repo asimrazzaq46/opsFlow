@@ -428,6 +428,49 @@ public sealed partial class InvitationService(
         return (await ExistingAsync(invitation.TenantId, userId, ct))!;
     }
 
+    /// <summary>
+    /// Read-only view of an invitation for its token holder (the token is the proof of mailbox access, so the invited address may be
+    /// shown to prefill registration). Revoked, used, unknown and no-longer-authorized invitations are indistinguishable.
+    /// </summary>
+    public async Task<InvitationPreviewDto> PreviewAsync(string token, CancellationToken ct)
+    {
+        var now = clock.GetUtcNow().UtcDateTime;
+        var hash = SecureToken.Hash(token);
+        var invitation = await db
+            .Invitations.IgnoreQueryFilters()
+            .AsNoTracking()
+            .SingleOrDefaultAsync(i => i.TokenHash == hash, ct);
+        if (invitation is null || !invitation.IsOpen)
+        {
+            return Unavailable;
+        }
+
+        if (!invitation.IsPending(now))
+        {
+            return new InvitationPreviewDto(InvitationPreviewState.Expired, null, null, null, null);
+        }
+
+        if (!await InviterStillAuthorizedAsync(invitation, ct))
+        {
+            return Unavailable;
+        }
+
+        using var scope = tenantContext.Begin(invitation.TenantId);
+        var tenant = await db.Tenants.AsNoTracking().SingleOrDefaultAsync(ct);
+        return tenant is null
+            ? Unavailable
+            : new InvitationPreviewDto(
+                InvitationPreviewState.Valid,
+                tenant.Name,
+                invitation.Role.ToString(),
+                invitation.Email,
+                invitation.ExpiresAtUtc
+            );
+    }
+
+    private static readonly InvitationPreviewDto Unavailable =
+        new(InvitationPreviewState.Unavailable, null, null, null, null);
+
     // The composite FK guarantees the inviter belongs to the same tenant; here we check the inviter is STILL entitled.
     private async Task<bool> InviterStillAuthorizedAsync(
         Invitation invitation,
@@ -490,11 +533,10 @@ public sealed partial class InvitationService(
         {
             var tenant = await db.Tenants.SingleAsync(ct);
             var link = $"{options.Value.BaseUrl.TrimEnd('/')}/invitations/accept?token={token}";
-            await email.SendAsync(
+            email.SendDetached(
                 invitation.Email,
                 $"You are invited to join {tenant.Name} on OpsFlow",
-                $"You have been invited to join {tenant.Name} as {invitation.Role}.\n\nAccept the invitation: {link}\n\nThis link expires on {invitation.ExpiresAtUtc:u}.",
-                ct
+                $"You have been invited to join {tenant.Name} as {invitation.Role}.\n\nAccept the invitation: {link}\n\nThis link expires on {invitation.ExpiresAtUtc:u}."
             );
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

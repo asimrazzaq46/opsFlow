@@ -1,0 +1,97 @@
+@if (total() > 0) {
+  <button
+    type="button"
+    class="tasks-toggle"
+    [attr.aria-expanded]="expanded()"
+    [attr.aria-controls]="'tasks-' + ticketId()"
+    (click)="toggle()"
+  >
+    <span class="ms text-[16px]" aria-hidden="true">{{ expanded() ? 'expand_less' : 'expand_more' }}</span>
+    <span class="font-medium">{{ 'kanban.tasks.summary' | translate: { done: done(), total: total() } }}</span>
+    <span class="h-1.5 w-12 shrink-0 overflow-hidden rounded-full bg-surface" aria-hidden="true">
+      <span class="block h-1.5 rounded-full bg-success" [style.width.%]="percent()"></span>
+    </span>
+  </button>
+}
+
+<div [id]="'tasks-' + ticketId()" class="flex flex-col gap-1">
+  @if (expanded()) {
+    @if (loading() && tasks() === null) {
+      <p class="px-1 text-xs text-muted" role="status">{{ 'common.loading' | translate }}</p>
+    }
+    @if (tasks(); as list) {
+      <ul class="flex flex-col" [attr.aria-label]="'kanban.tasks.list' | translate">
+        @for (t of list; track t.id) {
+          <li class="task-row" [class.task-done]="t.status === 'Done'">
+            <input
+              type="checkbox"
+              class="size-4 shrink-0 accent-[var(--color-brand)]"
+              [checked]="t.status === 'Done'"
+              [disabled]="!t.canChangeStatus || toggling().has(t.id)"
+              [attr.aria-label]="
+                (t.status === 'Done' ? 'kanban.tasks.reopen' : 'kanban.tasks.complete') | translate: { title: t.title }
+              "
+              (change)="setDone(t, $any($event.target).checked)"
+            />
+            <span class="min-w-0 flex-1 break-words">{{ t.title }}</span>
+            <span class="task-avatar" [attr.title]="t.assigneeDisplayName" aria-hidden="true">{{ initials(t.assigneeDisplayName) }}</span>
+            <span class="sr-only">{{ t.assigneeDisplayName }}</span>
+          </li>
+        }
+      </ul>
+    }
+  }
+
+  @if (showAdd()) {
+    @if (!adding()) {
+      <button type="button" class="tasks-add" (click)="startAdding()">
+        <span class="ms text-[16px]" aria-hidden="true">add</span>{{ 'tasks.add' | translate }}
+      </button>
+    } @else {
+      <div class="flex flex-col gap-1" (keydown)="onKey($event)">
+        <label class="sr-only" [for]="'task-title-' + ticketId()">{{ 'kanban.tasks.titleLabel' | translate }}</label>
+        <input
+          #titleInput
+          type="text"
+          autocomplete="off"
+          class="task-input"
+          [id]="'task-title-' + ticketId()"
+          [formControl]="title"
+          [attr.maxlength]="titleMax"
+          [attr.aria-invalid]="error() ? 'true' : null"
+          [placeholder]="'kanban.tasks.placeholder' | translate"
+          (keydown.enter)="$event.preventDefault(); submit()"
+        />
+        @if (isManager() && assignees().length > 1) {
+          <label class="grid gap-0.5 text-xs">
+            <span class="text-muted">{{ 'kanban.tasks.assignee' | translate }}</span>
+            <select class="task-input" [formControl]="assignee">
+              @for (a of assignees(); track a.membershipId) {
+                <option [value]="a.membershipId">{{ a.displayName }}</option>
+              }
+            </select>
+          </label>
+        }
+        @if (!canWork() && canClaim()) {
+          <p class="text-xs text-muted" role="note">{{ 'kanban.tasks.claimFirst' | translate }}</p>
+          <button type="button" class="task-btn-primary" [disabled]="claiming()" [attr.aria-busy]="claiming()" (click)="claim.emit()">
+            {{ (claiming() ? 'kanban.tasks.claiming' : 'kanban.tasks.claim') | translate }}
+          </button>
+        }
+        @if (error(); as key) {
+          <p class="text-xs text-danger" role="alert">{{ key | translate }}</p>
+        }
+        <div class="flex gap-2">
+          <button type="button" class="task-btn-primary" [disabled]="busy() || !canWork() || !title.value.trim()" [attr.aria-busy]="busy()" (click)="submit()">
+            {{ (busy() ? 'kanban.tasks.saving' : 'kanban.tasks.save') | translate }}
+          </button>
+          <button type="button" class="task-btn" (click)="cancel()">{{ 'kanban.tasks.cancel' | translate }}</button>
+        </div>
+      </div>
+    }
+  }
+
+  @if (!adding() && error(); as key) {
+    <p class="text-xs text-danger" role="alert">{{ key | translate }}</p>
+  }
+</div>

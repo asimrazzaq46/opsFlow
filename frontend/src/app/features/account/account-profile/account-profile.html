@@ -1,19 +1,43 @@
-<section class="flex flex-col rounded-lg bg-surface-container-lowest p-6 shadow-sm" aria-labelledby="profile-title">
+<section
+  class="flex flex-col rounded-lg bg-surface-container-lowest p-6 shadow-sm"
+  aria-labelledby="profile-title"
+>
   <div class="mb-4 flex items-center gap-2 border-b border-surface-container-high/60 pb-3">
-    <div class="grid size-8 place-items-center rounded-sm bg-primary-fixed text-primary"><span class="ms text-[18px]" aria-hidden="true">person</span></div>
+    <div class="grid size-8 place-items-center rounded-sm bg-primary-fixed text-primary">
+      <span class="ms text-[18px]" aria-hidden="true">person</span>
+    </div>
     <div>
-      <h2 id="profile-title" class="text-headline-md text-on-surface">{{ 'account.profile.title' | translate }}</h2>
-      <p class="text-body-sm text-on-surface-variant">{{ 'account.profile.subtitle' | translate }}</p>
+      <h2 id="profile-title" class="text-headline-md text-on-surface">
+        {{ 'account.profile.title' | translate }}
+      </h2>
+      <p class="text-body-sm text-on-surface-variant">
+        {{ 'account.profile.subtitle' | translate }}
+      </p>
     </div>
   </div>
 
   <form class="grid grid-cols-1 gap-3 md:grid-cols-2" (ngSubmit)="save()" novalidate>
     <div class="flex flex-col gap-1">
-      <label class="text-label-caps tracking-wider text-on-surface-variant uppercase" for="profile-name">{{ 'account.profile.name' | translate }}</label>
+      <label
+        class="text-label-caps tracking-wider text-on-surface-variant uppercase"
+        for="profile-name"
+        >{{ 'account.profile.name' | translate }}</label
+      >
       <div class="relative">
-        <input id="profile-name" type="text" autocomplete="name" maxlength="100" [formControl]="name"
-          [attr.aria-invalid]="name.invalid && name.touched ? 'true' : null" class="ops-input h-11 pr-10 text-headline-sm" />
-        <span class="ms pointer-events-none absolute top-3 right-3 text-[18px] text-on-surface-variant" aria-hidden="true">badge</span>
+        <input
+          id="profile-name"
+          type="text"
+          autocomplete="name"
+          maxlength="100"
+          [formControl]="name"
+          [attr.aria-invalid]="name.invalid && name.touched ? 'true' : null"
+          class="ops-input h-11 pr-10 text-headline-sm"
+        />
+        <span
+          class="ms pointer-events-none absolute top-3 right-3 text-[18px] text-on-surface-variant"
+          aria-hidden="true"
+          >badge</span
+        >
       </div>
       @if (name.invalid && name.touched) {
         <p class="ops-error">{{ 'authFlow.validation.name' | translate }}</p>
@@ -22,31 +46,60 @@
 
     <div class="flex flex-col gap-1">
       <div class="flex items-center justify-between gap-2">
-        <label class="text-label-caps tracking-wider text-on-surface-variant uppercase" for="profile-email">{{ 'auth.email' | translate }}</label>
+        <label
+          class="text-label-caps tracking-wider text-on-surface-variant uppercase"
+          for="profile-email"
+          >{{ 'auth.email' | translate }}</label
+        >
         <span class="flex gap-1">
           @if (profile().hasPassword) {
-            <span class="rounded-xs bg-secondary-container px-1.5 text-label-caps text-on-secondary-container uppercase">{{ 'account.profile.password' | translate }}</span>
+            <span
+              class="rounded-xs bg-secondary-container px-1.5 text-label-caps text-on-secondary-container uppercase"
+              >{{ 'account.profile.password' | translate }}</span
+            >
           }
           @if (profile().googleLinked) {
-            <span class="rounded-xs bg-primary-fixed px-1.5 text-label-caps text-primary uppercase">Google</span>
+            <span class="rounded-xs bg-primary-fixed px-1.5 text-label-caps text-primary uppercase"
+              >Google</span
+            >
           }
         </span>
       </div>
       <div class="relative">
-        <input id="profile-email" type="email" readonly [value]="profile().email" aria-describedby="profile-email-hint"
-          class="h-11 w-full cursor-not-allowed rounded-sm bg-surface-container-high/60 px-3 pr-10 text-headline-sm text-on-surface opacity-90 outline-none" />
-        <span class="ms pointer-events-none absolute top-3 right-3 text-[18px] text-on-surface-variant" aria-hidden="true">lock</span>
+        <input
+          id="profile-email"
+          type="email"
+          readonly
+          [value]="profile().email"
+          aria-describedby="profile-email-hint"
+          class="h-11 w-full cursor-not-allowed rounded-sm bg-surface-container-high/60 px-3 pr-10 text-headline-sm text-on-surface opacity-90 outline-none"
+        />
+        <span
+          class="ms pointer-events-none absolute top-3 right-3 text-[18px] text-on-surface-variant"
+          aria-hidden="true"
+          >lock</span
+        >
       </div>
-      <p id="profile-email-hint" class="text-body-sm text-on-surface-variant">{{ 'account.profile.emailHint' | translate }}</p>
+      <p id="profile-email-hint" class="text-body-sm text-on-surface-variant">
+        {{ 'account.profile.emailHint' | translate }}
+      </p>
     </div>
 
     <div class="flex flex-wrap items-center gap-3 md:col-span-2">
-      <button type="submit" class="ops-btn-primary h-10" [disabled]="busy() || name.value.trim() === profile().displayName" [attr.aria-busy]="busy()">
+      <button
+        type="submit"
+        class="ops-btn-primary h-10"
+        [disabled]="busy() || name.value.trim() === profile().displayName"
+        [attr.aria-busy]="busy()"
+      >
         {{ (busy() ? 'common.saving' : 'account.profile.save') | translate }}
       </button>
       @if (status(); as s) {
         @if (s === 'saved') {
-          <span role="status" class="flex items-center gap-1 text-body-sm text-secondary"><span class="ms text-[16px]" aria-hidden="true">check_circle</span>{{ 'account.profile.saved' | translate }}</span>
+          <span role="status" class="flex items-center gap-1 text-body-sm text-secondary"
+            ><span class="ms text-[16px]" aria-hidden="true">check_circle</span
+            >{{ 'account.profile.saved' | translate }}</span
+          >
         } @else {
           <span role="alert" class="text-body-sm text-error">{{ s | translate }}</span>
         }

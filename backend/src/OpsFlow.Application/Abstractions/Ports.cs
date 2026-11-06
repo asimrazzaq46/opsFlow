@@ -27,6 +27,13 @@ public interface IEmailService
         string body,
         CancellationToken cancellationToken
     );
+
+    /// <summary>
+    /// Starts a best-effort delivery without holding the caller: a failure is logged and not retried. For mails that carry a one-time
+    /// secret, which must never be persisted for a later retry, and whose request must not reveal through its duration whether a
+    /// message was sent. Delivery that has to be retried goes through the outbox and <see cref="SendAsync"/>.
+    /// </summary>
+    void SendDetached(string recipient, string subject, string body);
 }
 
 public sealed class AppOptions

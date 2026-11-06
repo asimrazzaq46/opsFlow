@@ -33,7 +33,7 @@ public sealed class TicketAssignmentsController(TicketAssignmentService assignme
     [HttpPost(Name = "AssignTicketAgents")]
     [EndpointSummary("Assign agents")]
     [EndpointDescription(
-        "Assigns one or more eligible agents to the ticket. Requires the Owner or Manager role in the tenant."
+        "Adds one or more eligible agents (active Agents of this tenant) to the ticket without removing anyone. Owners and Managers may assign anyone; an Agent may add themselves (claim) or a teammate. Customers are rejected. Removing an assignee stays with Owners and Managers."
     )]
     [ProducesResponseType<TicketDetailDto>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemResponse>(

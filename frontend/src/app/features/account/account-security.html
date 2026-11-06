@@ -1,18 +1,36 @@
 <div class="flex flex-col gap-4">
   <div class="relative overflow-hidden rounded-lg bg-surface-container-lowest p-6 shadow-sm">
-    <div class="pointer-events-none absolute -top-24 -right-16 size-80 rounded-full bg-primary/5 blur-3xl" aria-hidden="true"></div>
+    <div
+      class="pointer-events-none absolute -top-24 -right-16 size-80 rounded-full bg-primary/5 blur-3xl"
+      aria-hidden="true"
+    ></div>
     <div class="relative z-10 flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
       <div class="max-w-3xl">
-        <h1 id="account-title" class="text-headline-lg tracking-tight text-on-surface sm:text-headline-xl">{{ 'account.title' | translate }}</h1>
-        <p class="mt-1 text-body-md text-on-surface-variant">{{ 'account.subtitle' | translate }}</p>
+        <h1
+          id="account-title"
+          class="text-headline-lg tracking-tight text-on-surface sm:text-headline-xl"
+        >
+          {{ 'account.title' | translate }}
+        </h1>
+        <p class="mt-1 text-body-md text-on-surface-variant">
+          {{ 'account.subtitle' | translate }}
+        </p>
       </div>
       @if (tenant.current(); as org) {
-        <div class="flex shrink-0 items-center gap-2 self-start rounded-lg bg-surface-container-low p-2 lg:self-center">
-          <div class="flex items-center gap-2 rounded-sm bg-surface-container-lowest px-3 py-1 shadow-sm">
+        <div
+          class="flex shrink-0 items-center gap-2 self-start rounded-lg bg-surface-container-low p-2 lg:self-center"
+        >
+          <div
+            class="flex items-center gap-2 rounded-sm bg-surface-container-lowest px-3 py-1 shadow-sm"
+          >
             <span class="ms text-[20px] text-primary" aria-hidden="true">domain</span>
             <div class="flex flex-col">
-              <span class="text-label-caps text-on-surface-variant uppercase">{{ 'tenant.label' | translate }}</span>
-              <span class="max-w-[160px] truncate text-headline-sm text-on-surface">{{ org.name }}</span>
+              <span class="text-label-caps text-on-surface-variant uppercase">{{
+                'tenant.label' | translate
+              }}</span>
+              <span class="max-w-[160px] truncate text-headline-sm text-on-surface">{{
+                org.name
+              }}</span>
             </div>
           </div>
         </div>
@@ -21,11 +39,15 @@
   </div>
 
   @if (profile.isLoading() && !profile.hasValue()) {
-    <p class="text-body-sm text-on-surface-variant" role="status">{{ 'common.loading' | translate }}</p>
+    <p class="text-body-sm text-on-surface-variant" role="status">
+      {{ 'common.loading' | translate }}
+    </p>
   } @else if (profile.error()) {
     <div class="flex items-center gap-3" role="alert">
       <p class="text-body-sm text-error">{{ 'account.loadError' | translate }}</p>
-      <button type="button" (click)="profile.reload()" class="ops-btn-secondary h-9">{{ 'common.retry' | translate }}</button>
+      <button type="button" (click)="profile.reload()" class="ops-btn-secondary h-9">
+        {{ 'common.retry' | translate }}
+      </button>
     </div>
   } @else if (profile.value(); as me) {
     <div class="grid grid-cols-1 items-start gap-4 xl:grid-cols-12">
@@ -37,35 +59,86 @@
       </div>
 
       <!-- Sign-in methods -->
-      <section class="flex flex-col gap-3 rounded-lg bg-surface-container-lowest p-6 shadow-sm xl:col-span-5" aria-labelledby="google-title">
+      <section
+        class="flex flex-col gap-3 rounded-lg bg-surface-container-lowest p-6 shadow-sm xl:col-span-5"
+        aria-labelledby="google-title"
+      >
         <div class="flex items-center gap-2.5">
-          <div class="grid size-8 place-items-center rounded-sm bg-surface-container-high text-primary"><span class="ms text-[20px]" aria-hidden="true">key</span></div>
-          <h2 id="google-title" class="text-headline-md text-on-surface">{{ 'account.google' | translate }}</h2>
+          <div
+            class="grid size-8 place-items-center rounded-sm bg-surface-container-high text-primary"
+          >
+            <span class="ms text-[20px]" aria-hidden="true">key</span>
+          </div>
+          <h2 id="google-title" class="text-headline-md text-on-surface">
+            {{ 'account.google' | translate }}
+          </h2>
         </div>
 
         @if (me.googleLinked) {
-          <p class="flex items-start gap-2 rounded-sm bg-secondary-container/50 p-3 text-body-sm text-on-secondary-container" role="status">
-            <span class="ms text-[16px]" aria-hidden="true">check_circle</span>{{ (linked() ? 'account.linkedNow' : 'account.linked') | translate }}
+          <p
+            class="flex items-start gap-2 rounded-sm bg-secondary-container/50 p-3 text-body-sm text-on-secondary-container"
+            role="status"
+          >
+            <span class="ms text-[16px]" aria-hidden="true">check_circle</span
+            >{{ (linked() ? 'account.linkedNow' : 'account.linked') | translate }}
           </p>
         } @else if (!me.hasPassword) {
-          <p class="text-body-sm text-on-surface-variant">{{ 'account.passwordRequired' | translate }}</p>
+          <p class="text-body-sm text-on-surface-variant">
+            {{ 'account.passwordRequired' | translate }}
+          </p>
         } @else if (confirmedPassword(); as pw) {
-          <p class="text-body-sm text-on-surface-variant">{{ 'account.chooseGoogle' | translate }}</p>
-          <app-google-sign-in purpose="link" [password]="pw" [busy]="busy()" (credential)="link($event)" (prepareFailed)="challengeFailed($event)" />
-          <button type="button" (click)="cancel()" [disabled]="busy()" class="ops-btn-secondary h-9 w-fit">{{ 'common.cancel' | translate }}</button>
+          <p class="text-body-sm text-on-surface-variant">
+            {{ 'account.chooseGoogle' | translate }}
+          </p>
+          <app-google-sign-in
+            purpose="link"
+            [password]="pw"
+            [busy]="busy()"
+            (credential)="link($event)"
+            (prepareFailed)="challengeFailed($event)"
+          />
+          <button
+            type="button"
+            (click)="cancel()"
+            [disabled]="busy()"
+            class="ops-btn-secondary h-9 w-fit"
+          >
+            {{ 'common.cancel' | translate }}
+          </button>
         } @else {
           <form class="space-y-3" (ngSubmit)="confirm()" novalidate>
-            <p class="text-body-sm text-on-surface-variant">{{ 'account.confirmPassword' | translate }}</p>
+            <p class="text-body-sm text-on-surface-variant">
+              {{ 'account.confirmPassword' | translate }}
+            </p>
             <div>
-              <label for="link-password" class="ops-label mb-1.5">{{ 'auth.password' | translate }}</label>
-              <input id="link-password" type="password" autocomplete="current-password" [formControl]="password" class="ops-input font-mono text-mono-data" />
+              <label for="link-password" class="ops-label mb-1.5">{{
+                'auth.password' | translate
+              }}</label>
+              <input
+                id="link-password"
+                type="password"
+                autocomplete="current-password"
+                [formControl]="password"
+                class="ops-input font-mono text-mono-data"
+              />
             </div>
-            <button type="submit" [disabled]="password.invalid || busy()" class="ops-btn-primary h-10">{{ 'account.continue' | translate }}</button>
+            <button
+              type="submit"
+              [disabled]="password.invalid || busy()"
+              class="ops-btn-primary h-10"
+            >
+              {{ 'account.continue' | translate }}
+            </button>
           </form>
         }
 
         @if (error(); as key) {
-          <p role="alert" class="rounded-sm bg-error-container p-3 text-body-sm text-on-error-container">{{ key | translate }}</p>
+          <p
+            role="alert"
+            class="rounded-sm bg-error-container p-3 text-body-sm text-on-error-container"
+          >
+            {{ key | translate }}
+          </p>
         }
       </section>
 

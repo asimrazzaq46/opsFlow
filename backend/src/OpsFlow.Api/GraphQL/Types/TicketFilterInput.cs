@@ -23,7 +23,8 @@ public sealed record TicketFilterInput(
     string? SortBy = null,
     bool Descending = true,
     int Page = 1,
-    int PageSize = 20
+    int PageSize = 20,
+    bool AssignedToMe = false
 )
 {
     public TicketListFilter ToFilter() =>
@@ -40,6 +41,7 @@ public sealed record TicketFilterInput(
             SortBy,
             Descending,
             Page,
-            PageSize
+            PageSize,
+            AssignedToMe
         );
 }

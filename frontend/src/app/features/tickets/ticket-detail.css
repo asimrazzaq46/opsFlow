@@ -25,7 +25,9 @@
   font-weight: 500;
   color: var(--ops-on-surface-variant);
   border-bottom: 2px solid transparent;
-  transition: color 0.15s, border-color 0.15s;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .detail-tab:hover {
@@ -33,7 +35,7 @@
 }
 
 /* The selected tab is marked by weight and an underline in addition to color. */
-.detail-tab[aria-selected="true"] {
+.detail-tab[aria-selected='true'] {
   color: var(--ops-on-surface);
   font-weight: 600;
   border-bottom-color: var(--ops-primary-container);

@@ -8,7 +8,7 @@
 
 /* Vertical connector from one marker to the next (the list gap is 1rem). */
 .timeline-item:not(:last-child)::before {
-  content: "";
+  content: '';
   position: absolute;
   left: calc(1rem - 1px);
   top: 2rem;

@@ -1,5 +1,13 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, effect, inject, input, signal, untracked } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  effect,
+  inject,
+  input,
+  signal,
+  untracked,
+} from '@angular/core';
 import { TranslatePipe } from '@ngx-translate/core';
 import { AttachmentDto } from '../../core/api/generated/models';
 import { TenantService } from '../../core/auth/tenant.service';
@@ -9,7 +17,10 @@ export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 export const ALLOWED_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'pdf', 'txt', 'docx', 'xlsx'];
 
 /** Client-side pre-check for UX only; the server validates size, extension AND file signature. */
-export function attachmentProblem(file: { name: string; size: number }): 'badType' | 'tooLarge' | null {
+export function attachmentProblem(file: {
+  name: string;
+  size: number;
+}): 'badType' | 'tooLarge' | null {
   const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
   if (!file.name.includes('.') || !ALLOWED_EXTENSIONS.includes(ext)) return 'badType';
   return file.size > MAX_ATTACHMENT_BYTES ? 'tooLarge' : null;
@@ -26,21 +37,34 @@ export function attachmentProblem(file: { name: string; size: number }): 'badTyp
         @if (loading()) {
           <p class="text-muted">{{ 'common.loading' | translate }}</p>
         } @else if (error()) {
-          <p role="alert" class="text-danger">{{ 'attachments.error' | translate }}
-            <button type="button" class="ml-2 underline" (click)="load()">{{ 'common.retry' | translate }}</button></p>
+          <p role="alert" class="text-danger">
+            {{ 'attachments.error' | translate }}
+            <button type="button" class="ml-2 underline" (click)="load()">
+              {{ 'common.retry' | translate }}
+            </button>
+          </p>
         } @else if (!items().length) {
           <p class="text-muted">{{ 'attachments.empty' | translate }}</p>
         } @else {
           <ul class="divide-y divide-border">
             @for (a of items(); track a.id) {
               <li class="flex flex-wrap items-center justify-between gap-2 py-2">
-                <span class="break-all">{{ a.fileName }}
+                <span class="break-all"
+                  >{{ a.fileName }}
                   @if (a.isInternal) {
-                    <span class="ml-1 rounded bg-amber-500/20 px-1.5 py-0.5 text-xs">{{ 'attachments.internalBadge' | translate }}</span>
+                    <span class="ml-1 rounded bg-amber-500/20 px-1.5 py-0.5 text-xs">{{
+                      'attachments.internalBadge' | translate
+                    }}</span>
                   }
-                  <span class="ml-2 text-xs text-muted">{{ size(a) }} · {{ a.createdAtUtc | date: 'short' }}</span>
+                  <span class="ml-2 text-xs text-muted"
+                    >{{ size(a) }} · {{ a.createdAtUtc | date: 'short' }}</span
+                  >
                 </span>
-                <button type="button" class="rounded-lg border border-border px-3 py-1 text-sm focus-visible:outline-2 focus-visible:outline-brand" (click)="download(a)">
+                <button
+                  type="button"
+                  class="rounded-lg border border-border px-3 py-1 text-sm focus-visible:outline-2 focus-visible:outline-brand"
+                  (click)="download(a)"
+                >
                   {{ 'attachments.download' | translate }}
                 </button>
               </li>
@@ -49,13 +73,23 @@ export function attachmentProblem(file: { name: string; size: number }): 'badTyp
         }
       </div>
       @if (actionError()) {
-        <p role="alert" class="mt-2 text-sm text-danger">{{ 'attachments.' + actionError() | translate }}</p>
+        <p role="alert" class="mt-2 text-sm text-danger">
+          {{ 'attachments.' + actionError() | translate }}
+        </p>
       }
 
       <div class="mt-4">
-        <label for="att-file" class="block text-sm font-medium">{{ 'attachments.upload' | translate }}</label>
-        <input id="att-file" type="file" [accept]="accept" [disabled]="uploading()" (change)="pick($event)"
-          class="mt-1 block w-full text-sm focus-visible:outline-2 focus-visible:outline-brand" />
+        <label for="att-file" class="block text-sm font-medium">{{
+          'attachments.upload' | translate
+        }}</label>
+        <input
+          id="att-file"
+          type="file"
+          [accept]="accept"
+          [disabled]="uploading()"
+          (change)="pick($event)"
+          class="mt-1 block w-full text-sm focus-visible:outline-2 focus-visible:outline-brand"
+        />
         <p class="mt-1 text-xs text-muted">{{ 'attachments.allowed' | translate }}</p>
         @if (staff()) {
           <label class="mt-2 flex items-center gap-2 text-sm">
@@ -79,7 +113,9 @@ export class TicketAttachments {
   protected readonly loading = signal(false);
   protected readonly error = signal(false);
   protected readonly uploading = signal(false);
-  protected readonly actionError = signal<'badType' | 'tooLarge' | 'uploadError' | 'downloadError' | null>(null);
+  protected readonly actionError = signal<
+    'badType' | 'tooLarge' | 'uploadError' | 'downloadError' | null
+  >(null);
   protected readonly internal = signal(false);
 
   constructor() {
@@ -91,7 +127,9 @@ export class TicketAttachments {
 
   protected size(a: AttachmentDto): string {
     const bytes = Number(a.sizeBytes);
-    return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    return bytes >= 1024 * 1024
+      ? `${(bytes / 1024 / 1024).toFixed(1)} MB`
+      : `${Math.max(1, Math.round(bytes / 1024))} KB`;
   }
 
   protected load(): void {

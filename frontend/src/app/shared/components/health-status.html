@@ -1,4 +1,7 @@
-<span role="status" class="inline-flex items-center gap-1.5 rounded-full bg-surface-container-low px-2.5 py-1 font-mono text-mono-timer text-on-surface-variant">
+<span
+  role="status"
+  class="inline-flex items-center gap-1.5 rounded-full bg-surface-container-low px-2.5 py-1 font-mono text-mono-timer text-on-surface-variant"
+>
   <span class="size-2 rounded-full" [class]="dot()" aria-hidden="true"></span>
   {{ 'health.' + state() | translate }}
 </span>

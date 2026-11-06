@@ -1,5 +1,13 @@
 import { NgTemplateOutlet } from '@angular/common';
-import { ChangeDetectionStrategy, Component, ElementRef, computed, inject, signal, viewChild } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  computed,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { TranslatePipe } from '@ngx-translate/core';
@@ -15,7 +23,15 @@ import { NotificationCenter } from './notification-center';
 
 @Component({
   selector: 'app-shell',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, NgTemplateOutlet, TranslatePipe, HealthStatus, NotificationCenter],
+  imports: [
+    RouterOutlet,
+    RouterLink,
+    RouterLinkActive,
+    NgTemplateOutlet,
+    TranslatePipe,
+    HealthStatus,
+    NotificationCenter,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './shell.html',
   styleUrl: './shell.css',
@@ -50,10 +66,22 @@ export class Shell {
     ];
   });
 
+  /** Routes flagged `publicLayout` (one-time e-mail links) never use the signed-in shell, even with a session open. */
+  protected readonly publicLayout = signal(false);
+
   constructor() {
-    inject(Router)
-      .events.pipe(filter((e) => e instanceof NavigationEnd), takeUntilDestroyed())
-      .subscribe(() => this.menuOpen.set(false));
+    const router = inject(Router);
+    router.events
+      .pipe(
+        filter((e) => e instanceof NavigationEnd),
+        takeUntilDestroyed(),
+      )
+      .subscribe(() => {
+        this.menuOpen.set(false);
+        let route = router.routerState.snapshot.root;
+        while (route.firstChild) route = route.firstChild;
+        this.publicLayout.set(route.data['publicLayout'] === true);
+      });
   }
 
   protected openMenu(): void {

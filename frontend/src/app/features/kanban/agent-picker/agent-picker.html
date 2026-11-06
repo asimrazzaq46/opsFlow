@@ -1,0 +1,92 @@
+<div class="flex flex-col gap-1" (keydown.escape)="close()">
+  <button
+    type="button"
+    class="picker-trigger"
+    [attr.aria-expanded]="open()"
+    [attr.aria-controls]="popupId()"
+    [attr.aria-label]="'kanban.assign.open' | translate"
+    [disabled]="readOnly()"
+    (click)="toggle()"
+  >
+    @if (assignees().length) {
+      <span class="flex -space-x-1.5" aria-hidden="true">
+        @for (a of visible(); track a.membershipId) {
+          <span class="avatar" [attr.title]="a.displayName">{{ initials(a.displayName) }}</span>
+        }
+        @if (extra() > 0) {
+          <span class="avatar avatar-more">+{{ extra() }}</span>
+        }
+      </span>
+      <span class="truncate">{{ assignees()[0].displayName }}</span>
+      @if (assignees().length > 1) {
+        <span class="text-muted">+{{ assignees().length - 1 }}</span>
+      }
+    } @else {
+      <span class="ms text-[16px] text-muted" aria-hidden="true">person_add</span>
+      <span class="text-muted">{{ 'kanban.assign.unassigned' | translate }}</span>
+    }
+    <span class="ms ml-auto text-[16px] text-muted" aria-hidden="true">{{ open() ? 'expand_less' : 'expand_more' }}</span>
+  </button>
+
+  @if (open()) {
+    <div class="picker-panel" [id]="popupId()">
+      <label class="sr-only" [for]="popupId() + '-search'">{{ 'kanban.assign.search' | translate }}</label>
+      <input
+        #search
+        type="search"
+        autocomplete="off"
+        class="picker-search"
+        [id]="popupId() + '-search'"
+        [placeholder]="'kanban.assign.search' | translate"
+        [value]="query()"
+        (input)="onSearch($event)"
+      />
+      <div role="status" class="sr-only">
+        {{ busyId() ? ('kanban.assign.saving' | translate) : '' }}
+      </div>
+      @if (loading()) {
+        <p class="px-2 py-2 text-xs text-muted" role="status">{{ 'common.loading' | translate }}</p>
+      } @else if (loadFailed()) {
+        <p class="px-2 py-2 text-xs text-danger" role="alert">
+          {{ 'kanban.assign.loadError' | translate }}
+          <button type="button" class="underline" (click)="retry.emit()">{{ 'common.retry' | translate }}</button>
+        </p>
+      } @else {
+        <ul class="max-h-48 overflow-y-auto" [attr.aria-label]="'kanban.assign.agents' | translate">
+          @for (a of filtered(); track a.id) {
+            <li>
+              <button
+                type="button"
+                class="picker-option"
+                [disabled]="busyId() === a.id || assignedIds().has(a.id)"
+                [attr.aria-busy]="busyId() === a.id"
+                (click)="choose(a)"
+              >
+                <span class="avatar" aria-hidden="true">{{ initials(a.displayName) }}</span>
+                <span class="flex min-w-0 flex-col text-left">
+                  <span class="truncate">
+                    {{ a.displayName }}
+                    @if (a.id === me()) {
+                      <span class="text-muted">({{ 'kanban.assign.you' | translate }})</span>
+                    }
+                  </span>
+                  @if (ambiguous().has(a.displayName)) {
+                    <span class="truncate text-xs text-muted">{{ a.email }}</span>
+                  }
+                </span>
+                @if (assignedIds().has(a.id)) {
+                  <span class="ms ml-auto text-[16px] text-success" aria-hidden="true">check_circle</span>
+                  <span class="sr-only">{{ 'kanban.assign.assigned' | translate }}</span>
+                } @else if (busyId() === a.id) {
+                  <span class="ms ml-auto animate-spin text-[16px]" aria-hidden="true">progress_activity</span>
+                }
+              </button>
+            </li>
+          } @empty {
+            <li class="px-2 py-2 text-xs text-muted">{{ 'kanban.assign.none' | translate }}</li>
+          }
+        </ul>
+      }
+    </div>
+  }
+</div>

@@ -78,15 +78,16 @@ public class GraphQlAnalyticsTests(ApiFactory factory) : IClassFixture<ApiFactor
     }
 
     [Fact]
-    public async Task Agent_dashboard_is_limited_to_visible_tickets_and_has_no_tenant_workload()
+    public async Task Agent_dashboard_counts_the_workspace_reports_own_assignments_and_has_no_tenant_workload()
     {
         var w = await TicketWorld.CreateAsync(factory);
         var t = await w.CreateTicketAsync(w.Customer);
         await w.AssignAsync(t.Id, w.Agent1Membership);
-        await w.CreateTicketAsync(w.Customer); // not visible to Agent1
+        await w.CreateTicketAsync(w.Customer); // visible to Agent1 (workspace-wide), but not assigned to them
 
-        var agent = (await GqlAsync(w.Agent1, w.Org.Id, "{ dashboard { current { openTickets } workload { displayName } } }")).GetProperty("data").GetProperty("dashboard");
-        Assert.Equal(1, agent.GetProperty("current").GetProperty("openTickets").GetInt32());
+        var agent = (await GqlAsync(w.Agent1, w.Org.Id, "{ dashboard { current { openTickets assignedToMe } workload { displayName } } }")).GetProperty("data").GetProperty("dashboard");
+        Assert.Equal(2, agent.GetProperty("current").GetProperty("openTickets").GetInt32());
+        Assert.Equal(1, agent.GetProperty("current").GetProperty("assignedToMe").GetInt32());
         Assert.Equal(JsonValueKind.Null, agent.GetProperty("workload").ValueKind);
         var manager = (await GqlAsync(w.Manager, w.Org.Id, "{ dashboard { current { openTickets unassignedTickets } workload { activeTickets } } }")).GetProperty("data").GetProperty("dashboard");
         Assert.Equal(2, manager.GetProperty("current").GetProperty("openTickets").GetInt32());
@@ -186,6 +187,19 @@ public class GraphQlAnalyticsTests(ApiFactory factory) : IClassFixture<ApiFactor
         Assert.DoesNotContain("OtherTenantSecret", csv, StringComparison.Ordinal);
         Assert.Equal(new byte[] { 0xEF, 0xBB, 0xBF }, (await ok.Content.ReadAsByteArrayAsync()).Take(3).ToArray()); // UTF-8 BOM for Excel
         Assert.StartsWith("ticket,title,status", csv, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task The_team_directory_is_staff_only_over_graphql_as_it_is_over_rest()
+    {
+        var w = await TicketWorld.CreateAsync(factory);
+
+        var asCustomer = await GqlAsync(w.Customer, w.Org.Id, "{ teamMembers { totalCount items { email } } }");
+        Assert.True(asCustomer.TryGetProperty("errors", out _));
+        Assert.DoesNotContain(w.Owner.Email, asCustomer.ToString(), StringComparison.Ordinal);
+
+        var asAgent = await GqlAsync(w.Agent1, w.Org.Id, "{ teamMembers { totalCount } }");
+        Assert.False(asAgent.TryGetProperty("errors", out _));
     }
 
     [Fact]

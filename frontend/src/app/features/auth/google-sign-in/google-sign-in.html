@@ -12,15 +12,25 @@
   @if (state() === 'error') {
     <div class="flex flex-wrap items-center justify-center gap-3" role="alert">
       <p class="text-sm text-danger">{{ 'google.unavailable' | translate }}</p>
-      <button type="button" (click)="retry()" [disabled]="busy()"
-        class="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-brand">
+      <button
+        type="button"
+        (click)="retry()"
+        [disabled]="busy()"
+        class="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-brand"
+      >
         {{ 'common.retry' | translate }}
       </button>
     </div>
   }
 }
-<div #host class="google-button" [class.hidden]="state() !== 'ready'" [class.is-busy]="busy()"
-  [attr.aria-busy]="busy()" [attr.inert]="busy() ? '' : null"></div>
+<div
+  #host
+  class="google-button"
+  [class.hidden]="state() !== 'ready'"
+  [class.is-busy]="busy()"
+  [attr.aria-busy]="busy()"
+  [attr.inert]="busy() ? '' : null"
+></div>
 @if (state() !== 'disabled') {
   <ng-content />
 }

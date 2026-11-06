@@ -1,19 +1,22 @@
 import { Injectable, inject } from '@angular/core';
 import { Router } from '@angular/router';
+import { PendingInvitation } from './pending-invitation';
 import { safeReturnUrl } from './return-url';
 import { TenantService } from './tenant.service';
 
 /**
- * Where a fresh session lands: a validated return URL (e.g. a pending invitation) first, otherwise workspace onboarding for
- * users without memberships, the dashboard for exactly one workspace and the workspace picker for several.
+ * Where a fresh session lands: a validated return URL first, then an invitation the visitor opened earlier (it survives registration and
+ * email confirmation), otherwise workspace onboarding for users without memberships, the dashboard for exactly one workspace and the
+ * workspace picker for several.
  */
 @Injectable({ providedIn: 'root' })
 export class PostSignIn {
   private readonly tenant = inject(TenantService);
   private readonly router = inject(Router);
+  private readonly pending = inject(PendingInvitation);
 
   enter(returnUrl: string | null): void {
-    const target = safeReturnUrl(returnUrl);
+    const target = safeReturnUrl(returnUrl) ?? this.pending.url();
     this.tenant.load().subscribe({
       next: (orgs) => void this.router.navigateByUrl(target ?? (orgs.length === 0 ? '/workspaces/new' : orgs.length === 1 ? '/dashboard' : '/workspaces')),
       // The picker shows the load error with a retry.

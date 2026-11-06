@@ -25,6 +25,12 @@ public sealed partial class MembershipService(
         CancellationToken ct
     )
     {
+        // Shared with GraphQL, whose policy admits Customers: the staff directory is for staff only.
+        if (await actor.RequireActiveRoleAsync(ct) == TenantRole.Customer)
+        {
+            throw AppException.Forbidden("The team directory is not available to customers.");
+        }
+
         (page, pageSize, var skip) = Paging.Normalize(page, pageSize, MaxPageSize); // overflow-safe paging
 
         var query = db.Memberships.Where(m => m.Role != TenantRole.Customer);

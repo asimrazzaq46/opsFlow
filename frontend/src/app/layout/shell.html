@@ -2,65 +2,126 @@
 
 <ng-template #brand>
   <!-- The approved logo ships with its own dark backdrop, so it is shown as a tile in both themes instead of being recolored. -->
-  <img src="assets/brand/opsflow-logo-480.png" alt="OpsFlow" width="480" height="137" class="h-8 w-auto max-w-none shrink-0 rounded-md object-contain" />
+  <img
+    src="assets/brand/opsflow-logo-480.png"
+    alt="OpsFlow"
+    width="480"
+    height="137"
+    class="h-8 w-auto max-w-none shrink-0 rounded-md object-contain"
+  />
 </ng-template>
 
 <ng-template #utilities>
   <app-health-status class="hidden md:inline-flex" />
-  <div role="group" [attr.aria-label]="'shell.language' | translate" class="flex rounded-lg bg-surface-container-low p-0.5">
+  <div
+    role="group"
+    [attr.aria-label]="'shell.language' | translate"
+    class="flex rounded-lg bg-surface-container-low p-0.5"
+  >
     @for (lang of languages; track lang) {
-      <button type="button" class="min-h-8 rounded-md px-2.5 font-mono text-mono-timer uppercase transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-container"
-        [class]="language.current() === lang ? 'bg-surface-container-lowest text-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'"
-        [attr.aria-pressed]="language.current() === lang" (click)="setLanguage(lang)">{{ lang }}</button>
+      <button
+        type="button"
+        class="min-h-8 rounded-md px-2.5 font-mono text-mono-timer uppercase transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-container"
+        [class]="
+          language.current() === lang
+            ? 'bg-surface-container-lowest text-primary shadow-sm'
+            : 'text-on-surface-variant hover:text-on-surface'
+        "
+        [attr.aria-pressed]="language.current() === lang"
+        (click)="setLanguage(lang)"
+      >
+        {{ lang }}
+      </button>
     }
   </div>
-  <button type="button" class="grid size-9 place-items-center rounded-lg text-on-surface-variant transition-colors hover:bg-surface-container-low hover:text-on-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-container"
-    [attr.aria-label]="'shell.toggleTheme' | translate" (click)="theme.toggle()">
-    <span class="ms text-[20px]" aria-hidden="true">{{ theme.theme() === 'dark' ? 'light_mode' : 'dark_mode' }}</span>
+  <button
+    type="button"
+    class="grid size-9 place-items-center rounded-lg text-on-surface-variant transition-colors hover:bg-surface-container-low hover:text-on-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-container"
+    [attr.aria-label]="'shell.toggleTheme' | translate"
+    (click)="theme.toggle()"
+  >
+    <span class="ms text-[20px]" aria-hidden="true">{{
+      theme.theme() === 'dark' ? 'light_mode' : 'dark_mode'
+    }}</span>
   </button>
 </ng-template>
 
-@if (auth.isAuthenticated()) {
+@if (auth.isAuthenticated() && !publicLayout()) {
   <div class="min-h-screen bg-surface lg:pl-64">
     @if (menuOpen()) {
-      <div class="fixed inset-0 z-40 bg-inverse-surface/50 lg:hidden" aria-hidden="true" (click)="closeMenu(false)"></div>
+      <div
+        class="fixed inset-0 z-40 bg-inverse-surface/50 lg:hidden"
+        aria-hidden="true"
+        (click)="closeMenu(false)"
+      ></div>
     }
 
-    <aside id="app-sidebar" class="fixed inset-y-0 left-0 z-50 w-64 flex-col justify-between overflow-y-auto bg-surface-container-lowest shadow-[0_1px_8px_rgba(0,0,0,0.06)] lg:flex"
-      [class.flex]="menuOpen()" [class.hidden]="!menuOpen()" [attr.aria-label]="'nav.sidebar' | translate">
+    <aside
+      id="app-sidebar"
+      class="fixed inset-y-0 left-0 z-50 w-64 flex-col justify-between overflow-y-auto bg-surface-container-lowest shadow-[0_1px_8px_rgba(0,0,0,0.06)] lg:flex"
+      [class.flex]="menuOpen()"
+      [class.hidden]="!menuOpen()"
+      [attr.aria-label]="'nav.sidebar' | translate"
+    >
       <div class="flex flex-col">
         <div class="flex h-16 items-center justify-between gap-2 px-3">
-          <a routerLink="/dashboard" class="rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-container">
+          <a
+            routerLink="/dashboard"
+            class="rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-container"
+          >
             <ng-container [ngTemplateOutlet]="brand" />
           </a>
-          <button #closeButton type="button" class="grid size-9 place-items-center rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface focus-visible:outline-2 focus-visible:outline-primary-container lg:hidden"
-            [attr.aria-label]="'nav.closeMenu' | translate" (click)="closeMenu()">
+          <button
+            #closeButton
+            type="button"
+            class="grid size-9 place-items-center rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface focus-visible:outline-2 focus-visible:outline-primary-container lg:hidden"
+            [attr.aria-label]="'nav.closeMenu' | translate"
+            (click)="closeMenu()"
+          >
             <span class="ms text-[20px]" aria-hidden="true">close</span>
           </button>
         </div>
 
         @if (tenant.organizations().length) {
           <div class="px-3 py-2">
-            <label for="tenant-select" class="ops-label mb-1 px-2">{{ 'tenant.label' | translate }}</label>
+            <label for="tenant-select" class="ops-label mb-1 px-2">{{
+              'tenant.label' | translate
+            }}</label>
             <div class="relative">
-              <select id="tenant-select" class="h-11 w-full appearance-none truncate rounded-xl bg-surface-container-low pl-3 pr-8 text-headline-sm text-on-surface transition-colors hover:bg-surface-container-high focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-container"
-                (change)="selectTenant($event)">
+              <select
+                id="tenant-select"
+                class="h-11 w-full appearance-none truncate rounded-xl bg-surface-container-low pl-3 pr-8 text-headline-sm text-on-surface transition-colors hover:bg-surface-container-high focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-container"
+                (change)="selectTenant($event)"
+              >
                 @for (o of tenant.organizations(); track o.id) {
-                  <option [value]="o.id" [selected]="o.id === tenant.tenantId()">{{ o.name }}</option>
+                  <option [value]="o.id" [selected]="o.id === tenant.tenantId()">
+                    {{ o.name }}
+                  </option>
                 }
               </select>
-              <span class="ms pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[18px] text-on-surface-variant" aria-hidden="true">unfold_more</span>
+              <span
+                class="ms pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[18px] text-on-surface-variant"
+                aria-hidden="true"
+                >unfold_more</span
+              >
             </div>
           </div>
         }
 
         @if (tenant.tenantId()) {
           <nav class="px-3 pt-1" [attr.aria-label]="'nav.menu' | translate">
-            <span class="ops-label mb-1 px-2" aria-hidden="true">{{ 'nav.operations' | translate }}</span>
+            <span class="ops-label mb-1 px-2" aria-hidden="true">{{
+              'nav.operations' | translate
+            }}</span>
             <ul class="space-y-0.5">
               @for (item of navItems(); track item.link) {
                 <li>
-                  <a [routerLink]="item.link" routerLinkActive ariaCurrentWhenActive="page" class="ops-nav-link">
+                  <a
+                    [routerLink]="item.link"
+                    routerLinkActive
+                    ariaCurrentWhenActive="page"
+                    class="ops-nav-link"
+                  >
                     <span class="ms text-[20px]" aria-hidden="true">{{ item.icon }}</span>
                     <span>{{ item.label | translate }}</span>
                   </a>
@@ -72,32 +133,59 @@
       </div>
 
       <div class="px-3 pb-3 pt-4">
-        <span class="ops-label mb-1 px-2" aria-hidden="true">{{ 'nav.preferences' | translate }}</span>
+        <span class="ops-label mb-1 px-2" aria-hidden="true">{{
+          'nav.preferences' | translate
+        }}</span>
         <ul class="mb-2 space-y-0.5">
           <li>
-            <a routerLink="/workspaces" routerLinkActive ariaCurrentWhenActive="page" [routerLinkActiveOptions]="{ exact: true }" class="ops-nav-link">
-              <span class="ms text-[20px]" aria-hidden="true">switch_account</span><span>{{ 'nav.workspaces' | translate }}</span>
+            <a
+              routerLink="/workspaces"
+              routerLinkActive
+              ariaCurrentWhenActive="page"
+              [routerLinkActiveOptions]="{ exact: true }"
+              class="ops-nav-link"
+            >
+              <span class="ms text-[20px]" aria-hidden="true">switch_account</span
+              ><span>{{ 'nav.workspaces' | translate }}</span>
             </a>
           </li>
           <li>
-            <a routerLink="/account" routerLinkActive ariaCurrentWhenActive="page" class="ops-nav-link">
-              <span class="ms text-[20px]" aria-hidden="true">manage_accounts</span><span>{{ 'nav.account' | translate }}</span>
+            <a
+              routerLink="/account"
+              routerLinkActive
+              ariaCurrentWhenActive="page"
+              class="ops-nav-link"
+            >
+              <span class="ms text-[20px]" aria-hidden="true">manage_accounts</span
+              ><span>{{ 'nav.account' | translate }}</span>
             </a>
           </li>
         </ul>
         @if (auth.user(); as me) {
-          <div class="flex items-center justify-between gap-2 rounded-xl bg-surface-container-low p-2">
+          <div
+            class="flex items-center justify-between gap-2 rounded-xl bg-surface-container-low p-2"
+          >
             <div class="flex min-w-0 items-center gap-2">
-              <span class="grid size-8 shrink-0 place-items-center rounded-full bg-primary-container text-headline-sm text-on-primary" aria-hidden="true">{{ initials(me.displayName) }}</span>
+              <span
+                class="grid size-8 shrink-0 place-items-center rounded-full bg-primary-container text-headline-sm text-on-primary"
+                aria-hidden="true"
+                >{{ initials(me.displayName) }}</span
+              >
               <span class="flex min-w-0 flex-col">
                 <span class="truncate text-headline-sm text-on-surface">{{ me.displayName }}</span>
                 @if (tenant.role(); as role) {
-                  <span class="text-badge-label font-semibold uppercase text-primary">{{ 'roles.' + role | translate }}</span>
+                  <span class="text-badge-label font-semibold uppercase text-primary">{{
+                    'roles.' + role | translate
+                  }}</span>
                 }
               </span>
             </div>
-            <button type="button" class="grid size-9 shrink-0 place-items-center rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:outline-2 focus-visible:outline-primary-container"
-              [attr.aria-label]="'auth.signOut' | translate" (click)="auth.logout()">
+            <button
+              type="button"
+              class="grid size-9 shrink-0 place-items-center rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:outline-2 focus-visible:outline-primary-container"
+              [attr.aria-label]="'auth.signOut' | translate"
+              (click)="auth.logout()"
+            >
               <span class="ms text-[20px]" aria-hidden="true">logout</span>
             </button>
           </div>
@@ -105,17 +193,31 @@
       </div>
     </aside>
 
-    <header class="sticky top-0 z-30 flex h-16 items-center justify-between gap-2 bg-surface/85 px-4 shadow-[0_1px_8px_rgba(0,0,0,0.04)] backdrop-blur-xl sm:px-6 lg:px-8">
+    <header
+      class="sticky top-0 z-30 flex h-16 items-center justify-between gap-2 bg-surface/85 px-4 shadow-[0_1px_8px_rgba(0,0,0,0.04)] backdrop-blur-xl sm:px-6 lg:px-8"
+    >
       <div class="flex min-w-0 items-center gap-2">
-        <button #menuButton type="button" class="grid size-10 place-items-center rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface focus-visible:outline-2 focus-visible:outline-primary-container lg:hidden"
-          aria-controls="app-sidebar" [attr.aria-expanded]="menuOpen()" [attr.aria-label]="'nav.openMenu' | translate" (click)="openMenu()">
+        <button
+          #menuButton
+          type="button"
+          class="grid size-10 place-items-center rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface focus-visible:outline-2 focus-visible:outline-primary-container lg:hidden"
+          aria-controls="app-sidebar"
+          [attr.aria-expanded]="menuOpen()"
+          [attr.aria-label]="'nav.openMenu' | translate"
+          (click)="openMenu()"
+        >
           <span class="ms text-[22px]" aria-hidden="true">menu</span>
         </button>
-        <a routerLink="/dashboard" class="rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-container lg:hidden">
+        <a
+          routerLink="/dashboard"
+          class="rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-container lg:hidden"
+        >
           <ng-container [ngTemplateOutlet]="brand" />
         </a>
         @if (tenant.current(); as org) {
-          <p class="hidden truncate text-body-sm text-on-surface-variant lg:block">{{ org.name }}</p>
+          <p class="hidden truncate text-body-sm text-on-surface-variant lg:block">
+            {{ org.name }}
+          </p>
         }
       </div>
       <div class="flex items-center gap-1.5 sm:gap-2">
@@ -127,29 +229,54 @@
     </header>
 
     @if (realtime.state() !== 'connected') {
-      <div role="status" class="bg-tertiary-fixed px-4 py-1.5 text-center text-body-sm text-on-tertiary-fixed">
-        {{ (realtime.state() === 'disconnected' ? 'realtime.disconnected' : 'realtime.reconnecting') | translate }}
+      <div
+        role="status"
+        class="bg-tertiary-fixed px-4 py-1.5 text-center text-body-sm text-on-tertiary-fixed"
+      >
+        {{
+          (realtime.state() === 'disconnected' ? 'realtime.disconnected' : 'realtime.reconnecting')
+            | translate
+        }}
       </div>
     }
 
-    <main id="main-content" tabindex="-1" class="mx-auto w-full max-w-7xl px-4 py-6 outline-none sm:px-6 lg:px-8 lg:py-8">
+    <main
+      id="main-content"
+      tabindex="-1"
+      class="mx-auto w-full max-w-7xl px-4 py-6 outline-none sm:px-6 lg:px-8 lg:py-8"
+    >
       <router-outlet />
     </main>
   </div>
 } @else {
   <div class="flex min-h-screen flex-col bg-surface">
-    <header class="sticky top-0 z-30 bg-surface/85 shadow-[0_1px_8px_rgba(0,0,0,0.04)] backdrop-blur-xl">
+    <header
+      class="sticky top-0 z-30 bg-surface/85 shadow-[0_1px_8px_rgba(0,0,0,0.04)] backdrop-blur-xl"
+    >
       <div class="mx-auto flex h-16 max-w-6xl items-center justify-between gap-2 px-4 sm:px-6">
-        <a routerLink="/" class="rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-container">
+        <a
+          routerLink="/"
+          class="rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-container"
+        >
           <ng-container [ngTemplateOutlet]="brand" />
         </a>
         <div class="flex items-center gap-1.5 sm:gap-2">
           <ng-container [ngTemplateOutlet]="utilities" />
-          <a routerLink="/login" routerLinkActive ariaCurrentWhenActive="page" class="ops-nav-link px-3 text-headline-sm">{{ 'auth.signIn' | translate }}</a>
+          <a
+            routerLink="/login"
+            routerLinkActive
+            ariaCurrentWhenActive="page"
+            class="ops-nav-link px-3 text-headline-sm"
+            >{{ 'auth.signIn' | translate }}</a
+          >
         </div>
       </div>
     </header>
-    <main id="main-content" tabindex="-1" class="mx-auto w-full max-w-6xl flex-1 px-4 py-8 outline-none sm:px-6 sm:py-12">
+    <main
+      id="main-content"
+      tabindex="-1"
+      class="mx-auto w-full max-w-6xl flex-1 px-4 py-8 outline-none sm:px-6 sm:py-12"
+    >
       <router-outlet />
     </main>
   </div>

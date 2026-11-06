@@ -15,6 +15,22 @@ public class TicketTests(ApiFactory factory) : IClassFixture<ApiFactory>
     // ---------------------------------------------------------------- provisioning
 
     [Fact]
+    public async Task Assigned_to_me_reflects_the_callers_own_open_assignment_and_is_hidden_from_customers()
+    {
+        var w = await TicketWorld.CreateAsync(factory);
+        var ticket = await w.CreateTicketAsync(w.Customer, new { title = "Mine?", description = "d", categoryId = w.CategoryId });
+        await w.AssignAsync(ticket.Id, w.Agent1Membership);
+
+        Assert.True((await w.GetTicketAsync(w.Agent1, ticket.Id)).Summary.AssignedToMe);
+        Assert.False((await w.GetTicketAsync(w.Manager, ticket.Id)).Summary.AssignedToMe);
+        Assert.Null((await w.GetTicketAsync(w.Customer, ticket.Id)).Summary.AssignedToMe);
+
+        await w.AssignAsync(ticket.Id, w.Agent2Membership);
+        (await w.Manager.DeleteAsync(w.Url($"tickets/{ticket.Id}/assignments/{w.Agent1Membership}"))).EnsureSuccessStatusCode();
+        Assert.True((await w.GetTicketAsync(w.Agent2, ticket.Id)).Summary.AssignedToMe);
+    }
+
+    [Fact]
     public async Task New_tenants_get_their_defaults_atomically_with_the_tenant()
     {
         var w = await TicketWorld.CreateAsync(factory);
@@ -213,12 +229,12 @@ public class TicketTests(ApiFactory factory) : IClassFixture<ApiFactory>
 
         Assert.Equal(Expect(customerTicket.Id), await IdsAsync(w.Customer));
         Assert.Equal(Expect(otherCustomerTicket.Id), await IdsAsync(otherCustomerUser));
-        Assert.Equal(Expect(customerTicket.Id, agentOwn.Id), await IdsAsync(w.Agent1)); // assigned + self-created, not the colleague's
-        Assert.Equal(Expect(agent2Own.Id), await IdsAsync(w.Agent2));
+        Assert.Equal(Expect(customerTicket.Id, otherCustomerTicket.Id, agentOwn.Id, agent2Own.Id), await IdsAsync(w.Agent1)); // active staff discover the whole workspace
+        Assert.Equal(Expect(customerTicket.Id, otherCustomerTicket.Id, agentOwn.Id, agent2Own.Id), await IdsAsync(w.Agent2));
         Assert.Equal(4, (await IdsAsync(w.Manager)).Length);
         Assert.Equal(4, (await IdsAsync(w.Owner)).Length);
         Assert.Equal(HttpStatusCode.NotFound, (await w.Customer.GetAsync(w.Url($"tickets/{otherCustomerTicket.Id}"))).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await w.Agent2.GetAsync(w.Url($"tickets/{agentOwn.Id}"))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await w.Agent2.GetAsync(w.Url($"tickets/{agentOwn.Id}"))).StatusCode); // a colleague's ticket is discoverable in the workspace
     }
 
     [Fact]
@@ -252,7 +268,8 @@ public class TicketTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(HttpStatusCode.OK, (await w.Manager.GetAsync(w.Url($"tickets/{ticket.Id}"))).StatusCode);
 
         (await w.Owner.PutAsync(w.Url($"members/{w.ManagerMembership}/role"), new { role = "Agent" })).EnsureSuccessStatusCode();
-        Assert.Equal(HttpStatusCode.NotFound, (await w.Manager.GetAsync(w.Url($"tickets/{ticket.Id}"))).StatusCode); // an Agent sees only assigned/own tickets
+        Assert.Equal(HttpStatusCode.OK, (await w.Manager.GetAsync(w.Url($"tickets/{ticket.Id}"))).StatusCode); // an Agent discovers workspace tickets...
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Manager.PutAsync(w.Url($"tickets/{ticket.Id}"), new { title = "Not mine" })).StatusCode); // ...but is not responsible for them
 
         (await w.Owner.PutAsync(w.Url($"members/{w.Agent1Membership}/status"), new { isActive = false })).EnsureSuccessStatusCode();
         Assert.Equal(HttpStatusCode.Forbidden, (await w.Agent1.GetAsync(w.Url("tickets"))).StatusCode);
@@ -297,7 +314,7 @@ public class TicketTests(ApiFactory factory) : IClassFixture<ApiFactory>
         await w.AssignAsync(ticket.Id, w.Agent1Membership);
         Assert.Equal(HttpStatusCode.Forbidden, (await w.Customer.PutAsync(w.Url($"tickets/{ticket.Id}"), new { title = "Too late" })).StatusCode); // no longer Open
         Assert.Equal(HttpStatusCode.OK, (await w.Agent1.PutAsync(w.Url($"tickets/{ticket.Id}"), new { priority = "High" })).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await w.Agent2.PutAsync(w.Url($"tickets/{ticket.Id}"), new { priority = "Low" })).StatusCode); // not their ticket
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Agent2.PutAsync(w.Url($"tickets/{ticket.Id}"), new { priority = "Low" })).StatusCode); // visible in the workspace, but not assigned to them
     }
 
     // ---------------------------------------------------------------- list / search / sort / paging
@@ -389,7 +406,11 @@ public class TicketTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Contains(customer, a => a.Type == "StatusChanged" && a.NewValue == "Assigned");
         Assert.Equal(2, paged.Items.Count);
         Assert.Equal(staff.Count, paged.TotalCount);
-        Assert.Equal(HttpStatusCode.NotFound, (await w.Agent2.GetAsync(w.Url($"tickets/{ticket.Id}/activity"))).StatusCode);
+
+        // An Agent who is not assigned can read the workspace ticket's lifecycle, nothing internal.
+        var unassigned = await w.Agent2.ReadAsync<PagedDto<ActivityJson>>(await w.Agent2.GetAsync(w.Url($"tickets/{ticket.Id}/activity")));
+        Assert.Equal(customer.Count, unassigned.TotalCount);
+        Assert.All(unassigned.Items, a => Assert.True(a.Type is "Created" or "StatusChanged" or "Resolved" or "Reopened"));
     }
 
     [Fact]
@@ -401,7 +422,7 @@ public class TicketTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var before = (await w.ActivityAsync(w.Manager, ticket.Id)).Count;
 
         Assert.Equal(HttpStatusCode.Conflict, (await w.Manager.PostAsync(w.Url($"tickets/{ticket.Id}/status"), new { status = "Closed" })).StatusCode); // invalid transition
-        Assert.Equal(HttpStatusCode.NotFound, (await w.Agent2.PostAsync(w.Url($"tickets/{ticket.Id}/status"), new { status = "InProgress" })).StatusCode); // not visible to them
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Agent2.PostAsync(w.Url($"tickets/{ticket.Id}/status"), new { status = "InProgress" })).StatusCode); // visible, not assigned
         Assert.Equal(before, (await w.ActivityAsync(w.Manager, ticket.Id)).Count);
 
         factory.Faults.FailNextSave();

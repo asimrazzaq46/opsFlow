@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { OrganizationDto } from '../api/generated/models';
+import { PendingInvitation } from './pending-invitation';
 import { PostSignIn } from './post-sign-in';
 import { TenantService } from './tenant.service';
 
@@ -14,6 +15,7 @@ describe('PostSignIn', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
     TestBed.configureTestingModule({
       providers: [
         { provide: TenantService, useValue: tenant },
@@ -39,6 +41,20 @@ describe('PostSignIn', () => {
     expect(router.navigateByUrl).toHaveBeenLastCalledWith('/invitations/accept?token=t');
     post.enter('https://evil.test');
     expect(router.navigateByUrl).toHaveBeenLastCalledWith('/dashboard');
+  });
+
+  it('returns an invited user with no membership to the pending invitation, never to workspace creation', () => {
+    TestBed.inject(PendingInvitation).set('tok 1');
+    tenant.load.mockReturnValue(of([]));
+    post.enter(null);
+    expect(router.navigateByUrl).toHaveBeenCalledWith('/invitations/accept?token=tok%201');
+  });
+
+  it('lets an explicit return URL win over the pending invitation', () => {
+    TestBed.inject(PendingInvitation).set('tok');
+    tenant.load.mockReturnValue(of([]));
+    post.enter('/tickets');
+    expect(router.navigateByUrl).toHaveBeenCalledWith('/tickets');
   });
 
   it('falls back to the workspace picker when memberships cannot be loaded', () => {

@@ -24,7 +24,10 @@ export class ForgotPassword {
   protected readonly submitted = signal(false);
   protected readonly accepted = signal(false);
   protected readonly error = signal<string | null>(null);
-  protected readonly email = new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.email] });
+  protected readonly email = new FormControl('', {
+    nonNullable: true,
+    validators: [Validators.required, Validators.email],
+  });
 
   protected submit(): void {
     this.submitted.set(true);

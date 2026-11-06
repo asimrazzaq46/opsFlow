@@ -18,3 +18,22 @@ public sealed record InvitationDto(
     DateTime CreatedAtUtc,
     DateTime ExpiresAtUtc
 );
+
+public enum InvitationPreviewState
+{
+    Valid,
+    Expired,
+    Unavailable,
+}
+
+/// <summary>
+/// What the holder of an invitation token may see before signing in. Details are present only for a <see cref="InvitationPreviewState.Valid"/>
+/// invitation. <c>Role</c> is the role name as text so the shared non-nullable TenantRole schema stays unchanged.
+/// </summary>
+public sealed record InvitationPreviewDto(
+    InvitationPreviewState State,
+    string? WorkspaceName,
+    string? Role,
+    string? Email,
+    DateTime? ExpiresAtUtc
+);

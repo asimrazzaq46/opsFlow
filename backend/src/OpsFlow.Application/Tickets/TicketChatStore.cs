@@ -96,6 +96,11 @@ public sealed class TicketChatStore(
         var ticket =
             await access.Visible(actor).Where(t => t.Id == ticketId).SingleOrDefaultAsync(ct)
             ?? throw AppException.NotFound("Ticket not found.");
+        if (!await access.MayWorkOnAsync(actor, ticketId, ct))
+        {
+            throw AppException.Forbidden(TicketAccess.AgentMustBeAssigned); // the chat library only carries its own failures
+        }
+
         if (ticket.Status == TicketStatus.Closed)
         {
             throw AppException.Conflict(

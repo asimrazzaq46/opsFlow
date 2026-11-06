@@ -18,5 +18,6 @@ public sealed record TicketListQuery(
     string? SortBy,
     bool Descending = false,
     int Page = 1,
-    int PageSize = 25
+    int PageSize = 25,
+    bool AssignedToMe = false
 );

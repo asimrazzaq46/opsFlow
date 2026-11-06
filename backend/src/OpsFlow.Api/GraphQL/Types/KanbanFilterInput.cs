@@ -17,5 +17,6 @@ public sealed record KanbanFilterInput(
     Guid? AssignedMembershipId = null,
     bool? Overdue = null,
     bool IncludeClosed = false,
-    int? Page = null
+    int? Page = null,
+    bool AssignedToMe = false
 );

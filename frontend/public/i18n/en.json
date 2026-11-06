@@ -103,7 +103,7 @@
       "chooseAgent": "Choose an agent",
       "noAgents": "No other active agents",
       "inactiveAgent": "Inactive",
-      "reopenHint": "Reopening starts a new SLA cycle."
+      "reopenHint": "Reopening starts a new deadline cycle."
     },
     "errors": {
       "conflict": "The ticket was changed by someone else. It was reloaded.",
@@ -111,12 +111,12 @@
       "generic": "The action failed."
     },
     "sla": {
-      "title": "SLA history",
+      "title": "Ticket deadlines",
       "cycle": "Cycle {{n}}",
       "started": "Started",
-      "responseDue": "Response due",
+      "responseDue": "Response deadline",
       "firstResponse": "First response",
-      "resolutionDue": "Resolution due",
+      "resolutionDue": "Resolution deadline",
       "resolvedAt": "Resolved",
       "reason": {
         "Initial": "Initial",
@@ -128,6 +128,10 @@
         "Met": "Met",
         "Missed": "Missed",
         "NotApplicable": "N/A"
+      },
+      "hint": {
+        "response": "When the team should first reply.",
+        "resolution": "When the ticket should be resolved."
       }
     },
     "breadcrumb": "Breadcrumb",
@@ -137,7 +141,7 @@
       "views": {
         "all": "All tickets",
         "open": "Open",
-        "overdue": "SLA overdue",
+        "overdue": "Resolution overdue",
         "unstaffed": "Needs staffing",
         "finished": "Resolved & closed"
       },
@@ -149,7 +153,7 @@
       "caption": "Tickets matching the current filters",
       "col": {
         "id": "Ticket",
-        "slaDue": "SLA resolution due",
+        "slaDue": "Resolution deadline",
         "updated": "Updated"
       },
       "internal": "Internal",
@@ -158,7 +162,12 @@
       "noMatches": "No tickets match these filters.",
       "invalidFilter": "These filters are not supported. Reset them and try again.",
       "pageSize": "Rows per page",
-      "pageN": "Page {{n}}"
+      "pageN": "Page {{n}}",
+      "scope": {
+        "all": "All tickets",
+        "mine": "My tickets"
+      },
+      "scopeLabel": "Ticket scope"
     },
     "create": {
       "title": "Create ticket",
@@ -173,7 +182,7 @@
       "agentSelfAssigned": "Tickets you create are assigned to you automatically.",
       "customerRouting": "Our team sets the priority and assigns the right agent.",
       "afterTitle": "What happens next",
-      "afterText": "The ticket gets a number and an SLA based on its priority. Replies and status changes appear on the ticket page as they happen.",
+      "afterText": "The ticket gets a number and deadlines based on its priority. Replies and status changes appear on the ticket page as they happen.",
       "priorityHint": {
         "Low": "Minor issue or question",
         "Medium": "Normal business impact",
@@ -187,8 +196,10 @@
       "sections": "Ticket sections",
       "properties": "Properties",
       "created": "Created",
-      "slaState": "SLA status",
-      "remaining": "{{time}} left"
+      "slaState": "Deadline status",
+      "remaining": "{{time}} remaining",
+      "notAssigned": "This ticket is not assigned to you. You can read the overview and its deadlines; only the assigned agents can work on it.",
+      "restricted": "This section is available to the agents assigned to the ticket."
     },
     "activity": {
       "title": "Activity",
@@ -205,14 +216,39 @@
         "StatusChanged": "Status changed",
         "Resolved": "Ticket resolved",
         "Reopened": "Ticket reopened",
-        "SlaCycleStarted": "SLA cycle started",
-        "SlaCycleCompleted": "SLA cycle completed",
+        "SlaCycleStarted": "Deadline cycle started",
+        "SlaCycleCompleted": "Deadline cycle completed",
         "AttachmentAdded": "Attachment added",
         "TaskCreated": "Child task created",
         "TaskDetailsUpdated": "Child task updated",
         "TaskStatusChanged": "Child task status changed",
         "TaskAssigned": "Child task reassigned",
         "TasksReordered": "Child tasks reordered"
+      },
+      "actor": {
+        "system": "System",
+        "support": "Support team",
+        "unknown": "Former team member"
+      },
+      "did": {
+        "Created": "created the ticket",
+        "DetailsUpdated": "updated the ticket details",
+        "PriorityChanged": "changed the priority from {{from}} to {{to}}",
+        "CategoryChanged": "changed the category",
+        "AgentAssigned": "assigned {{agent}} to the ticket",
+        "Claimed": "claimed the ticket",
+        "AgentUnassigned": "removed {{agent}} from the ticket",
+        "StatusChanged": "changed the status from {{from}} to {{to}}",
+        "Resolved": "resolved the ticket",
+        "Reopened": "reopened the ticket",
+        "SlaCycleStarted": "started a new deadline cycle",
+        "SlaCycleCompleted": "completed the deadline cycle",
+        "AttachmentAdded": "added an attachment",
+        "TaskCreated": "created a child task",
+        "TaskDetailsUpdated": "edited a child task",
+        "TaskStatusChanged": "changed the status of a child task",
+        "TaskAssigned": "assigned a child task",
+        "TasksReordered": "reordered the child tasks"
       }
     },
     "edit": {
@@ -222,7 +258,7 @@
       "basedOn": "Editing version {{version}}",
       "unsaved": "Unsaved changes",
       "save": "Save changes",
-      "priorityHint": "Changing the priority recalculates the active SLA targets.",
+      "priorityHint": "Changing the priority recalculates the active deadlines.",
       "customerHint": "You can change the title and description while the ticket is open.",
       "staleWarning": "Someone updated this ticket while you were editing. Saving may report a conflict.",
       "conflictTitle": "Version conflict: version {{from}} was replaced by {{to}}",
@@ -348,12 +384,12 @@
       "TicketReopened": "Reopened: {{subject}}",
       "MessageReceived": "New message on {{subject}}",
       "NoteAdded": "New internal note on {{subject}}",
-      "SlaWarning": "SLA deadline approaching: {{subject}}",
-      "SlaBreached": "SLA breached: {{subject}}"
+      "SlaWarning": "Due soon: {{subject}}",
+      "SlaBreached": "Overdue: {{subject}}"
     },
     "slaKinds": {
-      "FirstResponse": "first response",
-      "Resolution": "resolution"
+      "FirstResponse": "response deadline",
+      "Resolution": "resolution deadline"
     }
   },
   "realtime": {
@@ -383,22 +419,34 @@
     "currentState": "Right now",
     "period": "Selected period",
     "sample": "Based on {{n}} replied tickets",
-    "slaDetail": "{{met}} met · {{breached}} breached",
+    "slaDetail": "{{met}} on time · {{breached}} late",
     "kpi": {
       "open": "Open tickets",
       "unassigned": "Unassigned",
-      "overdue": "Overdue",
+      "overdue": "Resolution overdue",
       "resolvedToday": "Resolved today",
       "avgFirstResponse": "Avg first response",
-      "slaCompliance": "SLA compliance",
+      "slaCompliance": "Resolved on time",
       "created": "Created",
-      "resolved": "Resolved"
+      "resolved": "Resolved",
+      "openWorkspace": "Open in workspace",
+      "assignedToMe": "Assigned to me"
     },
     "charts": {
       "trend": "Created vs resolved",
       "status": "Open tickets by status",
       "priority": "Priority distribution",
       "workload": "Agent workload"
+    },
+    "hint": {
+      "open": "Your open tickets.",
+      "openWorkspace": "Open tickets of the whole workspace.",
+      "assignedToMe": "Open tickets you are assigned to.",
+      "unassigned": "Open tickets that have no active agent yet.",
+      "overdue": "Open tickets whose resolution deadline has passed.",
+      "resolvedToday": "Tickets resolved today in the workspace time zone.",
+      "avgFirstResponse": "Average time until the team first replied to the customer.",
+      "slaCompliance": "Share of tickets resolved on or before their resolution deadline in the selected period."
     }
   },
   "kanban": {
@@ -408,14 +456,57 @@
     "empty": "No tickets",
     "more": "{{n}} more not shown — narrow the filters",
     "assignees": "{{n}} assigned",
-    "due": "Due",
+    "due": "Resolution due",
     "overdue": "Overdue since",
     "moveTo": "Move to",
     "errors": {
       "conflict": "Someone else changed this ticket. The board was refreshed.",
       "forbidden": "You are not allowed to move this ticket.",
       "invalid": "This status change is not allowed.",
-      "generic": "The ticket could not be moved."
+      "generic": "The ticket could not be moved.",
+      "reopen": "The ticket could not be reopened."
+    },
+    "reopening": "Reopening…",
+    "reopened": "Ticket reopened. A new SLA cycle has started.",
+    "mineOnly": "My tickets only",
+    "notAssignedToYou": "Not assigned to you",
+    "assign": {
+      "open": "Assign agents",
+      "unassigned": "Unassigned",
+      "search": "Search agents",
+      "agents": "Agents",
+      "you": "you",
+      "assigned": "Already assigned",
+      "none": "No matching agents.",
+      "loadError": "Could not load the agents.",
+      "saving": "Assigning…",
+      "errors": {
+        "conflict": "The ticket changed or the agent is already assigned. The board was refreshed.",
+        "forbidden": "You are not allowed to assign agents to this ticket.",
+        "invalid": "Only active Agents of this workspace can be assigned.",
+        "generic": "The assignment could not be saved."
+      }
+    },
+    "tasks": {
+      "summary": "Child tasks {{done}}/{{total}} completed",
+      "list": "Child tasks",
+      "complete": "Mark \"{{title}}\" completed",
+      "reopen": "Reopen \"{{title}}\"",
+      "titleLabel": "New child task title",
+      "placeholder": "Task title, then press Enter",
+      "assignee": "Assignee",
+      "claimFirst": "Claim this ticket first to add child tasks. What you typed is kept.",
+      "claim": "Claim ticket",
+      "claiming": "Claiming…",
+      "save": "Add",
+      "saving": "Adding…",
+      "cancel": "Cancel",
+      "errors": {
+        "conflict": "The tasks changed and were reloaded.",
+        "forbidden": "You are not allowed to change these tasks.",
+        "invalid": "Enter a title of 1 to 200 characters.",
+        "generic": "The task action failed. Please try again."
+      }
     }
   },
   "reports": {
@@ -466,7 +557,8 @@
     "title": "Team",
     "name": "Name",
     "role": "Role",
-    "loadError": "Could not load the team."
+    "loadError": "Could not load the team.",
+    "readOnly": "Only owners and managers can invite people to this workspace."
   },
   "invitations": {
     "title": "Invitations",
@@ -498,7 +590,7 @@
       "signInText": "Sign in with the invited email address. You will return here to accept.",
       "signIn": "Sign in to accept",
       "register": "Create an account",
-      "registerHint": "New to OpsFlow? Register with the invited address, confirm your email, then open this invitation link again.",
+      "registerHint": "New to OpsFlow? Create an account with the invited address and confirm your email. You will return to this invitation after signing in.",
       "joinedTitle": "You joined {{name}}",
       "joinedText": "Your membership is active.",
       "open": "Open workspace",
@@ -509,8 +601,17 @@
       "mismatchText": "This invitation was sent to another email address, or your email is not confirmed yet. Sign in with the invited account.",
       "conflictTitle": "Could not join",
       "conflictText": "The workspace changed in the meantime. Please try again.",
-      "failedTitle": "Could not accept the invitation"
-    }
+      "failedTitle": "Could not accept the invitation",
+      "titleFor": "You have been invited to {{name}}",
+      "invitedEmail": "Invited address",
+      "expiredText": "This invitation has expired. Ask the person who invited you to send a new one.",
+      "unavailableText": "This invitation is invalid, already used or revoked. Ask the person who invited you for a new invitation.",
+      "mismatchKnown": "This invitation was sent to {{invited}}, but you are signed in as {{current}}. Use a different account to continue."
+    },
+    "sending": "Sending…",
+    "revoked": "Invitation revoked.",
+    "timeout": "The request is taking too long. Check your connection and try again.",
+    "loadError": "Could not load the pending invitations."
   },
   "google": {
     "or": "or",
@@ -594,7 +695,8 @@
     "errors": {
       "generic": "Something went wrong. Please try again.",
       "network": "The server could not be reached. Check your connection and try again.",
-      "rateLimited": "Too many attempts. Please wait a minute and try again."
+      "rateLimited": "Too many attempts. Please wait a minute and try again.",
+      "timeout": "The request is taking too long. Check your connection and try again."
     },
     "password": {
       "new": "New password",
@@ -626,7 +728,7 @@
         "text": "Customers raise tickets; managers triage and assign them to agents."
       },
       "sla": {
-        "title": "SLA tracking",
+        "title": "Ticket deadlines",
         "text": "Response and resolution targets per priority, with overdue alerts."
       },
       "board": {
@@ -639,8 +741,6 @@
       }
     },
     "register": {
-      "crumbStep": "Step 1",
-      "crumbName": "Create account",
       "eyebrow": "New account",
       "title": "Create your OpsFlow account",
       "subtitle": "Your account is personal. Create a workspace or accept an invitation once you are signed in.",
@@ -659,14 +759,16 @@
       "next": {
         "confirm": "Open the confirmation link we email to you.",
         "signIn": "Sign in with your email and password.",
-        "workspace": "Create your own workspace or accept an invitation from your team."
+        "workspace": "Create your own workspace or accept an invitation from your team.",
+        "join": "Return to your invitation and accept it to join the workspace."
       },
       "teamTitle": "Joining an existing team?",
-      "teamText": "Ask an owner or manager to invite your email address, then open the invitation link after signing in."
+      "teamText": "Ask an owner or manager to invite your email address, then open the invitation link after signing in.",
+      "inviteBanner": "You were invited to join {{workspace}} as {{role}}. Register with the invited address to continue.",
+      "inviteUnavailable": "This invitation can no longer be used. You can still create an account; ask for a new invitation afterwards.",
+      "emailLocked": "The invitation was sent to this address, so it cannot be changed. We send a confirmation link here before you can sign in."
     },
     "confirm": {
-      "step": "Step 2 of 3",
-      "stepName": "Email confirmation",
       "inboxTitle": "Confirm your email address",
       "inboxText": "If this address can be registered, we have sent a confirmation link to it. Open the link to activate your account.",
       "verifyingTitle": "Confirming your email…",
@@ -676,11 +778,15 @@
       "invalidTitle": "This link cannot be used",
       "invalidText": "The confirmation link is invalid, already used or expired. Request a new one below.",
       "continue": "Continue to sign in",
-      "resendLabel": "Send a new confirmation link",
-      "resend": "Send link",
+      "resendLabel": "Resend confirmation email",
+      "resend": "Resend confirmation email",
       "resent": "If an unconfirmed account exists for this address, a new link is on its way.",
       "spamHint": "Not in your inbox? Check your spam or junk folder.",
-      "otherEmail": "Use a different email"
+      "otherEmail": "Use a different email",
+      "inboxNext": "We already sent the confirmation email when you created your account. Open the link in it, or resend it below.",
+      "inboxInvited": "We already sent the confirmation email when you created your account. After confirming, sign in and you will return to your invitation.",
+      "confirmedInvited": "After signing in you will return to your invitation to accept it.",
+      "confirmedOtherDevice": "Joining a team? After signing in, open the invitation link from your email again."
     },
     "forgot": {
       "crumb": "Account recovery",
@@ -736,6 +842,13 @@
       },
       "notYouTitle": "Didn't request this?",
       "notYouText": "Ignore the email. Your password only changes when this form is submitted."
+    },
+    "steps": {
+      "label": "Account setup progress",
+      "create": "Create account",
+      "verify": "Verify email",
+      "join": "Join workspace",
+      "workspace": "Set up workspace"
     }
   },
   "workspaces": {
@@ -755,9 +868,11 @@
       "clear": "Clear search",
       "newEyebrow": "New workspace",
       "newTitle": "Need a separate space for another team or client?",
-      "newText": "Create a workspace with its own tickets, members, categories and SLA policies. You become its owner.",
+      "newText": "Create a workspace with its own tickets, members, categories and response & resolution targets. You become its owner.",
       "create": "Create workspace",
-      "signedInAs": "Signed in as"
+      "signedInAs": "Signed in as",
+      "pendingInvitation": "You have an invitation waiting. Continue to join the workspace.",
+      "continueInvitation": "Continue invitation"
     },
     "setup": {
       "eyebrow": "New workspace",
@@ -783,7 +898,7 @@
           "text": "Ticket settings and categories are created automatically."
         },
         "sla": {
-          "title": "Default SLA policies",
+          "title": "Default response & resolution targets",
           "text": "Response and resolution targets per priority, ready to adjust."
         },
         "team": {

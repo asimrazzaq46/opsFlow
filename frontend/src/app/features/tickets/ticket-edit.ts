@@ -1,18 +1,38 @@
 import {
-  ChangeDetectionStrategy, Component, ElementRef, OnDestroy, OnInit, afterNextRender, computed, inject, input, output, signal, viewChild,
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  OnDestroy,
+  OnInit,
+  afterNextRender,
+  computed,
+  inject,
+  input,
+  output,
+  signal,
+  viewChild,
 } from '@angular/core';
 import { rxResource, toSignal } from '@angular/core/rxjs-interop';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { TranslatePipe } from '@ngx-translate/core';
 import { map, startWith } from 'rxjs';
-import { TicketDetailDto, TicketPriority, UpdateTicketRequest } from '../../core/api/generated/models';
+import {
+  TicketDetailDto,
+  TicketPriority,
+  UpdateTicketRequest,
+} from '../../core/api/generated/models';
 import { TenantService } from '../../core/auth/tenant.service';
 import { DESCRIPTION_MAX, TITLE_MAX } from './ticket-create';
 import { TICKET_PRIORITIES, fieldErrors, httpStatus } from './ticket-ui';
 import { TicketsApi } from './tickets-api';
 
 type Field = 'title' | 'description' | 'priority' | 'categoryId';
-interface FormValue { title: string; description: string; priority: TicketPriority; categoryId: string }
+interface FormValue {
+  title: string;
+  description: string;
+  priority: TicketPriority;
+  categoryId: string;
+}
 
 const valuesOf = (t: TicketDetailDto): FormValue => ({
   title: t.summary.title,
@@ -25,13 +45,18 @@ const valuesOf = (t: TicketDetailDto): FormValue => ({
  * Only the fields that differ from the version the user started from are sent, together with that version. A concurrent change
  * therefore fails with 409 instead of overwriting someone else's work, and untouched fields are never written back.
  */
-export function buildUpdate(base: TicketDetailDto, v: FormValue, staff: boolean): UpdateTicketRequest | null {
+export function buildUpdate(
+  base: TicketDetailDto,
+  v: FormValue,
+  staff: boolean,
+): UpdateTicketRequest | null {
   const b = valuesOf(base);
   const title = v.title.trim() !== b.title ? v.title.trim() : null;
   const description = v.description.trim() !== b.description ? v.description.trim() : null;
   const priority = staff && v.priority !== b.priority ? v.priority : null;
   const categoryId = staff && v.categoryId !== b.categoryId ? v.categoryId : null;
-  if (title === null && description === null && priority === null && categoryId === null) return null;
+  if (title === null && description === null && priority === null && categoryId === null)
+    return null;
   return { title, description, priority, categoryId, version: Number(base.summary.version) };
 }
 
@@ -71,12 +96,24 @@ export class TicketEdit implements OnInit, OnDestroy {
   protected readonly serverErrors = signal<Record<string, string>>({});
 
   protected readonly form = new FormGroup({
-    title: new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.minLength(3), Validators.maxLength(TITLE_MAX)] }),
-    description: new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.maxLength(DESCRIPTION_MAX)] }),
+    title: new FormControl('', {
+      nonNullable: true,
+      validators: [Validators.required, Validators.minLength(3), Validators.maxLength(TITLE_MAX)],
+    }),
+    description: new FormControl('', {
+      nonNullable: true,
+      validators: [Validators.required, Validators.maxLength(DESCRIPTION_MAX)],
+    }),
     priority: new FormControl<TicketPriority>('Medium', { nonNullable: true }),
     categoryId: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
   });
-  private readonly value = toSignal(this.form.valueChanges.pipe(startWith(null), map(() => this.form.getRawValue())), { requireSync: true });
+  private readonly value = toSignal(
+    this.form.valueChanges.pipe(
+      startWith(null),
+      map(() => this.form.getRawValue()),
+    ),
+    { requireSync: true },
+  );
 
   protected readonly categories = rxResource({
     params: () => (this.staff ? this.tenant.tenantId() : null) ?? undefined,
@@ -85,9 +122,14 @@ export class TicketEdit implements OnInit, OnDestroy {
 
   /** The page received a newer version (realtime) while the user was editing: warn before they hit a conflict. */
   protected readonly staleBase = computed(
-    () => !this.conflict() && !!this.base() && Number(this.ticket().summary.version) !== Number(this.base()!.summary.version),
+    () =>
+      !this.conflict() &&
+      !!this.base() &&
+      Number(this.ticket().summary.version) !== Number(this.base()!.summary.version),
   );
-  protected readonly dirty = computed(() => !!this.base() && buildUpdate(this.base()!, this.value(), this.staff) !== null);
+  protected readonly dirty = computed(
+    () => !!this.base() && buildUpdate(this.base()!, this.value(), this.staff) !== null,
+  );
   /** Field-by-field comparison of the user's edit with the newer server version. */
   protected readonly diff = computed(() => {
     const server = this.conflict();
@@ -96,14 +138,24 @@ export class TicketEdit implements OnInit, OnDestroy {
     const b = valuesOf(start);
     const s = valuesOf(server);
     const mine = this.value();
-    const fields: Field[] = this.staff ? ['title', 'description', 'priority', 'categoryId'] : ['title', 'description'];
+    const fields: Field[] = this.staff
+      ? ['title', 'description', 'priority', 'categoryId']
+      : ['title', 'description'];
     return fields
       .filter((f) => s[f] !== b[f] || mine[f].trim() !== b[f])
-      .map((f) => ({ field: f, theirs: this.display(f, s[f]), mine: this.display(f, mine[f]), changedOnServer: s[f] !== b[f], changedByMe: mine[f].trim() !== b[f] }));
+      .map((f) => ({
+        field: f,
+        theirs: this.display(f, s[f]),
+        mine: this.display(f, mine[f]),
+        changedOnServer: s[f] !== b[f],
+        changedByMe: mine[f].trim() !== b[f],
+      }));
   });
 
   constructor() {
-    afterNextRender(() => this.panel().nativeElement.querySelector<HTMLElement>('input, textarea')?.focus());
+    afterNextRender(() =>
+      this.panel().nativeElement.querySelector<HTMLElement>('input, textarea')?.focus(),
+    );
   }
 
   ngOnInit(): void {
@@ -145,7 +197,15 @@ export class TicketEdit implements OnInit, OnDestroy {
         if (status === 409) return this.resolveConflict(start);
         this.saving.set(false);
         this.serverErrors.set(fieldErrors(e));
-        this.error.set(status === 403 ? 'tickets.edit.forbidden' : status === 400 ? 'tickets.edit.invalid' : status === 404 ? 'tickets.detail.notFound' : 'tickets.edit.error');
+        this.error.set(
+          status === 403
+            ? 'tickets.edit.forbidden'
+            : status === 400
+              ? 'tickets.edit.invalid'
+              : status === 404
+                ? 'tickets.detail.notFound'
+                : 'tickets.edit.error',
+        );
       },
     });
   }
@@ -173,7 +233,8 @@ export class TicketEdit implements OnInit, OnDestroy {
     const mine = this.form.getRawValue();
     this.form.patchValue({
       title: mine.title.trim() === before.title ? server.title : mine.title,
-      description: mine.description.trim() === before.description ? server.description : mine.description,
+      description:
+        mine.description.trim() === before.description ? server.description : mine.description,
       priority: mine.priority === before.priority ? server.priority : mine.priority,
       categoryId: mine.categoryId === before.categoryId ? server.categoryId : mine.categoryId,
     });
@@ -189,9 +250,11 @@ export class TicketEdit implements OnInit, OnDestroy {
   /** Keeps Tab focus inside the dialog. */
   protected trapFocus(event: KeyboardEvent): void {
     if (event.key !== 'Tab') return;
-    const items = [...this.panel().nativeElement.querySelectorAll<HTMLElement>('button, input, select, textarea, [href]')].filter(
-      (el) => !el.hasAttribute('disabled') && el.offsetParent !== null,
-    );
+    const items = [
+      ...this.panel().nativeElement.querySelectorAll<HTMLElement>(
+        'button, input, select, textarea, [href]',
+      ),
+    ].filter((el) => !el.hasAttribute('disabled') && el.offsetParent !== null);
     if (!items.length) return;
     const first = items[0];
     const last = items[items.length - 1];
@@ -211,7 +274,8 @@ export class TicketEdit implements OnInit, OnDestroy {
         this.saving.set(false);
         this.reloaded.emit(latest);
         if (latest.summary.status === 'Closed') this.error.set('tickets.edit.closed');
-        else if (Number(latest.summary.version) !== Number(start.summary.version)) this.conflict.set(latest);
+        else if (Number(latest.summary.version) !== Number(start.summary.version))
+          this.conflict.set(latest);
         else this.error.set('tickets.edit.notEditable');
       },
       error: () => {
@@ -222,7 +286,8 @@ export class TicketEdit implements OnInit, OnDestroy {
   }
 
   private display(field: Field, value: string): string {
-    if (field === 'categoryId') return this.categories.value()?.find((c) => c.id === value)?.name ?? value;
+    if (field === 'categoryId')
+      return this.categories.value()?.find((c) => c.id === value)?.name ?? value;
     return value;
   }
 }

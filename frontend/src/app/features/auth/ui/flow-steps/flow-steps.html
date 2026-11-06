@@ -1,0 +1,23 @@
+<ol
+  class="mb-6 flex w-full items-center gap-1.5"
+  [attr.aria-label]="'authFlow.steps.label' | translate"
+>
+  @for (step of steps(); track step; let i = $index) {
+    <li
+      class="flex flex-1 flex-col gap-1"
+      [attr.aria-current]="i + 1 === current() ? 'step' : null"
+    >
+      <span
+        class="h-1 rounded-full"
+        [class]="i + 1 <= current() ? 'bg-primary' : 'bg-surface-container-high'"
+        aria-hidden="true"
+      ></span>
+      <span
+        class="text-label-caps uppercase tracking-wider"
+        [class]="i + 1 === current() ? 'text-primary' : 'text-on-surface-variant'"
+      >
+        {{ i + 1 }}. {{ 'authFlow.steps.' + step | translate }}
+      </span>
+    </li>
+  }
+</ol>

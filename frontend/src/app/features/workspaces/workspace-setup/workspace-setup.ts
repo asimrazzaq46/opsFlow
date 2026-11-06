@@ -33,7 +33,10 @@ export class WorkspaceSetup {
   protected readonly busy = signal(false);
   protected readonly submitted = signal(false);
   protected readonly error = signal<string | null>(null);
-  protected readonly name = new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.minLength(2), Validators.maxLength(100)] });
+  protected readonly name = new FormControl('', {
+    nonNullable: true,
+    validators: [Validators.required, Validators.minLength(2), Validators.maxLength(100)],
+  });
 
   protected submit(): void {
     this.submitted.set(true);
@@ -45,12 +48,22 @@ export class WorkspaceSetup {
       .create(name)
       .pipe(
         // The workspace exists even if the list refresh fails; selection then falls back to the picker.
-        switchMap((org) => this.tenant.load().pipe(switchMap(() => of(org)), catchError(() => of(org)))),
+        switchMap((org) =>
+          this.tenant.load().pipe(
+            switchMap(() => of(org)),
+            catchError(() => of(org)),
+          ),
+        ),
       )
       .subscribe({
-        next: (org) => void this.router.navigateByUrl(this.tenant.select(org.id) ? '/dashboard' : '/workspaces'),
+        next: (org) =>
+          void this.router.navigateByUrl(this.tenant.select(org.id) ? '/dashboard' : '/workspaces'),
         error: (err: unknown) => {
-          this.error.set(err instanceof HttpErrorResponse && err.status === 400 ? 'workspaces.setup.invalid' : requestErrorKey(err));
+          this.error.set(
+            err instanceof HttpErrorResponse && err.status === 400
+              ? 'workspaces.setup.invalid'
+              : requestErrorKey(err),
+          );
           this.busy.set(false);
         },
       });

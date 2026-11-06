@@ -1,0 +1,131 @@
+<h1 class="text-2xl font-bold tracking-tight">{{ 'team.title' | translate }}</h1>
+
+@if (!canView()) {
+  <p role="alert" class="mt-6 text-muted">{{ 'common.forbidden' | translate }}</p>
+} @else {
+  <div class="mt-6 overflow-x-auto" aria-live="polite">
+    @if (error()) {
+      <p role="alert" class="text-danger">
+        {{ 'team.loadError' | translate }}
+        <button type="button" class="underline" (click)="load()">
+          {{ 'common.retry' | translate }}
+        </button>
+      </p>
+    } @else if (data(); as d) {
+      <table class="w-full min-w-[30rem] text-left text-sm">
+        <thead class="text-muted">
+          <tr>
+            <th class="py-2">{{ 'team.name' | translate }}</th>
+            <th>{{ 'customers.email' | translate }}</th>
+            <th>{{ 'team.role' | translate }}</th>
+            <th>{{ 'common.status' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (m of d.items; track m.id) {
+            <tr class="border-t border-border">
+              <td class="py-2 font-medium">{{ m.displayName }}</td>
+              <td>{{ m.email }}</td>
+              <td>{{ 'roles.' + pascal(m.role) | translate }}</td>
+              <td>{{ (m.isActive ? 'common.active' : 'common.inactive') | translate }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+      <nav class="mt-4 flex items-center justify-between text-sm">
+        <button
+          type="button"
+          class="rounded-lg border border-border px-3 py-1 disabled:opacity-50"
+          [disabled]="d.page <= 1"
+          (click)="go(d.page - 1)"
+        >
+          ‹ {{ 'common.previous' | translate }}
+        </button>
+        <span>{{ d.page }} / {{ pages(d) }}</span>
+        <button
+          type="button"
+          class="rounded-lg border border-border px-3 py-1 disabled:opacity-50"
+          [disabled]="d.page >= pages(d)"
+          (click)="go(d.page + 1)"
+        >
+          {{ 'common.next' | translate }} ›
+        </button>
+      </nav>
+    } @else {
+      <p class="text-muted" role="status">{{ 'common.loading' | translate }}</p>
+    }
+  </div>
+
+  @if (canInvite()) {
+    <h2 class="mt-10 text-xl font-bold tracking-tight">{{ 'invitations.title' | translate }}</h2>
+    <form
+      [formGroup]="invite"
+      (ngSubmit)="send()"
+      class="mt-4 flex flex-wrap items-end gap-3 text-sm"
+      novalidate
+    >
+      <label class="grid gap-1"
+        ><span>{{ 'customers.email' | translate }}</span>
+        <input
+          type="email"
+          formControlName="email"
+          autocomplete="off"
+          class="rounded-lg border border-border bg-card px-2 py-1"
+          [attr.aria-invalid]="invite.controls.email.invalid && invite.controls.email.touched"
+      /></label>
+      <label class="grid gap-1"
+        ><span>{{ 'team.role' | translate }}</span>
+        <select formControlName="role" class="rounded-lg border border-border bg-card px-2 py-1">
+          @for (r of roles(); track r) {
+            <option [value]="r">{{ 'roles.' + r | translate }}</option>
+          }
+        </select></label
+      >
+      <button
+        type="submit"
+        [disabled]="busy()"
+        [attr.aria-busy]="busy()"
+        class="rounded-lg bg-brand px-3 py-1.5 font-semibold text-brand-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:opacity-60"
+      >
+        {{ (busy() ? 'invitations.sending' : 'invitations.send') | translate }}
+      </button>
+    </form>
+    @if (invite.controls.email.invalid && invite.controls.email.touched) {
+      <p role="alert" class="mt-2 text-sm text-danger">
+        {{ 'authFlow.validation.email' | translate }}
+      </p>
+    }
+    @if (message(); as m) {
+      <p
+        [attr.role]="m.error ? 'alert' : 'status'"
+        class="mt-2 text-sm"
+        [class.text-danger]="m.error"
+      >
+        {{ m.key | translate }}
+      </p>
+    }
+    @if (invitationsError()) {
+      <p role="alert" class="mt-4 text-sm text-danger">
+        {{ 'invitations.loadError' | translate }}
+        <button type="button" class="underline" (click)="loadInvitations()">
+          {{ 'common.retry' | translate }}
+        </button>
+      </p>
+    } @else {
+      <ul class="mt-4 divide-y divide-border rounded-xl border border-border bg-card text-sm">
+        @for (i of invitations(); track i.id) {
+          <li class="flex flex-wrap items-center justify-between gap-2 px-4 py-2">
+            <span>{{ i.email }} · {{ 'roles.' + i.role | translate }}</span>
+            <button type="button" class="underline" (click)="revoke(i.id)">
+              {{ 'invitations.revoke' | translate }}
+            </button>
+          </li>
+        } @empty {
+          <li class="px-4 py-3 text-muted">{{ 'invitations.empty' | translate }}</li>
+        }
+      </ul>
+    }
+  } @else {
+    <p class="mt-8 text-sm text-muted">{{ 'team.readOnly' | translate }}</p>
+  }
+}

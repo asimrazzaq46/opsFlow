@@ -1,5 +1,14 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  inject,
+  input,
+  signal,
+  untracked,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router, RouterLink } from '@angular/router';
 import { TranslatePipe } from '@ngx-translate/core';
@@ -22,7 +31,13 @@ import { TicketsApi } from './tickets-api';
 export type DetailTab = 'conversation' | 'notes' | 'attachments' | 'tasks' | 'activity';
 
 // Notifications that mean the ticket header (status, staffing, SLA) changed on the server.
-const TICKET_CHANGES = new Set(['TicketAssigned', 'TicketUnassigned', 'TicketStatusChanged', 'TicketResolved', 'TicketReopened']);
+const TICKET_CHANGES = new Set([
+  'TicketAssigned',
+  'TicketUnassigned',
+  'TicketStatusChanged',
+  'TicketResolved',
+  'TicketReopened',
+]);
 
 /** Customers may edit only title and description of their open tickets; nobody edits a closed one (the server enforces both). */
 export function canEditTicket(t: TicketDetailDto, staff: boolean): boolean {
@@ -31,7 +46,18 @@ export function canEditTicket(t: TicketDetailDto, staff: boolean): boolean {
 
 @Component({
   selector: 'app-ticket-detail',
-  imports: [RouterLink, TranslatePipe, DatePipe, TicketChat, TicketNotes, TicketAttachments, TicketActions, TicketTasks, TicketActivity, TicketEdit],
+  imports: [
+    RouterLink,
+    TranslatePipe,
+    DatePipe,
+    TicketChat,
+    TicketNotes,
+    TicketAttachments,
+    TicketActions,
+    TicketTasks,
+    TicketActivity,
+    TicketEdit,
+  ],
   templateUrl: './ticket-detail.html',
   styleUrl: './ticket-detail.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -46,7 +72,8 @@ export class TicketDetail {
   protected readonly statusBadge = STATUS_BADGE;
   protected readonly priorityBadge = PRIORITY_BADGE;
   /** Remaining time is computed by the server at read time; the browser only formats it. */
-  protected readonly remaining = (m: number | string | null) => (m === null ? null : minutesLabel(Number(m)));
+  protected readonly remaining = (m: number | string | null) =>
+    m === null ? null : minutesLabel(Number(m));
   protected readonly ticket = signal<TicketDetailDto | null>(null);
   protected readonly loading = signal(false);
   protected readonly error = signal<string | null>(null);
@@ -56,14 +83,22 @@ export class TicketDetail {
   protected readonly visited = signal<ReadonlySet<DetailTab>>(new Set(['conversation']));
   protected readonly tabs = computed<{ key: DetailTab; icon: string; label: string }[]>(() => [
     { key: 'conversation', icon: 'chat', label: 'chat.title' },
-    ...(this.tenant.isStaff() ? [{ key: 'notes' as const, icon: 'lock', label: 'notes.title' }] : []),
+    ...(this.tenant.isStaff()
+      ? [{ key: 'notes' as const, icon: 'lock', label: 'notes.title' }]
+      : []),
     { key: 'attachments', icon: 'attachment', label: 'attachments.title' },
-    ...(this.tenant.isStaff() ? [{ key: 'tasks' as const, icon: 'task_alt', label: 'tasks.title' }] : []),
+    ...(this.tenant.isStaff()
+      ? [{ key: 'tasks' as const, icon: 'task_alt', label: 'tasks.title' }]
+      : []),
     { key: 'activity', icon: 'timeline', label: 'tickets.activity.title' },
   ]);
+  /** Agents see every ticket of the workspace but work only on those assigned to them; the server enforces it, the UI just says so. */
+  protected readonly unassignedAgent = computed(
+    () => this.tenant.role() === 'Agent' && this.ticket()?.summary.assignedToMe === false,
+  );
   protected readonly canEdit = computed(() => {
     const t = this.ticket();
-    return !!t && canEditTicket(t, this.tenant.isStaff());
+    return !!t && !this.unassignedAgent() && canEditTicket(t, this.tenant.isStaff());
   });
 
   private readonly openedIn = this.tenant.tenantId();
@@ -80,9 +115,15 @@ export class TicketDetail {
     });
     const realtime = inject(RealtimeService);
     merge(
-      realtime.on<NotificationCreatedEvent>('notification.created').pipe(
-        filter((e) => e.notification.ticketId === this.id() && TICKET_CHANGES.has(e.notification.type)),
-      ),
+      realtime
+        .on<NotificationCreatedEvent>('notification.created')
+        .pipe(
+          filter(
+            (e) => e.notification.ticketId === this.id() && TICKET_CHANGES.has(e.notification.type),
+          ),
+        ),
+      // Workspace staff who are not recipients of the personal notification still learn that this ticket changed.
+      realtime.on<{ ticketId: string }>('ticket.changed').pipe(filter((e) => e.ticketId === this.id())),
       realtime.reconnected,
     )
       .pipe(debounceTime(500), takeUntilDestroyed())
@@ -97,7 +138,16 @@ export class TicketDetail {
   /** Arrow keys move between tabs (WAI-ARIA tabs pattern with automatic activation). */
   protected onTabKey(event: KeyboardEvent, index: number): void {
     const tabs = this.tabs();
-    const next = event.key === 'ArrowRight' ? index + 1 : event.key === 'ArrowLeft' ? index - 1 : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : null;
+    const next =
+      event.key === 'ArrowRight'
+        ? index + 1
+        : event.key === 'ArrowLeft'
+          ? index - 1
+          : event.key === 'Home'
+            ? 0
+            : event.key === 'End'
+              ? tabs.length - 1
+              : null;
     if (next === null) return;
     event.preventDefault();
     const target = tabs[(next + tabs.length) % tabs.length];
@@ -109,7 +159,9 @@ export class TicketDetail {
   protected refresh(): void {
     if (!this.ticket()) return;
     this.request?.unsubscribe();
-    this.request = this.api.get(this.id()).subscribe({ next: (t) => this.ticket.set(t), error: () => undefined });
+    this.request = this.api
+      .get(this.id())
+      .subscribe({ next: (t) => this.ticket.set(t), error: () => undefined });
   }
 
   protected saved(t: TicketDetailDto): void {
@@ -130,7 +182,13 @@ export class TicketDetail {
         this.ticket.set(null);
         const status = httpStatus(e);
         // 404 also covers tickets of other workspaces or outside the caller's visibility: nothing about them is revealed
-        this.error.set(status === 404 ? 'tickets.detail.notFound' : status === 403 ? 'common.forbidden' : 'tickets.loadError');
+        this.error.set(
+          status === 404
+            ? 'tickets.detail.notFound'
+            : status === 403
+              ? 'common.forbidden'
+              : 'tickets.loadError',
+        );
         this.loading.set(false);
       },
     });

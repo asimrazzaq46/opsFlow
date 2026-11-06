@@ -159,9 +159,9 @@ export class AuthService {
    * The refresh token is captured, then local state and storage are dropped so nothing protected stays usable while the revocation
    * runs. Revocation is best effort (an unreachable server leaves the refresh token to expire on its own).
    */
-  logout(): void {
+  logout(redirect = true): void {
     const token = this._refreshToken();
-    this.clear();
+    this.clear(redirect);
     if (token) this.api.invoke(logout, { body: { refreshToken: token } }).pipe(catchError(() => of(null))).subscribe();
   }
 

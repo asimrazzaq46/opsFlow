@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { authGuard, guestGuard, workspaceGuard } from './core/auth/auth.guard';
+import { authGuard, emailLinkGuard, guestGuard, workspaceGuard } from './core/auth/auth.guard';
 
 export const routes: Routes = [
   {
@@ -25,11 +25,15 @@ export const routes: Routes = [
   // Paths below are fixed by the links the API puts in its emails.
   {
     path: 'auth/confirm-email',
+    canActivate: [emailLinkGuard],
+    data: { publicLayout: true },
     loadComponent: () =>
       import('./features/auth/confirm-email/confirm-email').then((m) => m.ConfirmEmail),
   },
   {
     path: 'auth/reset-password',
+    canActivate: [emailLinkGuard],
+    data: { publicLayout: true },
     loadComponent: () =>
       import('./features/auth/reset-password/reset-password').then((m) => m.ResetPassword),
   },

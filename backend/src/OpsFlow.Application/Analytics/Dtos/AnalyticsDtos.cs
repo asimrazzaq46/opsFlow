@@ -30,7 +30,8 @@ public sealed record CurrentStateDto(
     int OpenTickets,
     int UnassignedTickets,
     int OverdueTickets,
-    int ResolvedToday
+    int ResolvedToday,
+    int? AssignedToMe = null // open tickets the caller is assigned to; null for Customers (the other cards are workspace-wide for staff)
 );
 
 public sealed record SlaComplianceDto(

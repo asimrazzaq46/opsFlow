@@ -5,6 +5,7 @@ using OpsFlow.Application.Abstractions;
 using OpsFlow.Application.Common;
 using OpsFlow.Application.Memberships;
 using OpsFlow.Application.Notifications;
+using OpsFlow.Application.Outbox;
 using OpsFlow.Domain.Notifications;
 using OpsFlow.Domain.Tenants;
 using OpsFlow.Domain.Tickets;
@@ -21,6 +22,7 @@ public sealed partial class TicketWorkflowService(
     TicketAccess access,
     TicketService tickets,
     NotificationService notifications,
+    OutboxWriter outbox,
     TimeProvider clock,
     ILogger<TicketWorkflowService> logger
 )
@@ -164,6 +166,7 @@ public sealed partial class TicketWorkflowService(
             detail: target.ToString(),
             ct: ct
         );
+        outbox.StageTicketChanged(ticket.TenantId, ticketId, TicketChanges.StatusChanged);
         if (await SaveAsync(ct) is { } saveFailure)
         {
             return saveFailure;
@@ -275,6 +278,7 @@ public sealed partial class TicketWorkflowService(
             detail: next.ToString(),
             ct: ct
         );
+        outbox.StageTicketChanged(ticket.TenantId, ticketId, TicketChanges.Reopened);
         if (await SaveAsync(ct) is { } saveFailure)
         {
             return saveFailure;

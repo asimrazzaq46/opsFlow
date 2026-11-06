@@ -45,7 +45,7 @@ public sealed class TicketTaskService(
             .Select(t => (TicketStatus?)t.Status)
             .SingleOrDefaultAsync(ct);
         return status is null
-            ? TicketNotFound()
+            ? await NoTaskAccessAsync(actor, ticketId, ct)
             : await BuildListAsync(actor, ticketId, TicketWorkflow.IsFinished(status.Value), ct);
     }
 
@@ -447,7 +447,7 @@ public sealed class TicketTaskService(
         var ticket = await TaskTicket(actor, ticketId).SingleOrDefaultAsync(ct);
         if (ticket is null)
         {
-            return TicketNotFound();
+            return await NoTaskAccessAsync(actor, ticketId, ct);
         }
 
         if (TicketWorkflow.IsFinished(ticket.Status))
@@ -698,6 +698,12 @@ public sealed class TicketTaskService(
 
     private static BadRequestObjectResult FieldError(string field, string message) =>
         new(new ValidationProblemDetails(new Dictionary<string, string[]> { [field] = [message] }));
+
+    /// <summary>A ticket the Agent can see in the workspace but is not assigned to is forbidden (not "missing"); other tickets stay hidden.</summary>
+    private async Task<ObjectResult> NoTaskAccessAsync(TicketActor actor, Guid ticketId, CancellationToken ct) =>
+        await access.Visible(actor).AnyAsync(t => t.Id == ticketId, ct)
+            ? ActorAccess.Forbidden(TicketAccess.AgentMustBeAssignedToOpen)
+            : TicketNotFound();
 
     private static NotFoundObjectResult TicketNotFound() =>
         new(new ProblemDetails { Title = "Ticket not found." });

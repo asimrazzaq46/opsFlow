@@ -2,14 +2,30 @@ import { inject } from '@angular/core';
 import { CanActivateFn, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from './auth.service';
+import { PendingInvitation } from './pending-invitation';
+import { safeReturnUrl } from './return-url';
 import { TenantService } from './tenant.service';
 
 /** Signed-out users go to sign-in and come back to the requested page afterwards (validated there by `safeReturnUrl`). */
 export const authGuard: CanActivateFn = (_route, state) =>
   inject(AuthService).isAuthenticated() || inject(Router).createUrlTree(['/login'], { queryParams: { returnUrl: state.url } });
 
-/** Sign-in, registration and recovery pages make no sense with an active session. */
-export const guestGuard: CanActivateFn = () => !inject(AuthService).isAuthenticated() || inject(Router).createUrlTree(['/workspaces']);
+/**
+ * Sign-in, registration and recovery pages make no sense with an active session. A signed-in visitor continues to the validated
+ * `returnUrl` (e.g. an invitation link) or a pending invitation before the workspace picker.
+ */
+export const guestGuard: CanActivateFn = (route) => {
+  if (!inject(AuthService).isAuthenticated()) return true;
+  const target = safeReturnUrl(route.queryParamMap.get('returnUrl')) ?? inject(PendingInvitation).url() ?? '/workspaces';
+  return inject(Router).parseUrl(target);
+};
+
+/**
+ * One-time e-mail links (address confirmation, password reset) keep working with a session open: the link names its own account and the
+ * server consumes the token. The same pages without a token (the "check your inbox" and request forms) are for signed-out visitors.
+ */
+export const emailLinkGuard: CanActivateFn = (route, state) =>
+  route.queryParamMap.has('token') || guestGuard(route, state);
 
 /**
  * Workspace pages need an active tenant. After a reload the restored session has no memberships in memory yet, so they are

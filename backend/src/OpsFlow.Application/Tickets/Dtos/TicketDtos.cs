@@ -1,6 +1,20 @@
 using OpsFlow.Domain.Tickets;
+using OpsFlow.Realtime;
 
 namespace OpsFlow.Application.Tickets;
+
+public static class TicketChanges
+{
+    public const string Created = "TicketCreated";
+    public const string Updated = "TicketUpdated";
+    public const string StatusChanged = "TicketStatusChanged";
+    public const string Reopened = "TicketReopened";
+    public const string Assignment = "TicketAssignmentChanged";
+}
+
+/// <summary>Content-free realtime signal for the staff of a workspace: something about this ticket changed, reload the list or board.</summary>
+[RealtimeEvent("ticket.changed")]
+public sealed record TicketChanged(Guid TenantId, Guid TicketId, string Change);
 
 public sealed record TicketSummaryDto(
     Guid Id,
@@ -20,7 +34,11 @@ public sealed record TicketSummaryDto(
     int? AssigneeCount,
     int? EligibleAssigneeCount,
     DateTime? ResolutionDueAtUtc,
-    bool? IsOverdue
+    bool? IsOverdue,
+    // Whether the caller holds an open assignment (the condition the status and reopen commands check for Agents). Null for Customers.
+    bool? AssignedToMe,
+    // Current assignees of list pages (one batched query per page); null for Customers and for single-ticket reads, which carry them separately.
+    IReadOnlyList<AssigneeDto>? Assignees = null
 );
 
 /// <summary><c>IsAgentActive</c> is true only while the assignee is still ELIGIBLE (Agent role, active membership, active user).</summary>
@@ -79,7 +97,12 @@ public sealed record TicketActivityDto(
     DateTime OccurredAtUtc,
     Guid? ActorUserId,
     string? OldValue,
-    string? NewValue
+    string? NewValue,
+    // Who acted: the persisted actor's display name (a Customer only ever gets their own name, never a staff identity). Null for
+    // automation and for staff actions seen by a Customer.
+    string? ActorDisplayName = null,
+    // For assignment entries: the agent who was added or removed.
+    string? RelatedDisplayName = null
 );
 
 public sealed record CreateTicketCommand(
@@ -112,5 +135,6 @@ public sealed record TicketListFilter(
     string? SortBy,
     bool Descending,
     int Page,
-    int PageSize
+    int PageSize,
+    bool AssignedToMe = false
 );

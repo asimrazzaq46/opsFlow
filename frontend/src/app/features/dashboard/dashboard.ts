@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, effect, inject, signal, untracked } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  effect,
+  inject,
+  signal,
+  untracked,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -46,7 +54,7 @@ export class Dashboard {
       else this.data.set(null); // never keep another workspace's numbers
     });
     // the existing notification push (ticket created/assigned/status) and reconnects trigger ONE debounced reconcile
-    merge(this.realtime.on('notification.created'), this.realtime.reconnected)
+    merge(this.realtime.on('notification.created'), this.realtime.on('ticket.changed'), this.realtime.reconnected)
       .pipe(debounceTime(1500), takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.load());
   }
@@ -55,26 +63,39 @@ export class Dashboard {
     const { from, to, priority } = this.form.getRawValue();
     const id = ++this.seq;
     this.error.set(false);
-    this.gql.query(DashboardDocument, { filter: { from, to, priority: priority ? (priority.toUpperCase() as 'LOW') : null } }).subscribe({
-      next: (r) => {
-        if (id === this.seq) this.data.set(r.dashboard); // drop stale responses
-      },
-      error: (e: { code?: string }) => {
-        if (id !== this.seq) return;
-        this.forbidden.set(e?.code === 'FORBIDDEN');
-        this.error.set(true);
-      },
-    });
+    this.gql
+      .query(DashboardDocument, {
+        filter: { from, to, priority: priority ? (priority.toUpperCase() as 'LOW') : null },
+      })
+      .subscribe({
+        next: (r) => {
+          if (id === this.seq) this.data.set(r.dashboard); // drop stale responses
+        },
+        error: (e: { code?: string }) => {
+          if (id !== this.seq) return;
+          this.forbidden.set(e?.code === 'FORBIDDEN');
+          this.error.set(true);
+        },
+      });
   }
 
   protected currentCards(d: Dash) {
     const staff = d.sla !== null;
     return [
-      { key: 'open', value: d.current.openTickets, link: '/tickets', params: {} },
+      { key: staff ? 'openWorkspace' : 'open', value: d.current.openTickets, link: '/tickets', params: {} },
+      // Personal workload: the other cards describe the whole workspace for staff.
+      ...(d.current.assignedToMe !== null
+        ? [{ key: 'assignedToMe', value: d.current.assignedToMe, link: '/tickets', params: { scope: 'mine' } }]
+        : []),
       ...(staff
         ? [
             { key: 'unassigned', value: d.current.unassignedTickets, link: '/kanban', params: {} },
-            { key: 'overdue', value: d.current.overdueTickets, link: '/kanban', params: { overdue: 1 } },
+            {
+              key: 'overdue',
+              value: d.current.overdueTickets,
+              link: '/kanban',
+              params: { overdue: 1 },
+            },
           ]
         : []),
       { key: 'resolvedToday', value: d.current.resolvedToday, link: '/tickets', params: {} },
@@ -86,10 +107,23 @@ export class Dashboard {
   }
 
   protected trendData(d: Dash) {
-    return d.trend.map((p) => ({ label: p.periodStartUtc.slice(0, 10), created: p.created, resolved: p.resolved }));
+    return d.trend.map((p) => ({
+      label: p.periodStartUtc.slice(0, 10),
+      created: p.created,
+      resolved: p.resolved,
+    }));
   }
 
-  protected statusData = (d: Dash) => d.openByStatus.map((s) => ({ label: this.i18n.instant('tickets.status.' + s.key), value: s.count }));
-  protected priorityData = (d: Dash) => d.byPriority.map((s) => ({ label: this.i18n.instant('tickets.priority.' + pascal(s.key)), value: s.count }));
-  protected workloadData = (w: NonNullable<Dash['workload']>) => w.map((x) => ({ label: x.displayName, value: x.activeTickets }));
+  protected statusData = (d: Dash) =>
+    d.openByStatus.map((s) => ({
+      label: this.i18n.instant('tickets.status.' + s.key),
+      value: s.count,
+    }));
+  protected priorityData = (d: Dash) =>
+    d.byPriority.map((s) => ({
+      label: this.i18n.instant('tickets.priority.' + pascal(s.key)),
+      value: s.count,
+    }));
+  protected workloadData = (w: NonNullable<Dash['workload']>) =>
+    w.map((x) => ({ label: x.displayName, value: x.activeTickets }));
 }

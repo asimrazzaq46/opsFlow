@@ -12,6 +12,7 @@ public static class OutboxEvents
     public const string TicketNoteCreated = "ticket.note.created";
     public const string CacheInvalidated = "cache.invalidated";
     public const string TicketTaskChanged = "ticket.task.changed";
+    public const string TicketChanged = "ticket.changed";
 }
 
 public sealed record NotificationEvent(Guid NotificationId);
@@ -24,6 +25,9 @@ public sealed record CacheInvalidatedEvent(string Resource);
 
 /// <summary>Minimal internal change signal; clients reload the authoritative task list. <c>Change</c> is a <see cref="TicketTaskChanges"/> value.</summary>
 public sealed record TicketTaskEvent(Guid TicketId, Guid? TaskId, string Change, int? Version);
+
+/// <summary>Id-only change signal for the whole staff of a workspace; clients reload through their own authorized queries. <c>Change</c> is a <see cref="TicketChanges"/> value.</summary>
+public sealed record TicketChangedEvent(Guid TicketId, string Change);
 
 /// <summary>
 /// Stages events in the caller's DbContext. They are committed by the SAME SaveChanges as the business change, so a rollback removes them
@@ -40,6 +44,17 @@ public sealed class OutboxWriter(IOpsFlowDbContext db, TimeProvider clock)
             new CacheInvalidatedEvent(resource),
             $"cache:{resource}:{Guid.NewGuid():N}",
             OutboxChannels.Cache
+        );
+
+    /// <summary>Lets every active staff member's ticket list and board refresh; carries no ticket content.</summary>
+    public void StageTicketChanged(Guid tenantId, Guid ticketId, string change) =>
+        Stage(
+            tenantId,
+            OutboxEvents.TicketChanged,
+            ticketId,
+            new TicketChangedEvent(ticketId, change),
+            $"ticket:{ticketId}:{Guid.NewGuid():N}",
+            OutboxChannels.Realtime
         );
 
     public void Stage(

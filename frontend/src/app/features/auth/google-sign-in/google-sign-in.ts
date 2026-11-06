@@ -1,8 +1,24 @@
 import {
-  ChangeDetectionStrategy, Component, DestroyRef, ElementRef, afterNextRender, effect, inject, input, output, signal, untracked, viewChild,
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  ElementRef,
+  afterNextRender,
+  effect,
+  inject,
+  input,
+  output,
+  signal,
+  untracked,
+  viewChild,
 } from '@angular/core';
 import { TranslatePipe } from '@ngx-translate/core';
-import { GoogleButtonHandle, GoogleCredential, GoogleIdentityService, GooglePurpose } from '../../../core/auth/google-identity.service';
+import {
+  GoogleButtonHandle,
+  GoogleCredential,
+  GoogleIdentityService,
+  GooglePurpose,
+} from '../../../core/auth/google-identity.service';
 import { LanguageService } from '../../../i18n/language.service';
 
 /** Renew the challenge shortly before it expires so a click never sends a nonce the server already discarded. */
@@ -47,7 +63,8 @@ export class GoogleSignIn {
   constructor() {
     afterNextRender(() => this.viewReady.set(true));
     effect(() => {
-      if (this.viewReady() && this.needsChallenge() && !this.busy()) untracked(() => void this.prepare());
+      if (this.viewReady() && this.needsChallenge() && !this.busy())
+        untracked(() => void this.prepare());
     });
     inject(DestroyRef).onDestroy(() => {
       this.destroyed = true;
@@ -81,7 +98,10 @@ export class GoogleSignIn {
       }
       this.handle = handle;
       this.state.set('ready');
-      this.expiryTimer = setTimeout(() => this.needsChallenge.set(true), Math.max(0, handle.expiresAt - Date.now() - EXPIRY_MARGIN_MS));
+      this.expiryTimer = setTimeout(
+        () => this.needsChallenge.set(true),
+        Math.max(0, handle.expiresAt - Date.now() - EXPIRY_MARGIN_MS),
+      );
     } catch (err) {
       if (this.destroyed || generation !== this.generation) return;
       this.state.set('error');

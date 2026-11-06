@@ -116,7 +116,8 @@ public class ConversationTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var otherTenant = await TicketWorld.CreateAsync(factory);
         var strangerCustomer = await ApiClient.AddMemberAsync(factory, w.Owner, w.Org.Id, "Customer"); // customer of the same tenant, not the requester
 
-        Assert.Equal(HttpStatusCode.NotFound, (await w.SendMessageAsync(w.Agent2, t.Id, "not mine")).StatusCode); // unassigned agent
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.SendMessageAsync(w.Agent2, t.Id, "not mine")).StatusCode); // unassigned agent
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Agent2.GetAsync(w.Url($"tickets/{t.Id}/messages"))).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await w.SendMessageAsync(strangerCustomer, t.Id, "not mine")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await strangerCustomer.GetAsync(w.Url($"tickets/{t.Id}/messages"))).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await otherTenant.Owner.GetAsync(w.Url($"tickets/{t.Id}/messages"))).StatusCode); // no membership in this tenant
@@ -133,8 +134,8 @@ public class ConversationTests(ApiFactory factory) : IClassFixture<ApiFactory>
 
         await w.AssignAsync(t.Id, w.Agent2Membership); // the last eligible assignee cannot be removed, so add agent2 first
         (await w.Manager.DeleteAsync(w.Url($"tickets/{t.Id}/assignments/{w.Agent1Membership}"))).EnsureSuccessStatusCode();
-        Assert.Equal(HttpStatusCode.NotFound, (await w.SendMessageAsync(w.Agent1, t.Id, "after unassignment")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await w.Agent1.GetAsync(w.Url($"tickets/{t.Id}/messages"))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.SendMessageAsync(w.Agent1, t.Id, "after unassignment")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Agent1.GetAsync(w.Url($"tickets/{t.Id}/messages"))).StatusCode);
         await HttpAssert.StatusAsync(HttpStatusCode.Created, await w.SendMessageAsync(w.Agent2, t.Id, "taking over"));
 
         (await w.Owner.PutAsync(w.Url($"members/{w.Agent2Membership}/status"), new { isActive = false })).EnsureSuccessStatusCode();
@@ -165,7 +166,7 @@ public class ConversationTests(ApiFactory factory) : IClassFixture<ApiFactory>
 
         Assert.Equal(HttpStatusCode.Forbidden, (await w.Customer.GetAsync(w.Url($"tickets/{t.Id}/notes"))).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await w.AddNoteAsync(w.Customer, t.Id, "I am sneaky")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await w.Agent2.GetAsync(w.Url($"tickets/{t.Id}/notes"))).StatusCode); // unassigned agent
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Agent2.GetAsync(w.Url($"tickets/{t.Id}/notes"))).StatusCode); // unassigned agent
         Assert.Equal(secret, (await w.Manager.ReadAsync<PagedDto<NoteJson>>(await w.Manager.GetAsync(w.Url($"tickets/{t.Id}/notes")))).Items.Single().Content);
 
         // every customer-facing representation is free of the note
@@ -328,7 +329,8 @@ public class ConversationTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Empty(await w.Customer.ReadAsync<List<AttachmentJson>>(await w.Customer.GetAsync(w.Url($"tickets/{t.Id}/attachments"))));
         Assert.Equal(HttpStatusCode.NotFound, (await w.Customer.GetAsync(w.Url($"tickets/{t.Id}/attachments/{internalFile.Id}"))).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await w.Agent1.GetAsync(w.Url($"tickets/{t.Id}/attachments/{internalFile.Id}"))).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await w.Agent2.GetAsync(w.Url($"tickets/{t.Id}/attachments/{internalFile.Id}"))).StatusCode); // unassigned agent
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Agent2.GetAsync(w.Url($"tickets/{t.Id}/attachments/{internalFile.Id}"))).StatusCode); // unassigned agent: the ticket is visible, its files are not
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Agent2.GetAsync(w.Url($"tickets/{t.Id}/attachments"))).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await w.Manager.GetAsync(w.Url($"tickets/{otherTicket.Id}/attachments/{internalFile.Id}"))).StatusCode); // wrong ticket id
         Assert.Equal(HttpStatusCode.Forbidden, (await other.Owner.GetAsync(w.Url($"tickets/{t.Id}/attachments/{internalFile.Id}"))).StatusCode); // other tenant
         Assert.Equal(HttpStatusCode.Unauthorized, (await factory.CreateClient().GetAsync(w.Url($"tickets/{t.Id}/attachments/{internalFile.Id}"))).StatusCode);
@@ -336,6 +338,6 @@ public class ConversationTests(ApiFactory factory) : IClassFixture<ApiFactory>
         // revoked access: the agent is unassigned, so the very same download link stops working
         await w.AssignAsync(t.Id, w.Agent2Membership);
         (await w.Manager.DeleteAsync(w.Url($"tickets/{t.Id}/assignments/{w.Agent1Membership}"))).EnsureSuccessStatusCode();
-        Assert.Equal(HttpStatusCode.NotFound, (await w.Agent1.GetAsync(w.Url($"tickets/{t.Id}/attachments/{internalFile.Id}"))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Agent1.GetAsync(w.Url($"tickets/{t.Id}/attachments/{internalFile.Id}"))).StatusCode);
     }
 }

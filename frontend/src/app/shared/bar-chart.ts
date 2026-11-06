@@ -15,17 +15,27 @@ export interface ChartDatum {
         <div class="grid grid-cols-[minmax(5rem,9rem)_1fr_auto] items-center gap-2 text-sm">
           <span class="truncate text-muted" [title]="d.label">{{ d.label }}</span>
           <span class="h-3 overflow-hidden rounded-full bg-surface">
-            <span class="block h-full rounded-full bg-brand" [style.width.%]="(d.value / max()) * 100"></span>
+            <span
+              class="block h-full rounded-full bg-brand"
+              [style.width.%]="(d.value / max()) * 100"
+            ></span>
           </span>
           <span class="tabular-nums font-medium">{{ d.value }}</span>
         </div>
       }
     </div>
     <table class="sr-only">
-      <caption>{{ title() }}</caption>
+      <caption>
+        {{
+          title()
+        }}
+      </caption>
       <tbody>
         @for (d of data(); track d.label) {
-          <tr><th scope="row">{{ d.label }}</th><td>{{ d.value }}</td></tr>
+          <tr>
+            <th scope="row">{{ d.label }}</th>
+            <td>{{ d.value }}</td>
+          </tr>
         }
       </tbody>
     </table>

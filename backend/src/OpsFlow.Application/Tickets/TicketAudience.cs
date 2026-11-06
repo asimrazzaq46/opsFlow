@@ -43,6 +43,18 @@ public sealed class TicketAudience(IOpsFlowDbContext db)
         return await managers.Union(agents).ToListAsync(ct);
     }
 
+    /// <summary>Every active Owner, Manager and Agent of the current tenant: who may SEE tickets, used only for content-free refresh signals.</summary>
+    public async Task<List<Guid>> WorkspaceStaffAsync(CancellationToken ct) =>
+        await db
+            .Memberships.AsNoTracking()
+            .Where(m =>
+                m.Status == MembershipStatus.Active
+                && m.Role != TenantRole.Customer
+                && db.Users.Any(u => u.Id == m.UserId && u.Status == UserStatus.Active)
+            )
+            .Select(m => m.UserId)
+            .ToListAsync(ct);
+
     /// <summary>
     /// Audience of internal child-task data: active Owners/Managers and only the Agents that are CURRENTLY eligible assignees
     /// (never the creating agent by itself, never the customer).

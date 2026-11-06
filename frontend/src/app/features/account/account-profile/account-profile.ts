@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, effect, inject, input, output, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  effect,
+  inject,
+  input,
+  output,
+  signal,
+} from '@angular/core';
 import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { TranslatePipe } from '@ngx-translate/core';
 import { UserProfileDto } from '../../../core/api/generated/models';
@@ -21,7 +29,10 @@ export class AccountProfile {
 
   protected readonly busy = signal(false);
   protected readonly status = signal<'saved' | string | null>(null);
-  protected readonly name = new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.minLength(2), Validators.maxLength(100)] });
+  protected readonly name = new FormControl('', {
+    nonNullable: true,
+    validators: [Validators.required, Validators.minLength(2), Validators.maxLength(100)],
+  });
 
   constructor() {
     effect(() => this.name.reset(this.profile().displayName));
@@ -30,7 +41,13 @@ export class AccountProfile {
   protected save(): void {
     this.name.markAsTouched();
     const value = this.name.value.trim();
-    if (this.name.invalid || value.length < 2 || this.busy() || value === this.profile().displayName) return;
+    if (
+      this.name.invalid ||
+      value.length < 2 ||
+      this.busy() ||
+      value === this.profile().displayName
+    )
+      return;
     this.busy.set(true);
     this.status.set(null);
     this.account.updateDisplayName(value).subscribe({
