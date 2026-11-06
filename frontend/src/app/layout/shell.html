@@ -1,14 +1,17 @@
 <a href="#main-content" class="ops-skip-link">{{ 'shell.skipToContent' | translate }}</a>
 
 <ng-template #brand>
-  <!-- The approved logo ships with its own dark backdrop, so it is shown as a tile in both themes instead of being recolored. -->
-  <img
-    src="assets/brand/opsflow-logo-480.png"
-    alt="OpsFlow"
-    width="480"
-    height="137"
-    class="h-8 w-auto max-w-none shrink-0 rounded-md object-contain"
-  />
+  <!-- Transparent brand mark plus a live wordmark so the logo adapts to both themes; the link text provides the accessible name. -->
+  <span class="flex items-center gap-2">
+    <img
+      src="assets/brand/opsflow-mark.png"
+      alt=""
+      width="128"
+      height="128"
+      class="size-9 shrink-0 object-contain"
+    />
+    <span class="text-xl font-bold tracking-tight text-on-surface">Ops<span class="text-primary">Flow</span></span>
+  </span>
 </ng-template>
 
 <ng-template #utilities>
