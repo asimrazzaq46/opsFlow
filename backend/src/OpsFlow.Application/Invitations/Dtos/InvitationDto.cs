@@ -11,12 +11,14 @@ using OpsFlow.Domain.Users;
 
 namespace OpsFlow.Application.Invitations;
 
+/// <summary>CreatedAtUtc is when the invitation was first created; SentAtUtc is when its current link was last emailed (create or resend).</summary>
 public sealed record InvitationDto(
     Guid Id,
     string Email,
     TenantRole Role,
     DateTime CreatedAtUtc,
-    DateTime ExpiresAtUtc
+    DateTime ExpiresAtUtc,
+    DateTime SentAtUtc
 );
 
 public enum InvitationPreviewState

@@ -51,13 +51,14 @@ public sealed class InvitationsController(InvitationService invitations) : Contr
     [Authorize(Policy = AuthPolicies.TenantManager)]
     [EndpointSummary("List pending invitations")]
     [EndpointDescription(
-        "Returns the tenant's pending invitations. Requires the Owner or Manager role in the tenant."
+        "Returns the tenant's pending invitations, oldest first. With includeExpired=true it also returns open invitations whose link has expired (expiresAtUtc in the past), which can still be resent or revoked; accepted and revoked invitations are never listed. Requires the Owner or Manager role in the tenant."
     )]
     public async Task<ActionResult<IReadOnlyList<InvitationDto>>> ListInvitations(
-        CancellationToken ct
+        CancellationToken ct,
+        bool includeExpired = false
     )
     {
-        return Ok(await invitations.ListPendingAsync(ct));
+        return Ok(await invitations.ListPendingAsync(includeExpired, ct));
     }
 
     [HttpPost("tenants/{tenantId:guid}/invitations", Name = "CreateInvitation")]
@@ -65,7 +66,8 @@ public sealed class InvitationsController(InvitationService invitations) : Contr
     [EnableRateLimiting(RateLimitPolicies.Sensitive)]
     [EndpointSummary("Invite a user")]
     [EndpointDescription(
-        "Creates an invitation and emails a one-time token. Managers may invite Agents and Customers only. Requires the Owner or Manager role in the tenant."
+        "Creates an invitation and emails a one-time token that expires after 72 hours. Managers may invite Agents and Customers only. Requires the Owner or Manager role in the tenant. "
+            + "409 INVITATION_ALREADY_MEMBER when the address belongs to an active member of the tenant (nothing is sent; a suspended member can be invited), or 409 when a pending invitation already exists for the address."
     )]
     [ProducesResponseType<InvitationDto>(StatusCodes.Status201Created)]
     [ProducesResponseType<ProblemResponse>(
@@ -121,7 +123,7 @@ public sealed class InvitationsController(InvitationService invitations) : Contr
     [Authorize(Policy = AuthPolicies.TenantManager)]
     [EndpointSummary("Revoke invitation")]
     [EndpointDescription(
-        "Revokes a pending invitation. Requires the Owner or Manager role in the tenant."
+        "Revokes an open (pending or expired) invitation so its link stops working. Revoking an already revoked invitation changes nothing and also returns 204; an accepted invitation returns 409. Managers may revoke Agent and Customer invitations only. Requires the Owner or Manager role in the tenant."
     )]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ProblemResponse>(

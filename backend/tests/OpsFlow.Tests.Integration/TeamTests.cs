@@ -2,6 +2,7 @@ using System.Net;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using OpsFlow.Domain.Team;
 using OpsFlow.Infrastructure.Persistence;
 using OpsFlow.Tests.Integration.Support;
 
@@ -46,7 +47,10 @@ public class TeamTests(ApiFactory factory) : IClassFixture<ApiFactory>
         {
             var db = scope.ServiceProvider.GetRequiredService<OpsFlowDbContext>();
             Assert.Equal("Agent", (await db.Memberships.IgnoreQueryFilters().SingleAsync(m => m.Id == w.Agent1Membership)).Role.ToString());
-            Assert.False(await db.AuditEvents.IgnoreQueryFilters().AnyAsync(e => e.TargetMembershipId == w.Agent1Membership));
+            Assert.False(
+                await db.AuditEvents.IgnoreQueryFilters()
+                    .AnyAsync(e => e.TargetMembershipId == w.Agent1Membership && e.Action == AuditAction.MemberRoleChanged)
+            );
         }
 
         (await w.Manager.DeleteAsync(w.Url($"tickets/{ticket.Id}/assignments/{w.Agent1Membership}"))).EnsureSuccessStatusCode();
@@ -58,7 +62,8 @@ public class TeamTests(ApiFactory factory) : IClassFixture<ApiFactory>
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<OpsFlowDbContext>();
-            var audit = await db.AuditEvents.IgnoreQueryFilters().SingleAsync(e => e.TargetMembershipId == w.Agent1Membership);
+            var audit = await db.AuditEvents.IgnoreQueryFilters()
+                .SingleAsync(e => e.TargetMembershipId == w.Agent1Membership && e.Action == AuditAction.MemberRoleChanged);
             Assert.Equal(w.Owner.UserId, audit.ActorUserId);
             Assert.Equal(w.Org.Id, audit.TenantId);
         }

@@ -8,4 +8,5 @@ export interface InvitationDto {
   expiresAtUtc: string;
   id: string;
   role: TenantRole;
+  sentAtUtc: string;
 }

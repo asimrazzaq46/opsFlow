@@ -1,4 +1,5 @@
 import { DatePipe } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -193,7 +194,11 @@ export class CustomerDetail {
     const status = httpStatus(e);
     if (isForbidden(e)) return 'common.forbidden';
     if (isNotFound(e)) return 'customers.notFound';
-    if (action === 'invite') return status === 409 ? 'invitations.duplicate' : 'invitations.error';
+    if (action === 'invite') {
+      const code = e instanceof HttpErrorResponse ? (e.error as { code?: unknown } | null)?.code : undefined;
+      if (code === 'INVITATION_ALREADY_MEMBER') return 'invitations.errors.alreadyMember';
+      return status === 409 ? 'invitations.duplicate' : 'invitations.error';
+    }
     if (action === 'link') {
       return status === 409 ? 'customers.linkConflict' : status === 400 ? 'customers.invalidLink' : 'customers.saveError';
     }

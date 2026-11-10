@@ -7,6 +7,7 @@ using OpsFlow.Application.Common;
 using OpsFlow.Application.Invitations;
 using OpsFlow.Application.Memberships;
 using OpsFlow.Domain.Invitations;
+using OpsFlow.Domain.Team;
 using OpsFlow.Domain.Tenants;
 using OpsFlow.Infrastructure.Persistence;
 using OpsFlow.Tests.Integration.Support;
@@ -25,6 +26,134 @@ public class InvitationTests(ApiFactory factory) : IClassFixture<ApiFactory>
 
     private async Task<Invite> InviteAsync(ApiClient owner, Guid tenantId, string email, string role = "Agent") =>
         await owner.ReadAsync<Invite>(await owner.PostAsync($"/api/v1/tenants/{tenantId}/invitations", new { email, role }));
+
+    /// <summary>An active member's address cannot be invited, so the open invitation is created while the membership is suspended.</summary>
+    private static async Task<Invite> InviteWhileSuspendedAsync(ApiClient owner, Guid tenantId, ApiClient member, string role)
+    {
+        var membershipId = (await owner.MembersAsync(tenantId)).Single(m => m.UserId == member.UserId).Id;
+        var status = $"/api/v1/tenants/{tenantId}/members/{membershipId}/status";
+        (await owner.PutAsync(status, new { isActive = false, acknowledgeOpenWork = true })).EnsureSuccessStatusCode();
+        var invite = await owner.ReadAsync<Invite>(
+            await owner.PostAsync($"/api/v1/tenants/{tenantId}/invitations", new { email = member.Email, role })
+        );
+        (await owner.PutAsync(status, new { isActive = true })).EnsureSuccessStatusCode();
+        return invite;
+    }
+
+    private async Task<List<AuditEvent>> InvitationAuditAsync(Guid invitationId)
+    {
+        using var scope = factory.Services.CreateScope();
+        var detail = $"Invitation {invitationId} ";
+        return await scope.ServiceProvider.GetRequiredService<OpsFlowDbContext>()
+            .AuditEvents.IgnoreQueryFilters()
+            .Where(e => e.Detail != null && e.Detail.StartsWith(detail))
+            .ToListAsync();
+    }
+
+    private async Task ExpireAsync(Guid invitationId)
+    {
+        using var scope = factory.Services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<OpsFlowDbContext>().Invitations.IgnoreQueryFilters()
+            .Where(i => i.Id == invitationId)
+            .ExecuteUpdateAsync(s => s.SetProperty(i => i.ExpiresAtUtc, DateTime.UtcNow.AddDays(-1)));
+    }
+
+    [Fact]
+    public async Task An_active_members_address_cannot_be_invited_and_nothing_is_sent()
+    {
+        var (owner, org) = await NewTenantAsync();
+        var agent = await ApiClient.AddMemberAsync(factory, owner, org.Id, "Agent");
+        var emailsBefore = factory.Emails.Count(agent.Email);
+
+        var response = await owner.PostAsync(
+            $"/api/v1/tenants/{org.Id}/invitations",
+            new { email = agent.Email.ToUpperInvariant(), role = "Manager" }
+        );
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal("INVITATION_ALREADY_MEMBER", await CodeAsync(response));
+        Assert.Equal(emailsBefore, factory.Emails.Count(agent.Email));
+        Assert.Empty(await owner.ReadAsync<List<Invite>>(await owner.GetAsync($"/api/v1/tenants/{org.Id}/invitations?includeExpired=true")));
+        await InviteWhileSuspendedAsync(owner, org.Id, agent, "Manager"); // a suspended member stays invitable
+    }
+
+    [Fact]
+    public async Task Repeated_revoke_is_a_no_op_and_an_accepted_invitation_is_never_marked_revoked()
+    {
+        var (owner, org) = await NewTenantAsync();
+        var open = await InviteAsync(owner, org.Id, $"revoke-{Guid.NewGuid():N}@example.com");
+        var openUrl = $"/api/v1/tenants/{org.Id}/invitations/{open.Id}";
+
+        Assert.Equal(HttpStatusCode.NoContent, (await owner.DeleteAsync(openUrl)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await owner.DeleteAsync(openUrl)).StatusCode);
+        Assert.Single(await InvitationAuditAsync(open.Id), e => e.Action == AuditAction.InvitationRevoked);
+
+        var email = $"accepted-{Guid.NewGuid():N}@example.com";
+        var accepted = await InviteAsync(owner, org.Id, email);
+        var invitee = await ApiClient.RegisterAsync(factory, email);
+        var token = ApiClient.InvitationTokenFrom(factory, email);
+        Assert.Equal(HttpStatusCode.OK, (await invitee.PostAsync("/api/v1/invitations/accept", new { token })).StatusCode);
+
+        Assert.Equal(HttpStatusCode.Conflict, (await owner.DeleteAsync($"/api/v1/tenants/{org.Id}/invitations/{accepted.Id}")).StatusCode);
+        using var scope = factory.Services.CreateScope();
+        var row = await scope.ServiceProvider.GetRequiredService<OpsFlowDbContext>().Invitations.IgnoreQueryFilters()
+            .SingleAsync(i => i.Id == accepted.Id);
+        Assert.NotNull(row.AcceptedAtUtc);
+        Assert.Null(row.RevokedAtUtc);
+        Assert.DoesNotContain(await InvitationAuditAsync(accepted.Id), e => e.Action == AuditAction.InvitationRevoked);
+    }
+
+    [Fact]
+    public async Task Expired_open_invitations_are_listed_only_when_requested()
+    {
+        var (owner, org) = await NewTenantAsync();
+        var expired = await InviteAsync(owner, org.Id, $"old-{Guid.NewGuid():N}@example.com");
+        await ExpireAsync(expired.Id);
+        var revoked = await InviteAsync(owner, org.Id, $"gone-{Guid.NewGuid():N}@example.com");
+        await ExpireAsync(revoked.Id);
+        (await owner.DeleteAsync($"/api/v1/tenants/{org.Id}/invitations/{revoked.Id}")).EnsureSuccessStatusCode();
+        var pending = await InviteAsync(owner, org.Id, $"new-{Guid.NewGuid():N}@example.com");
+        var list = $"/api/v1/tenants/{org.Id}/invitations";
+
+        var byDefault = await owner.ReadAsync<List<Invite>>(await owner.GetAsync(list));
+        var withExpired = await owner.ReadAsync<List<Invite>>(await owner.GetAsync($"{list}?includeExpired=true"));
+
+        Assert.Equal([pending.Id], byDefault.Select(i => i.Id));
+        Assert.Equal(new[] { expired.Id, pending.Id }.Order(), withExpired.Select(i => i.Id).Order());
+    }
+
+    [Fact]
+    public async Task Invitation_lifecycle_is_audited_once_per_change_with_the_real_actor_and_no_secrets()
+    {
+        var (owner, org) = await NewTenantAsync();
+        var email = $"audited-{Guid.NewGuid():N}@example.com";
+        var invite = await InviteAsync(owner, org.Id, email, "Manager");
+        factory.Clock.Advance(InvitationService.ResendCooldown);
+        (await owner.PostAsync(Resend(org.Id, invite.Id))).EnsureSuccessStatusCode();
+        var invitee = await ApiClient.RegisterAsync(factory, email);
+        var token = ApiClient.InvitationTokenFrom(factory, email);
+        (await invitee.PostAsync("/api/v1/invitations/accept", new { token })).EnsureSuccessStatusCode();
+        (await invitee.PostAsync("/api/v1/invitations/accept", new { token })).EnsureSuccessStatusCode(); // idempotent repeat
+        var membershipId = (await owner.MembersAsync(org.Id)).Single(m => m.UserId == invitee.UserId).Id;
+
+        var audit = await InvitationAuditAsync(invite.Id);
+
+        Assert.Equal(
+            new[] { AuditAction.InvitationAccepted, AuditAction.InvitationCreated, AuditAction.InvitationResent }.Order(),
+            audit.Select(e => e.Action).Order()
+        );
+        Assert.All(audit, e => Assert.Equal(org.Id, e.TenantId));
+        Assert.All(audit.Where(e => e.Action != AuditAction.InvitationAccepted), e => Assert.Equal(owner.UserId, e.ActorUserId));
+        var acceptance = audit.Single(e => e.Action == AuditAction.InvitationAccepted);
+        Assert.Equal(invitee.UserId, acceptance.ActorUserId);
+        Assert.Equal(membershipId, acceptance.TargetMembershipId);
+        Assert.All(audit, e =>
+        {
+            Assert.DoesNotContain(email, e.Detail!, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain(token, e.Detail!, StringComparison.Ordinal);
+            Assert.DoesNotContain(SecureToken.Hash(token), e.Detail!, StringComparison.Ordinal);
+        });
+    }
 
     [Fact]
     public async Task Agents_and_customers_cannot_manage_invitations_or_memberships_and_a_rejected_attempt_changes_nothing()
@@ -195,7 +324,7 @@ public class InvitationTests(ApiFactory factory) : IClassFixture<ApiFactory>
     {
         var (owner, org) = await NewTenantAsync();
         var agent = await ApiClient.AddMemberAsync(factory, owner, org.Id, "Agent");
-        await InviteAsync(owner, org.Id, agent.Email, "Manager");
+        await InviteWhileSuspendedAsync(owner, org.Id, agent, "Manager");
         var token = ApiClient.InvitationTokenFrom(factory, agent.Email);
 
         var accepted = await agent.ReadAsync<OrgDto>(await agent.PostAsync("/api/v1/invitations/accept", new { token }));
@@ -540,7 +669,7 @@ public class InvitationTests(ApiFactory factory) : IClassFixture<ApiFactory>
     {
         var (owner, org) = await NewTenantAsync();
         var agent = await ApiClient.AddMemberAsync(factory, owner, org.Id, "Agent");
-        var invite = await InviteAsync(owner, org.Id, agent.Email, "Manager");
+        var invite = await InviteWhileSuspendedAsync(owner, org.Id, agent, "Manager");
         factory.Clock.Advance(InvitationService.ResendCooldown);
 
         var response = await owner.PostAsync(Resend(org.Id, invite.Id));

@@ -1820,9 +1820,17 @@
           "Invitations"
         ],
         "summary": "List pending invitations",
-        "description": "Returns the tenant's pending invitations. Requires the Owner or Manager role in the tenant.",
+        "description": "Returns the tenant's pending invitations, oldest first. With includeExpired=true it also returns open invitations whose link has expired (expiresAtUtc in the past), which can still be resent or revoked; accepted and revoked invitations are never listed. Requires the Owner or Manager role in the tenant.",
         "operationId": "ListInvitations",
         "parameters": [
+          {
+            "name": "includeExpired",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
           {
             "name": "tenantId",
             "in": "path",
@@ -1867,6 +1875,16 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "Validation failed; see `errors` for the offending fields.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemResponse"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -1880,7 +1898,7 @@
           "Invitations"
         ],
         "summary": "Invite a user",
-        "description": "Creates an invitation and emails a one-time token. Managers may invite Agents and Customers only. Requires the Owner or Manager role in the tenant.",
+        "description": "Creates an invitation and emails a one-time token that expires after 72 hours. Managers may invite Agents and Customers only. Requires the Owner or Manager role in the tenant. 409 INVITATION_ALREADY_MEMBER when the address belongs to an active member of the tenant (nothing is sent; a suspended member can be invited), or 409 when a pending invitation already exists for the address.",
         "operationId": "CreateInvitation",
         "parameters": [
           {
@@ -2077,7 +2095,7 @@
           "Invitations"
         ],
         "summary": "Revoke invitation",
-        "description": "Revokes a pending invitation. Requires the Owner or Manager role in the tenant.",
+        "description": "Revokes an open (pending or expired) invitation so its link stops working. Revoking an already revoked invitation changes nothing and also returns 204; an accepted invitation returns 409. Managers may revoke Agent and Customer invitations only. Requires the Owner or Manager role in the tenant.",
         "operationId": "RevokeInvitation",
         "parameters": [
           {
@@ -7946,7 +7964,8 @@
           "email",
           "role",
           "createdAtUtc",
-          "expiresAtUtc"
+          "expiresAtUtc",
+          "sentAtUtc"
         ],
         "type": "object",
         "properties": {
@@ -7965,6 +7984,10 @@
             "format": "date-time"
           },
           "expiresAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sentAtUtc": {
             "type": "string",
             "format": "date-time"
           }

@@ -14,6 +14,10 @@ export type AnalyticsFilterInput = {
 };
 
 export type AuditAction =
+  | 'INVITATION_ACCEPTED'
+  | 'INVITATION_CREATED'
+  | 'INVITATION_RESENT'
+  | 'INVITATION_REVOKED'
   | 'MEMBER_PROFILE_UPDATED'
   | 'MEMBER_ROLE_CHANGED'
   | 'MEMBER_SKILLS_CHANGED'

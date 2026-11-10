@@ -9,6 +9,7 @@ using OpsFlow.Application.Memberships;
 using OpsFlow.Application.Organizations;
 using OpsFlow.Domain.Customers;
 using OpsFlow.Domain.Invitations;
+using OpsFlow.Domain.Team;
 using OpsFlow.Domain.Tenants;
 using OpsFlow.Domain.Users;
 
@@ -34,7 +35,7 @@ public sealed partial class InvitationService(
     /// <summary>Minimum time between two emails for the same invitation.</summary>
     public static readonly TimeSpan ResendCooldown = TimeSpan.FromMinutes(2);
 
-    /// <summary>Permission matrix: Owners manage invitations of any staff role; Managers only Agent invitations.</summary>
+    /// <summary>Permission matrix: Owners manage invitations of every role; Managers only Agent and Customer invitations.</summary>
     private static bool CanManage(TenantRole actorRole, TenantRole invitedRole) =>
         actorRole == TenantRole.TenantOwner
         || (
@@ -72,6 +73,12 @@ public sealed partial class InvitationService(
                 );
             }
 
+            // A suspended member may still be invited; accepting then keeps the existing membership rules.
+            if (await IsActiveMemberAsync(normalized, ct))
+            {
+                return AlreadyMember();
+            }
+
             var now = clock.GetUtcNow().UtcDateTime;
             var open = await db
                 .Invitations.Where(i =>
@@ -99,6 +106,7 @@ public sealed partial class InvitationService(
             );
             db.Invitations.Add(invitation);
             tenant.RotateOwnerChangeStamp();
+            Audit(invitation, AuditAction.InvitationCreated, null, now);
             try
             {
                 await db.SaveChangesAsync(ct);
@@ -122,31 +130,40 @@ public sealed partial class InvitationService(
         return ChangedConcurrently();
     }
 
-    public async Task<IReadOnlyList<InvitationDto>> ListPendingAsync(CancellationToken ct)
+    /// <param name="includeExpired">Also return open invitations whose link has expired (they can still be resent or revoked).</param>
+    public async Task<IReadOnlyList<InvitationDto>> ListPendingAsync(bool includeExpired, CancellationToken ct)
     {
         var now = clock.GetUtcNow().UtcDateTime;
         var open = await db
-            .Invitations.Where(i => i.AcceptedAtUtc == null && i.RevokedAtUtc == null)
-            .ToListAsync(ct);
-        return open.Where(i => i.IsPending(now))
+            .Invitations.AsNoTracking()
+            .Where(i =>
+                i.AcceptedAtUtc == null
+                && i.RevokedAtUtc == null
+                && (includeExpired || i.ExpiresAtUtc > now)
+            )
             .OrderBy(i => i.CreatedAtUtc)
-            .Select(ToDto)
-            .ToList();
+            .ThenBy(i => i.Id)
+            .ToListAsync(ct);
+        return open.ConvertAll(ToDto); // mapped in memory: the sent time is derived from the expiry
     }
 
-    /// <returns>Null when the invitation was revoked; otherwise the failure to answer with.</returns>
+    /// <summary>
+    /// Revokes an open invitation with a conditional UPDATE, so an acceptance that commits concurrently can never be reported as revoked:
+    /// the update then matches no row and the retry answers from the current state. Like resend, the invitation row is written before the
+    /// tenant stamp, so both take the same lock order. Repeating a revocation changes nothing and is answered with success.
+    /// </summary>
+    /// <returns>Null when the invitation is revoked; otherwise the failure to answer with.</returns>
     public async Task<ObjectResult?> RevokeAsync(Guid invitationId, CancellationToken ct)
     {
         for (var attempt = 0; attempt < MaxAttempts; attempt++)
         {
-            // Revoke follows the same current-authorization + stamp protocol (Managers only Agent invitations).
             var tenant = await db.Tenants.SingleAsync(ct);
             if (await actor.GetActiveRoleAsync(ct) is not { } actorRole)
             {
                 return ActorAccess.AccessNoLongerValid();
             }
 
-            var invitation = await db.Invitations.SingleOrDefaultAsync(i => i.Id == invitationId, ct);
+            var invitation = await db.Invitations.AsNoTracking().SingleOrDefaultAsync(i => i.Id == invitationId, ct);
             if (invitation is null)
             {
                 return new NotFoundObjectResult(new ProblemDetails { Title = "Invitation not found." });
@@ -154,7 +171,7 @@ public sealed partial class InvitationService(
 
             if (!CanManage(actorRole, invitation.Role))
             {
-                return ActorAccess.Forbidden("You can only revoke Agent invitations.");
+                return ActorAccess.Forbidden("You can only revoke Agent and Customer invitations.");
             }
 
             if (invitation.AcceptedAtUtc is not null)
@@ -164,17 +181,41 @@ public sealed partial class InvitationService(
                 );
             }
 
-            invitation.Revoke(clock.GetUtcNow().UtcDateTime);
-            tenant.RotateOwnerChangeStamp();
-            try
+            if (invitation.RevokedAtUtc is not null)
             {
-                await db.SaveChangesAsync(ct);
-                return null;
+                return null; // already revoked: no write and no second audit entry
             }
-            catch (DbUpdateConcurrencyException)
+
+            var now = clock.GetUtcNow().UtcDateTime;
+            await using (var transaction = await db.BeginTransactionAsync(ct))
             {
-                db.ChangeTracker.Clear();
+                var revoked = await db
+                    .Invitations.Where(i =>
+                        i.Id == invitation.Id && i.AcceptedAtUtc == null && i.RevokedAtUtc == null
+                    )
+                    .ExecuteUpdateAsync(s => s.SetProperty(i => i.RevokedAtUtc, now), ct);
+                if (revoked == 0)
+                {
+                    db.ChangeTracker.Clear();
+                    continue; // accepted or revoked concurrently: the retry reports the current state
+                }
+
+                tenant.RotateOwnerChangeStamp();
+                Audit(invitation, AuditAction.InvitationRevoked, null, now);
+                try
+                {
+                    await db.SaveChangesAsync(ct);
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    db.ChangeTracker.Clear();
+                    continue; // disposing the transaction rolls the revocation back
+                }
+
+                await transaction.CommitAsync(ct);
             }
+
+            return null;
         }
 
         return ChangedConcurrently();
@@ -219,28 +260,13 @@ public sealed partial class InvitationService(
                 );
             }
 
-            if (
-                await db.Memberships.AnyAsync(
-                    m =>
-                        m.Status == MembershipStatus.Active
-                        && db.Users.Any(u => u.Id == m.UserId && u.NormalizedEmail == invitation.NormalizedEmail),
-                    ct
-                )
-            )
+            if (await IsActiveMemberAsync(invitation.NormalizedEmail, ct))
             {
-                return new ConflictObjectResult(
-                    new ProblemDetails
-                    {
-                        Title = "This person is already an active member of the organization.",
-                        Extensions = { ["code"] = "INVITATION_ALREADY_MEMBER" },
-                    }
-                );
+                return AlreadyMember();
             }
 
             var now = clock.GetUtcNow().UtcDateTime;
-            // The last send time is derived from the fixed lifetime, so no extra column is needed.
-            var lastSentAt = invitation.ExpiresAtUtc - Lifetime;
-            if (now - lastSentAt < ResendCooldown)
+            if (now - LastSentAt(invitation) < ResendCooldown)
             {
                 return new ObjectResult(
                     new ProblemDetails
@@ -278,6 +304,7 @@ public sealed partial class InvitationService(
                 }
 
                 tenant.RotateOwnerChangeStamp();
+                Audit(invitation, AuditAction.InvitationResent, null, now);
                 try
                 {
                     await db.SaveChangesAsync(ct);
@@ -354,7 +381,8 @@ public sealed partial class InvitationService(
                     );
                 }
 
-                await db
+                await using var consume = await db.BeginTransactionAsync(ct);
+                var consumed = await db
                     .Invitations.Where(i =>
                         i.Id == invitation.Id
                         && i.TokenHash == hash
@@ -362,6 +390,14 @@ public sealed partial class InvitationService(
                         && i.RevokedAtUtc == null
                     )
                     .ExecuteUpdateAsync(s => s.SetProperty(i => i.RevokedAtUtc, now), ct);
+                // Audited only by the request that consumed it, so concurrent repeats leave a single entry.
+                if (consumed == 1)
+                {
+                    Audit(invitation, AuditAction.InvitationAccepted, existing.MembershipId, now, "existing membership kept");
+                    await db.SaveChangesAsync(ct);
+                }
+
+                await consume.CommitAsync(ct);
                 return existing;
             }
 
@@ -399,9 +435,8 @@ public sealed partial class InvitationService(
                     : InvalidInvitation();
             }
 
-            db.Memberships.Add(
-                Membership.Create(invitation.TenantId, userId, invitation.Role, now)
-            );
+            var membership = Membership.Create(invitation.TenantId, userId, invitation.Role, now);
+            db.Memberships.Add(membership);
             if (
                 invitation.Role == TenantRole.Customer
                 && !await EnsureCustomerContactAsync(invitation, user, now, ct)
@@ -417,6 +452,7 @@ public sealed partial class InvitationService(
                 );
             }
 
+            Audit(invitation, AuditAction.InvitationAccepted, membership.Id, now);
             try
             {
                 await db.SaveChangesAsync(ct);
@@ -585,6 +621,41 @@ public sealed partial class InvitationService(
             : new OrganizationDto(tenant.Id, tenant.Name, tenant.Slug, membership!.Role, membership.Id);
     }
 
+    // Memberships are tenant-filtered; the user email uses the same normalization as the invitation.
+    private Task<bool> IsActiveMemberAsync(string normalizedEmail, CancellationToken ct) =>
+        db.Memberships.AnyAsync(
+            m =>
+                m.Status == MembershipStatus.Active
+                && db.Users.Any(u => u.Id == m.UserId && u.NormalizedEmail == normalizedEmail),
+            ct
+        );
+
+    private static ConflictObjectResult AlreadyMember() =>
+        new(
+            new ProblemDetails
+            {
+                Title = "This person is already an active member of the organization.",
+                Extensions = { ["code"] = "INVITATION_ALREADY_MEMBER" },
+            }
+        );
+
+    /// <summary>
+    /// Staged in the same SaveChanges as the state change it records, so a rolled-back or retried attempt leaves no entry.
+    /// The detail identifies the invitation and role only: never the token, its hash or the invited address.
+    /// </summary>
+    private void Audit(Invitation invitation, AuditAction action, Guid? membershipId, DateTime now, string? note = null) =>
+        db.AuditEvents.Add(
+            AuditEvent.Create(
+                invitation.TenantId,
+                currentUser.UserId,
+                action,
+                membershipId,
+                null,
+                $"Invitation {invitation.Id} ({invitation.Role}){(note is null ? string.Empty : $"; {note}")}",
+                now
+            )
+        );
+
     private static BadRequestObjectResult InvalidInvitation() =>
         new(new ProblemDetails { Title = "The invitation is invalid or has expired." });
 
@@ -619,8 +690,14 @@ public sealed partial class InvitationService(
         }
     }
 
+    /// <summary>
+    /// When the current link was emailed. Create and resend are the only writers of ExpiresAtUtc and both set it to "now + Lifetime"
+    /// (always 72 hours), so no separate column is needed; changing Lifetime or writing ExpiresAtUtc elsewhere would break this.
+    /// </summary>
+    private static DateTime LastSentAt(Invitation i) => i.ExpiresAtUtc - Lifetime;
+
     private static InvitationDto ToDto(Invitation i) =>
-        new(i.Id, i.Email, i.Role, i.CreatedAtUtc, i.ExpiresAtUtc);
+        new(i.Id, i.Email, i.Role, i.CreatedAtUtc, i.ExpiresAtUtc, LastSentAt(i));
 
     [LoggerMessage(
         Level = LogLevel.Information,

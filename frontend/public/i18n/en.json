@@ -741,7 +741,8 @@
       "MemberProfileUpdated": "Profile updated",
       "MemberSkillsChanged": "Skills changed",
       "SkillCreated": "Skill created",
-      "SkillUpdated": "Skill updated"
+      "SkillUpdated": "Skill updated",
+      "InvitationAccepted": "Invitation accepted"
     },
     "detailForbidden": "You can open only your own employee profile.",
     "detailError": "Could not load this employee."
@@ -752,7 +753,7 @@
     "revoke": "Revoke",
     "empty": "No pending invitations.",
     "sent": "Invitation sent.",
-    "duplicate": "A pending invitation or membership already exists.",
+    "duplicate": "A pending invitation may already exist for this address, or the workspace changed at the same time. Check the invitations and try again.",
     "error": "The invitation action failed.",
     "accept": {
       "eyebrow": "Invitation",
@@ -786,7 +787,7 @@
       "mismatchTitle": "Different email address",
       "mismatchText": "This invitation was sent to another email address, or your email is not confirmed yet. Sign in with the invited account.",
       "conflictTitle": "Could not join",
-      "conflictText": "The workspace changed in the meantime. Please try again.",
+      "conflictText": "You could not be added to the workspace. Your membership may be inactive or the workspace changed in the meantime. Try again, and ask a workspace administrator if it keeps failing.",
       "failedTitle": "Could not accept the invitation",
       "titleFor": "You have been invited to {{name}}",
       "invitedEmail": "Invited address",
@@ -795,9 +796,32 @@
       "mismatchKnown": "This invitation was sent to {{invited}}, but you are signed in as {{current}}. Use a different account to continue."
     },
     "sending": "Sending…",
-    "revoked": "Invitation revoked.",
+    "revoked": "Invitation for {{email}} revoked. Its link no longer works.",
     "timeout": "The request is taking too long. Check your connection and try again.",
-    "loadError": "Could not load the pending invitations."
+    "loadError": "Could not load the pending invitations.",
+    "listLabel": "Pending and expired invitations",
+    "resend": "Resend",
+    "resending": "Resending…",
+    "resent": "Invitation sent again to {{email}}. Earlier links no longer work.",
+    "statePending": "Pending",
+    "stateExpired": "Expired",
+    "sentAt": "Sent",
+    "expiresAt": "Expires",
+    "expiredAt": "Expired",
+    "ownerOnly": "Managed by Owners",
+    "revokeTitle": "Revoke this invitation?",
+    "revokeMessage": "The link sent to {{email}} ({{role}}) will stop working. You can invite the address again later.",
+    "errors": {
+      "invalid": "The invitation could not be created. Check the email address and role.",
+      "notFound": "This invitation no longer exists. The list was refreshed.",
+      "alreadyMember": "This person is already an active member of the workspace.",
+      "notResendable": "This invitation was already accepted or revoked and cannot be sent again. The list was refreshed.",
+      "cooldown": "The invitation was sent moments ago. Wait two minutes before sending it again.",
+      "rateLimited": "Too many requests. Please wait a moment and try again.",
+      "createConflict": "A pending invitation may already exist for this address, or the workspace changed at the same time. The list was refreshed; check it and try again.",
+      "resendConflict": "This invitation changed in the meantime. The list was refreshed; try again if it is still pending.",
+      "revokeConflict": "This invitation can no longer be revoked, probably because it was just accepted. The list was refreshed."
+    }
   },
   "google": {
     "or": "or",

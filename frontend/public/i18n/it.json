@@ -741,7 +741,8 @@
       "MemberProfileUpdated": "Profilo aggiornato",
       "MemberSkillsChanged": "Competenze modificate",
       "SkillCreated": "Competenza creata",
-      "SkillUpdated": "Competenza aggiornata"
+      "SkillUpdated": "Competenza aggiornata",
+      "InvitationAccepted": "Invito accettato"
     },
     "detailForbidden": "Puoi aprire solo il tuo profilo.",
     "detailError": "Impossibile caricare questo membro."
@@ -752,7 +753,7 @@
     "revoke": "Revoca",
     "empty": "Nessun invito in sospeso.",
     "sent": "Invito inviato.",
-    "duplicate": "Esiste già un invito in sospeso o un'appartenenza.",
+    "duplicate": "Potrebbe esistere già un invito in sospeso per questo indirizzo, oppure il workspace è cambiato nel frattempo. Controlla gli inviti e riprova.",
     "error": "Operazione sull'invito non riuscita.",
     "accept": {
       "eyebrow": "Invito",
@@ -786,7 +787,7 @@
       "mismatchTitle": "Indirizzo email diverso",
       "mismatchText": "L'invito è stato inviato a un altro indirizzo oppure la tua email non è ancora confermata. Accedi con l'account invitato.",
       "conflictTitle": "Impossibile entrare",
-      "conflictText": "Il workspace è stato modificato nel frattempo. Riprova.",
+      "conflictText": "Non è stato possibile aggiungerti al workspace. La tua iscrizione potrebbe non essere attiva oppure il workspace è cambiato nel frattempo. Riprova e, se persiste, contatta un amministratore del workspace.",
       "failedTitle": "Impossibile accettare l'invito",
       "titleFor": "Sei stato invitato in {{name}}",
       "invitedEmail": "Indirizzo invitato",
@@ -795,9 +796,32 @@
       "mismatchKnown": "Questo invito è stato inviato a {{invited}}, ma hai effettuato l'accesso come {{current}}. Usa un altro account per continuare."
     },
     "sending": "Invio in corso…",
-    "revoked": "Invito revocato.",
+    "revoked": "Invito per {{email}} revocato. Il link non funziona più.",
     "timeout": "La richiesta sta impiegando troppo tempo. Controlla la connessione e riprova.",
-    "loadError": "Impossibile caricare gli inviti in sospeso."
+    "loadError": "Impossibile caricare gli inviti in sospeso.",
+    "listLabel": "Inviti in sospeso e scaduti",
+    "resend": "Reinvia",
+    "resending": "Invio in corso…",
+    "resent": "Invito inviato di nuovo a {{email}}. I link precedenti non funzionano più.",
+    "statePending": "In sospeso",
+    "stateExpired": "Scaduto",
+    "sentAt": "Inviato",
+    "expiresAt": "Scade",
+    "expiredAt": "Scaduto",
+    "ownerOnly": "Gestito dai titolari",
+    "revokeTitle": "Revocare questo invito?",
+    "revokeMessage": "Il link inviato a {{email}} ({{role}}) smetterà di funzionare. Potrai invitare di nuovo l'indirizzo più tardi.",
+    "errors": {
+      "invalid": "Impossibile creare l'invito. Controlla l'indirizzo email e il ruolo.",
+      "notFound": "Questo invito non esiste più. L'elenco è stato aggiornato.",
+      "alreadyMember": "Questa persona è già un membro attivo del workspace.",
+      "notResendable": "Questo invito è già stato accettato o revocato e non può essere reinviato. L'elenco è stato aggiornato.",
+      "cooldown": "L'invito è stato inviato pochi istanti fa. Attendi due minuti prima di reinviarlo.",
+      "rateLimited": "Troppe richieste. Attendi un momento e riprova.",
+      "createConflict": "Potrebbe esistere già un invito in sospeso per questo indirizzo, oppure il workspace è cambiato nel frattempo. L'elenco è stato aggiornato; controllalo e riprova.",
+      "resendConflict": "Questo invito è cambiato nel frattempo. L'elenco è stato aggiornato; riprova se è ancora in sospeso.",
+      "revokeConflict": "Questo invito non può più essere revocato, probabilmente perché è appena stato accettato. L'elenco è stato aggiornato."
+    }
   },
   "google": {
     "or": "oppure",

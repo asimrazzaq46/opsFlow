@@ -10,6 +10,7 @@ import { RequestBuilder } from '../../request-builder';
 import { InvitationDto } from '../../models/invitation-dto';
 
 export interface ListInvitations$Params {
+  includeExpired?: boolean;
 
 /**
  * Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.
@@ -20,6 +21,7 @@ export interface ListInvitations$Params {
 export function listInvitations(http: HttpClient, rootUrl: string, params: ListInvitations$Params, context?: HttpContext): Observable<StrictHttpResponse<Array<InvitationDto>>> {
   const rb = new RequestBuilder(rootUrl, listInvitations.PATH, 'get');
   if (params) {
+    rb.query('includeExpired', params.includeExpired, {});
     rb.path('tenantId', params.tenantId, {});
   }
 

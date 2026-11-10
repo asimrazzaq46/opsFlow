@@ -104,6 +104,10 @@ public enum AuditAction
     MemberSkillsChanged,
     SkillCreated,
     SkillUpdated,
+    InvitationCreated,
+    InvitationResent,
+    InvitationRevoked,
+    InvitationAccepted,
 }
 
 /// <summary>Append-only record of an administrative change in a workspace. Holds no credentials or tokens.</summary>
