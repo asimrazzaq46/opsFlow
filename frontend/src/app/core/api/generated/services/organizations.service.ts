@@ -63,7 +63,7 @@ export class OrganizationsService extends BaseService {
   /**
    * Create organization.
    *
-   * Creates a tenant with the caller as its first Owner and seeds the default ticket settings, categories and SLA policies.
+   * Creates a tenant with the caller as its first Owner and seeds the default ticket settings, categories and SLA policies. The optional slug (lowercase letters, digits, hyphens; 2-50) and ticket number prefix (uppercase letters and digits, starting with a letter; 2-10) are chosen here once and can never be changed; omitted, they are derived from the name and the default. 400 for invalid values, 409 SLUG_TAKEN when the slug is in use.
    *
    * This method provides access to the full `HttpResponse`, allowing access to response headers.
    * To access only the response body, use `createOrganization()` instead.
@@ -78,7 +78,7 @@ export class OrganizationsService extends BaseService {
   /**
    * Create organization.
    *
-   * Creates a tenant with the caller as its first Owner and seeds the default ticket settings, categories and SLA policies.
+   * Creates a tenant with the caller as its first Owner and seeds the default ticket settings, categories and SLA policies. The optional slug (lowercase letters, digits, hyphens; 2-50) and ticket number prefix (uppercase letters and digits, starting with a letter; 2-10) are chosen here once and can never be changed; omitted, they are derived from the name and the default. 400 for invalid values, 409 SLUG_TAKEN when the slug is in use.
    *
    * This method provides access only to the response body.
    * To access the full response (for headers, for example), `createOrganization$Response()` instead.
