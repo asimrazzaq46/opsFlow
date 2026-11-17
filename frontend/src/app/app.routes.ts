@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 import { accessGuard, authGuard, emailLinkGuard, guestGuard } from './core/auth/auth.guard';
 import { RouteAccess } from './core/auth/route-access';
+import type { OrganizationSettings } from './features/settings/organization-settings';
 
 /** `data.access` of a workspace page; the guard, the sidebar and the shell's live revalidation all read it through `canAccess`. */
 const access = (level: RouteAccess) => ({ access: level });
@@ -143,6 +144,14 @@ export const routes: Routes = [
     data: access('staff'),
     loadComponent: () =>
       import('./features/team/member-detail/member-detail').then((m) => m.MemberDetail),
+  },
+  {
+    path: 'settings',
+    canActivate: [authGuard, accessGuard],
+    canDeactivate: [(page: OrganizationSettings) => page.confirmLeave()],
+    data: access('staff'),
+    loadComponent: () =>
+      import('./features/settings/organization-settings').then((m) => m.OrganizationSettings),
   },
   { path: '**', redirectTo: '' },
 ];

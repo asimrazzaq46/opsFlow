@@ -26,6 +26,7 @@ import { AuthService } from '../core/auth/auth.service';
 import { ChatUnreadService, compactCount, unreadKey } from '../core/chat/chat-unread.service';
 import { RouteAccess, canAccess, routeAccess } from '../core/auth/route-access';
 import { TenantService } from '../core/auth/tenant.service';
+import { UnsavedChanges } from '../core/auth/unsaved-changes';
 import { RealtimeService } from '../core/realtime/realtime.service';
 import { ThemeService } from '../core/services/theme.service';
 import { initials } from '../features/workspaces/workspace-api';
@@ -35,7 +36,7 @@ import { HealthStatus } from '../shared/components/health-status';
 import { NotificationCenter } from './notification-center';
 
 @Component({
-  selector: 'app-shell',
+  selector: 'app-workspace-layout',
   imports: [
     RouterOutlet,
     RouterLink,
@@ -47,13 +48,14 @@ import { NotificationCenter } from './notification-center';
     ConfirmDialog,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  templateUrl: './shell.html',
-  styleUrl: './shell.css',
+  templateUrl: './workspace-layout.html',
+  styleUrl: './workspace-layout.css',
   host: { '(document:keydown.escape)': 'menuOpen() && !hasOpenDialog() && closeMenu()' },
 })
-export class Shell {
+export class WorkspaceLayout {
   protected readonly auth = inject(AuthService);
   protected readonly tenant = inject(TenantService);
+  protected readonly unsaved = inject(UnsavedChanges);
   protected readonly realtime = inject(RealtimeService);
   protected readonly theme = inject(ThemeService);
   protected readonly language = inject(LanguageService);

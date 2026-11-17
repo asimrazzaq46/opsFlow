@@ -159,6 +159,19 @@
               ><span>{{ 'nav.workspaces' | translate }}</span>
             </a>
           </li>
+          @if (tenant.isStaff()) {
+            <li>
+              <a
+                routerLink="/settings"
+                routerLinkActive
+                ariaCurrentWhenActive="page"
+                class="ops-nav-link"
+              >
+                <span class="ms text-[20px]" aria-hidden="true">corporate_fare</span
+                ><span>{{ 'nav.settings' | translate }}</span>
+              </a>
+            </li>
+          }
           <li>
             <a
               routerLink="/account"
@@ -207,7 +220,10 @@
     <app-confirm-dialog
       #switchDialog
       [title]="'tenant.switchTitle' | translate"
-      [message]="'tenant.switchMessage' | translate: { name: switchTarget()?.name ?? '' }"
+      [message]="
+        (unsaved.dirty() ? 'tenant.switchUnsavedMessage' : 'tenant.switchMessage')
+          | translate: { name: switchTarget()?.name ?? '' }
+      "
       [confirmLabel]="'tenant.switchConfirm' | translate"
       (confirmed)="confirmSwitch()"
       (closed)="switchClosed()"
@@ -215,7 +231,7 @@
     <app-confirm-dialog
       #logoutDialog
       [title]="'auth.signOutTitle' | translate"
-      [message]="'auth.signOutMessage' | translate"
+      [message]="(unsaved.dirty() ? 'auth.signOutUnsavedMessage' : 'auth.signOutMessage') | translate"
       [confirmLabel]="'auth.signOut' | translate"
       (confirmed)="confirmLogout()"
     />
