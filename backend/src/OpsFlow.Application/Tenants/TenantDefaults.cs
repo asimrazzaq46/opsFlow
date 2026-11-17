@@ -33,13 +33,14 @@ public static class TenantDefaults
         bool hasSettings,
         bool hasCounter,
         ISet<string> existingCategories,
-        ISet<TicketPriority> existingPriorities
+        ISet<TicketPriority> existingPriorities,
+        string? ticketNumberPrefix = null
     )
     {
         var added = 0;
         if (!hasSettings)
         {
-            db.Settings.Add(TenantSettings.Create(tenantId, nowUtc));
+            db.Settings.Add(TenantSettings.Create(tenantId, nowUtc, ticketNumberPrefix));
             added++;
         }
 
@@ -79,7 +80,7 @@ public static class TenantDefaults
     }
 
     /// <summary>Everything a brand-new tenant needs (used by onboarding, atomically with the tenant).</summary>
-    public static void AddAll(IOpsFlowDbContext db, Guid tenantId, DateTime nowUtc) =>
+    public static void AddAll(IOpsFlowDbContext db, Guid tenantId, DateTime nowUtc, string? ticketNumberPrefix = null) =>
         AddMissing(
             db,
             tenantId,
@@ -87,7 +88,8 @@ public static class TenantDefaults
             false,
             false,
             new HashSet<string>(),
-            new HashSet<TicketPriority>()
+            new HashSet<TicketPriority>(),
+            ticketNumberPrefix
         );
 }
 

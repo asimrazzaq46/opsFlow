@@ -13,8 +13,9 @@ import { InvitationPreviewDto, OrganizationDto } from '../../core/api/generated/
 export class WorkspaceApi {
   private readonly api = inject(Api);
 
-  create(name: string): Observable<OrganizationDto> {
-    return this.api.invoke(createOrganization, { body: { name } });
+  /** Slug and prefix are fixed for the life of the workspace; omitted, the server derives the slug and uses its default prefix. */
+  create(name: string, slug?: string, ticketNumberPrefix?: string): Observable<OrganizationDto> {
+    return this.api.invoke(createOrganization, { body: { name, slug, ticketNumberPrefix } });
   }
 
   /** Anonymous and read-only: what the token holder may see before signing in. The token is sent in the body, never in a URL. */

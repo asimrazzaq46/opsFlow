@@ -23,12 +23,14 @@ public sealed class TenantSettings : ITenantOwned
     public DateTime CreatedAtUtc { get; private set; }
     public DateTime UpdatedAtUtc { get; private set; }
 
-    public static TenantSettings Create(Guid tenantId, DateTime nowUtc) =>
+    /// <summary>The prefix is fixed at creation (changing it would reinterpret existing ticket numbers); null keeps the default.</summary>
+    public static TenantSettings Create(Guid tenantId, DateTime nowUtc, string? ticketNumberPrefix = null) =>
         new()
         {
             TenantId = tenantId,
             CreatedAtUtc = nowUtc,
             UpdatedAtUtc = nowUtc,
+            TicketNumberPrefix = ticketNumberPrefix ?? DefaultTicketPrefix,
         };
 
     public void SetReportingTimeZone(string ianaId, DateTime nowUtc)

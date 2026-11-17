@@ -2612,7 +2612,7 @@
           "Organizations"
         ],
         "summary": "Create organization",
-        "description": "Creates a tenant with the caller as its first Owner and seeds the default ticket settings, categories and SLA policies.",
+        "description": "Creates a tenant with the caller as its first Owner and seeds the default ticket settings, categories and SLA policies. The optional slug (lowercase letters, digits, hyphens; 2-50) and ticket number prefix (uppercase letters and digits, starting with a letter; 2-10) are chosen here once and can never be changed; omitted, they are derived from the name and the default. 400 for invalid values, 409 SLUG_TAKEN when the slug is in use.",
         "operationId": "CreateOrganization",
         "requestBody": {
           "content": {
@@ -2631,6 +2631,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/OrganizationDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
                 }
               }
             }
@@ -7778,6 +7788,18 @@
         "properties": {
           "name": {
             "type": "string"
+          },
+          "slug": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "ticketNumberPrefix": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },

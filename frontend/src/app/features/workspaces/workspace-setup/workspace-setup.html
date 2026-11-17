@@ -69,6 +69,65 @@
           </p>
         </div>
 
+        <div class="flex flex-col gap-1.5">
+          <label class="text-label-caps uppercase text-on-surface-variant" for="org-slug">{{
+            'workspaces.setup.slug' | translate
+          }}</label>
+          <div class="flex items-center rounded-sm bg-surface-container-low shadow-sm focus-within:ring-2 focus-within:ring-primary-container">
+            <span class="pl-3 font-mono text-mono-data text-on-surface-variant" aria-hidden="true">/</span>
+            <input
+              id="org-slug"
+              type="text"
+              autocomplete="off"
+              spellcheck="false"
+              maxlength="50"
+              [formControl]="slug"
+              (input)="slugEdited()"
+              [attr.aria-invalid]="(slug.invalid && (slug.touched || submitted())) || serverErrors().slug ? 'true' : null"
+              aria-describedby="org-slug-hint"
+              [readonly]="busy()"
+              class="h-11 w-full bg-transparent px-1 pr-3 font-mono text-mono-data text-on-surface outline-none"
+            />
+          </div>
+          @if (slug.invalid && (slug.touched || submitted())) {
+            <p class="ops-error">{{ 'workspaces.setup.slugInvalid' | translate }}</p>
+          }
+          @if (serverErrors().slug; as key) {
+            <p class="ops-error">{{ key | translate }}</p>
+          }
+          <p id="org-slug-hint" class="text-body-sm text-on-surface-variant">
+            {{ 'workspaces.setup.slugHint' | translate }}
+          </p>
+        </div>
+
+        <div class="flex flex-col gap-1.5">
+          <label class="text-label-caps uppercase text-on-surface-variant" for="org-prefix">{{
+            'workspaces.setup.prefix' | translate
+          }}</label>
+          <input
+            id="org-prefix"
+            type="text"
+            autocomplete="off"
+            spellcheck="false"
+            maxlength="10"
+            [formControl]="prefix"
+            (input)="prefixEdited()"
+            [attr.aria-invalid]="(prefix.invalid && (prefix.touched || submitted())) || serverErrors().prefix ? 'true' : null"
+            aria-describedby="org-prefix-hint"
+            [readonly]="busy()"
+            class="ops-input h-11 rounded-sm font-mono uppercase sm:max-w-48"
+          />
+          @if (prefix.invalid && (prefix.touched || submitted())) {
+            <p class="ops-error">{{ 'workspaces.setup.prefixInvalid' | translate }}</p>
+          }
+          @if (serverErrors().prefix; as key) {
+            <p class="ops-error">{{ key | translate }}</p>
+          }
+          <p id="org-prefix-hint" class="text-body-sm text-on-surface-variant">
+            {{ 'workspaces.setup.prefixHint' | translate: { example: (prefix.value || 'TKT') + '-00001' } }}
+          </p>
+        </div>
+
         @if (error(); as key) {
           <p
             role="alert"
@@ -77,6 +136,14 @@
             {{ key | translate }}
           </p>
         }
+
+        <p
+          role="note"
+          class="flex items-start gap-3 rounded-sm border border-amber-300 bg-amber-50 px-4 py-3 text-body-sm leading-5 font-semibold text-amber-900 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-200"
+        >
+          <span class="ms size-5 shrink-0 text-[20px] leading-5 text-amber-600 dark:text-amber-300" aria-hidden="true">warning</span>
+          <span class="min-w-0">{{ 'workspaces.setup.immutableWarning' | translate }}</span>
+        </p>
 
         <div class="flex flex-col-reverse items-center justify-between gap-3 pt-3 sm:flex-row">
           <a

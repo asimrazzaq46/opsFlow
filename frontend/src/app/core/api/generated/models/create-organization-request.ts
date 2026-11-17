@@ -3,4 +3,6 @@
 
 export interface CreateOrganizationRequest {
   name: string;
+  slug?: (string | null);
+  ticketNumberPrefix?: (string | null);
 }
