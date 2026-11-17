@@ -1,0 +1,36 @@
+<dialog #dialog class="ops-dialog" aria-labelledby="invite-dialog-title" (cancel)="onCancel($event)">
+  <form [formGroup]="invite" (ngSubmit)="send()" class="flex flex-col gap-3 p-5 sm:p-6" novalidate>
+    <h2 id="invite-dialog-title" class="text-headline-lg text-on-surface">{{ 'invitations.dialogTitle' | translate }}</h2>
+    <label class="flex min-w-0 flex-col gap-1">
+      <span class="ops-label">{{ 'customers.email' | translate }}</span>
+      <input
+        type="email"
+        formControlName="email"
+        autocomplete="off"
+        class="ops-input"
+        [attr.aria-invalid]="invite.controls.email.invalid && invite.controls.email.touched"
+        [attr.aria-describedby]="invite.controls.email.invalid && invite.controls.email.touched ? 'invite-email-error' : null"
+      />
+    </label>
+    @if (invite.controls.email.invalid && invite.controls.email.touched) {
+      <p id="invite-email-error" role="alert" class="ops-error">{{ 'authFlow.validation.email' | translate }}</p>
+    }
+    <label class="flex flex-col gap-1">
+      <span class="ops-label">{{ 'team.role' | translate }}</span>
+      <select formControlName="role" class="ops-select h-10">
+        @for (r of roles(); track r) {
+          <option [value]="r">{{ 'roles.' + r | translate }}</option>
+        }
+      </select>
+    </label>
+    @if (errorKey(); as key) {
+      <p role="alert" class="text-body-sm text-error">{{ key | translate }}</p>
+    }
+    <div class="mt-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+      <button type="button" class="ops-btn-secondary" [disabled]="creating()" (click)="close()">{{ 'common.cancel' | translate }}</button>
+      <button type="submit" class="ops-btn-primary h-10" [disabled]="creating()" [attr.aria-busy]="creating()">
+        {{ (creating() ? 'invitations.sending' : 'invitations.send') | translate }}
+      </button>
+    </div>
+  </form>
+</dialog>

@@ -131,6 +131,118 @@ public class TeamTests(ApiFactory factory) : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task One_skill_can_be_assigned_to_several_members_without_touching_their_other_skills()
+    {
+        var w = await TicketWorld.CreateAsync(factory);
+        var angular = await CreateSkillAsync(w, w.Manager, "Angular");
+        var rust = await CreateSkillAsync(w, w.Manager, "Rust");
+        Assert.Equal(HttpStatusCode.NoContent, (await w.Owner.PutAsync(w.Url($"members/{w.Agent1Membership}/skills"), new { skillIds = new[] { rust } })).StatusCode);
+
+        var assign = await w.Manager.PostAsync(w.Url($"skills/{angular}/assignments"), new { addMembershipIds = new[] { w.Agent1Membership, w.Agent2Membership } });
+        Assert.Equal(HttpStatusCode.OK, assign.StatusCode);
+        using (var doc = JsonDocument.Parse(await assign.Content.ReadAsStringAsync()))
+        {
+            Assert.Equal(2, doc.RootElement.GetProperty("addedCount").GetInt32());
+        }
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OpsFlowDbContext>();
+            var agent1 = await db.MemberSkills.IgnoreQueryFilters().Where(m => m.MembershipId == w.Agent1Membership).Select(m => m.SkillId).ToListAsync();
+            Assert.Contains(rust, agent1); // the unrelated skill survived
+            Assert.Contains(angular, agent1);
+            Assert.Equal(2, await db.MemberSkills.IgnoreQueryFilters().CountAsync(m => m.SkillId == angular));
+        }
+
+        // Repeating the request changes nothing; removing it takes only this skill away.
+        var again = await w.Manager.PostAsync(w.Url($"skills/{angular}/assignments"), new { addMembershipIds = new[] { w.Agent1Membership } });
+        using (var doc = JsonDocument.Parse(await again.Content.ReadAsStringAsync()))
+        {
+            Assert.Equal(0, doc.RootElement.GetProperty("addedCount").GetInt32());
+        }
+
+        var remove = await w.Manager.PostAsync(w.Url($"skills/{angular}/assignments"), new { removeMembershipIds = new[] { w.Agent1Membership } });
+        using (var doc = JsonDocument.Parse(await remove.Content.ReadAsStringAsync()))
+        {
+            Assert.Equal(1, doc.RootElement.GetProperty("removedCount").GetInt32());
+        }
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OpsFlowDbContext>();
+            var left = await db.MemberSkills.IgnoreQueryFilters().Where(m => m.MembershipId == w.Agent1Membership).Select(m => m.SkillId).ToListAsync();
+            Assert.Equal([rust], left);
+        }
+    }
+
+    [Fact]
+    public async Task Bulk_skill_assignment_follows_the_role_matrix_and_is_all_or_nothing()
+    {
+        var w = await TicketWorld.CreateAsync(factory);
+        var angular = await CreateSkillAsync(w, w.Manager, "Angular");
+        string Url() => w.Url($"skills/{angular}/assignments");
+
+        // A Manager may not change another Manager: the whole request is refused and the Agent in it gets nothing.
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Manager.PostAsync(Url(), new { addMembershipIds = new[] { w.Agent1Membership, w.ManagerMembership } })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await w.Owner.PostAsync(Url(), new { addMembershipIds = new[] { w.ManagerMembership } })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Agent1.PostAsync(Url(), new { addMembershipIds = new[] { w.Agent1Membership } })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await w.Customer.PostAsync(Url(), new { addMembershipIds = new[] { w.Agent1Membership } })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await w.Owner.PostAsync(Url(), new { addMembershipIds = new[] { w.Agent1Membership }, removeMembershipIds = new[] { w.Agent1Membership } })).StatusCode);
+
+        // Unknown memberships and another workspace's memberships do not exist here.
+        Assert.Equal(HttpStatusCode.NotFound, (await w.Owner.PostAsync(Url(), new { addMembershipIds = new[] { Guid.NewGuid() } })).StatusCode);
+        var other = await TicketWorld.CreateAsync(factory);
+        Assert.Equal(HttpStatusCode.NotFound, (await w.Owner.PostAsync(Url(), new { addMembershipIds = new[] { other.Agent1Membership } })).StatusCode);
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OpsFlowDbContext>();
+        Assert.Equal(1, await db.MemberSkills.IgnoreQueryFilters().CountAsync(m => m.SkillId == angular)); // only the Owner's change for the Manager
+
+        // A deactivated skill can still be removed but not newly given.
+        Assert.Equal(HttpStatusCode.OK, (await w.Owner.PutAsync(w.Url($"skills/{angular}"), new { name = "Angular", isActive = false })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await w.Owner.PostAsync(Url(), new { addMembershipIds = new[] { w.Agent1Membership } })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await w.Owner.PostAsync(Url(), new { removeMembershipIds = new[] { w.ManagerMembership } })).StatusCode);
+    }
+
+    [Fact]
+    public async Task An_inactive_skill_is_hidden_and_never_filters_but_its_assignments_are_preserved()
+    {
+        var w = await TicketWorld.CreateAsync(factory);
+        var dotnet = await CreateSkillAsync(w, w.Manager, ".net");
+        Assert.Equal(HttpStatusCode.OK, (await w.Owner.PostAsync(w.Url($"skills/{dotnet}/assignments"), new { addMembershipIds = new[] { w.Agent1Membership, w.Agent2Membership } })).StatusCode);
+
+        var filtered = $"{{ teamDirectory(skillId: \"{dotnet}\", pageSize: 50) {{ totalCount items {{ membershipId skills {{ id }} }} }} }}";
+        var active = (await GraphQlAsync(w, w.Owner, filtered)).GetProperty("data").GetProperty("teamDirectory");
+        Assert.Equal(2, active.GetProperty("totalCount").GetInt32());
+
+        Assert.Equal(HttpStatusCode.OK, (await w.Owner.PutAsync(w.Url($"skills/{dotnet}"), new { name = ".net", isActive = false })).StatusCode);
+
+        // Deactivated: no match by a direct filter, and not shown as a badge.
+        var hidden = (await GraphQlAsync(w, w.Owner, filtered)).GetProperty("data").GetProperty("teamDirectory");
+        Assert.Equal(0, hidden.GetProperty("totalCount").GetInt32());
+        var all = (await GraphQlAsync(w, w.Owner, "{ teamDirectory(pageSize: 50) { items { skills { id } } } }")).GetProperty("data").GetProperty("teamDirectory");
+        foreach (var row in all.GetProperty("items").EnumerateArray())
+        {
+            Assert.Empty(row.GetProperty("skills").EnumerateArray());
+        }
+
+        // The assignments are still stored and counted; an editor still gets them in the member details.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OpsFlowDbContext>();
+            Assert.Equal(2, await db.MemberSkills.IgnoreQueryFilters().CountAsync(m => m.SkillId == dotnet));
+        }
+
+        var detail = await GraphQlAsync(w, w.Owner, $"{{ teamMember(membershipId: \"{w.Agent1Membership}\") {{ member {{ skills {{ id isActive }} }} }} }}");
+        Assert.Single(detail.GetProperty("data").GetProperty("teamMember").GetProperty("member").GetProperty("skills").EnumerateArray());
+
+        // Activating it again makes both assignments visible and filterable.
+        Assert.Equal(HttpStatusCode.OK, (await w.Owner.PutAsync(w.Url($"skills/{dotnet}"), new { name = ".net", isActive = true })).StatusCode);
+        var back = (await GraphQlAsync(w, w.Owner, filtered)).GetProperty("data").GetProperty("teamDirectory");
+        Assert.Equal(2, back.GetProperty("totalCount").GetInt32());
+    }
+
+    [Fact]
     public async Task The_directory_hides_other_peoples_emails_from_agents_and_is_closed_to_customers()
     {
         var w = await TicketWorld.CreateAsync(factory);

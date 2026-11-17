@@ -1,4 +1,9 @@
 <div class="flex flex-wrap items-center justify-end gap-2">
+  @if (ownOwnerRole()) {
+    <span class="ops-badge bg-primary-fixed text-on-primary-fixed" [attr.title]="'team.ownRoleReadOnly' | translate">
+      {{ 'roles.TenantOwner' | translate }}
+    </span>
+  } @else {
   <label class="sr-only" [for]="'role-' + member().membershipId">{{
     'team.changeRoleFor' | translate: { name: member().displayName }
   }}</label>
@@ -12,7 +17,14 @@
       <option [value]="r" [selected]="r === restRole(member().role)">{{ 'roles.' + r | translate }}</option>
     }
   </select>
-  <button type="button" class="ops-btn-secondary h-9 px-3 text-body-sm" [disabled]="busy()" (click)="proposeStatus()">
+  }
+  <button
+    type="button"
+    [class]="(member().isActive ? 'ops-btn-danger' : 'ops-btn-success') + ' h-9 px-3 text-body-sm'"
+    [disabled]="busy()"
+    (click)="proposeStatus()"
+  >
+    <span class="ms text-[18px]" aria-hidden="true">{{ member().isActive ? 'block' : 'check_circle' }}</span>
     {{ (member().isActive ? 'team.suspend' : 'team.reactivate') | translate }}
     <span class="sr-only">{{ member().displayName }}</span>
   </button>
@@ -60,9 +72,9 @@
 
 <app-confirm-dialog
   #dialog
-  [title]="(pending()?.role ? 'team.confirmRoleTitle' : pending()?.isActive ? 'team.confirmReactivateTitle' : 'team.confirmSuspendTitle') | translate"
+  [title]="dialogKeys().title | translate"
   [message]="
-    (pending()?.role ? 'team.confirmRole' : pending()?.isActive ? 'team.confirmReactivate' : 'team.confirmSuspend')
+    dialogKeys().message
       | translate: { name: member().displayName, role: pending()?.role ? ('roles.' + pending()!.role | translate) : '' }
   "
   [confirmLabel]="'team.confirm' | translate"

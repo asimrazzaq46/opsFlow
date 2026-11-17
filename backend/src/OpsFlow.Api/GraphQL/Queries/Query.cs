@@ -136,6 +136,11 @@ public sealed class Query
     ) => svc.SkillsAsync(includeInactive, ct);
 
     [Serial]
+    [Cost(5)]
+    public Task<IReadOnlyList<SkillUsageDto>> SkillCatalog([Service] TeamService svc, CancellationToken ct, string? search = null) =>
+        svc.SkillCatalogAsync(search, ct);
+
+    [Serial]
     [Cost(10)]
     public Task<PagedResult<MemberDto>> TeamMembers(
         [Service] MembershipService svc,

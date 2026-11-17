@@ -1991,6 +1991,117 @@
         ]
       }
     },
+    "/api/v1/tenants/{tenantId}/invitations/history": {
+      "get": {
+        "tags": [
+          "Invitations"
+        ],
+        "summary": "List invitation history",
+        "description": "Returns the tenant's complete invitation history (pending, accepted, revoked and expired), newest first, paged, with an optional status filter and email search. Owners and Managers can read every role's history; changing an invitation stays limited by the invitation permission matrix. Requires the Owner or Manager role in the tenant.",
+        "operationId": "ListInvitationHistory",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/InvitationStatus"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "1-based page number (clamped to a safe range).",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "Items per page (capped by the endpoint).",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 25
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "path",
+            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagedResultOfInvitationHistoryDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid Bearer access token.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no active membership with a sufficient role in this tenant.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed; see `errors` for the offending fields.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/invitations/{invitationId}/resend": {
       "post": {
         "tags": [
@@ -2772,6 +2883,114 @@
         ]
       }
     },
+    "/api/v1/tenants/{tenantId}/skills/{skillId}/assignments": {
+      "post": {
+        "tags": [
+          "Team"
+        ],
+        "summary": "Assign or remove a skill for several members",
+        "description": "Gives one skill to the listed memberships and/or removes it from others in a single all-or-nothing operation; the members' other skills are never touched and members that already match are skipped. Owners may change every staff member, Managers only Agents (403 otherwise); an unknown, cross-tenant or Customer membership is 404. Only active skills can be newly given (400). A member can have at most 30 skills. Each changed member is audited. Requires the Owner or Manager role in the tenant.",
+        "operationId": "UpdateSkillAssignments",
+        "parameters": [
+          {
+            "name": "skillId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tenantId",
+            "in": "path",
+            "description": "Tenant (organization) id. Only a request: the server validates the caller's active membership and role before using it.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSkillAssignmentsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillAssignmentResultDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired or invalid Bearer access token.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no active membership with a sufficient role in this tenant.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed; see `errors` for the offending fields.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The resource does not exist or is not visible to the caller.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": [ ]
+          }
+        ]
+      }
+    },
     "/api/v1/tenants/{tenantId}/skills/{skillId}": {
       "put": {
         "tags": [
@@ -3390,7 +3609,7 @@
           "Tenants"
         ],
         "summary": "Change member role",
-        "description": "Changes a staff member's role in this workspace only. A tenant always keeps at least one usable Owner. An active Agent who still holds open ticket assignments or unfinished tasks cannot leave the Agent role (409 MEMBER_HAS_OPEN_WORK, listing the work); a stale expectedRole is refused (409 MEMBER_CHANGED). The change is audited and the member is told to reload. Requires the Owner role in the tenant.",
+        "description": "Changes a staff member's role in this workspace only. A tenant always keeps at least one usable Owner. An active Agent who still holds open ticket assignments or unfinished tasks cannot leave the Agent role (409 MEMBER_HAS_OPEN_WORK, listing the work); a stale expectedRole is refused (409 MEMBER_CHANGED). An Owner cannot change their own Owner role (403 OWNER_SELF_DEMOTION). The change is audited and the member is told to reload. Requires the Owner role in the tenant.",
         "operationId": "ChangeMemberRole",
         "parameters": [
           {
@@ -7993,6 +8212,61 @@
           }
         }
       },
+      "InvitationHistoryDto": {
+        "required": [
+          "id",
+          "email",
+          "role",
+          "status",
+          "createdAtUtc",
+          "sentAtUtc",
+          "expiresAtUtc",
+          "acceptedAtUtc",
+          "revokedAtUtc"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/TenantRole"
+          },
+          "status": {
+            "$ref": "#/components/schemas/InvitationStatus"
+          },
+          "createdAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sentAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "acceptedAtUtc": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "revokedAtUtc": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
       "InvitationPreviewDto": {
         "required": [
           "state",
@@ -8038,6 +8312,14 @@
           "Valid",
           "Expired",
           "Unavailable"
+        ]
+      },
+      "InvitationStatus": {
+        "enum": [
+          "Pending",
+          "Accepted",
+          "Revoked",
+          "Expired"
         ]
       },
       "LoginRequest": {
@@ -8210,6 +8492,47 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/CustomerDto"
+            }
+          },
+          "page": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "pageSize": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "totalCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "PagedResultOfInvitationHistoryDto": {
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "totalCount"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InvitationHistoryDto"
             }
           },
           "page": {
@@ -8756,6 +9079,31 @@
         "properties": {
           "isActive": {
             "type": "boolean"
+          }
+        }
+      },
+      "SkillAssignmentResultDto": {
+        "required": [
+          "addedCount",
+          "removedCount"
+        ],
+        "type": "object",
+        "properties": {
+          "addedCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "removedCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },
@@ -9749,6 +10097,31 @@
         "properties": {
           "displayName": {
             "type": "string"
+          }
+        }
+      },
+      "UpdateSkillAssignmentsRequest": {
+        "type": "object",
+        "properties": {
+          "addMembershipIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "removeMembershipIds": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         }
       },

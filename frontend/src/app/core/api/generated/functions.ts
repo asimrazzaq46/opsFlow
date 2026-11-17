@@ -61,6 +61,8 @@ export type { ListInvitations$Params as ListInvitations$Params } from './fn/invi
 export { listInvitations as listInvitations } from './fn/invitations/list-invitations';
 export type { CreateInvitation$Params as CreateInvitation$Params } from './fn/invitations/create-invitation';
 export { createInvitation as createInvitation } from './fn/invitations/create-invitation';
+export type { ListInvitationHistory$Params as ListInvitationHistory$Params } from './fn/invitations/list-invitation-history';
+export { listInvitationHistory as listInvitationHistory } from './fn/invitations/list-invitation-history';
 export type { ResendInvitation$Params as ResendInvitation$Params } from './fn/invitations/resend-invitation';
 export { resendInvitation as resendInvitation } from './fn/invitations/resend-invitation';
 export type { RevokeInvitation$Params as RevokeInvitation$Params } from './fn/invitations/revoke-invitation';
@@ -87,6 +89,8 @@ export type { ExportReportCsv$Params as ExportReportCsv$Params } from './fn/repo
 export { exportReportCsv as exportReportCsv } from './fn/reports/export-report-csv';
 export type { CreateSkill$Params as CreateSkill$Params } from './fn/team/create-skill';
 export { createSkill as createSkill } from './fn/team/create-skill';
+export type { UpdateSkillAssignments$Params as UpdateSkillAssignments$Params } from './fn/team/update-skill-assignments';
+export { updateSkillAssignments as updateSkillAssignments } from './fn/team/update-skill-assignments';
 export type { UpdateSkill$Params as UpdateSkill$Params } from './fn/team/update-skill';
 export { updateSkill as updateSkill } from './fn/team/update-skill';
 export type { ListSlaPolicies$Params as ListSlaPolicies$Params } from './fn/sla-policies/list-sla-policies';

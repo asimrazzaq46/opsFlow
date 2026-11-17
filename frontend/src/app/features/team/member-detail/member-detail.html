@@ -25,17 +25,46 @@
         >
       </div>
     </div>
-    @if (d.canChangeRoleAndStatus) {
-      <app-member-actions class="md:max-w-md" [member]="d.member" (changed)="load()" />
+    @if (d.canEditProfileAndSkills || d.canChangeRoleAndStatus) {
+      <div class="flex shrink-0 flex-wrap items-center gap-2">
+        @if (editing()) {
+          @if (editing() && d.canEditProfileAndSkills) {
+            <button type="button" class="ops-btn-primary h-10 px-5" [disabled]="saving() || profile.invalid" [attr.aria-busy]="saving()" (click)="save()">
+              <span class="ms text-[18px]" aria-hidden="true">check</span>
+              {{ (saving() ? 'common.saving' : 'team.save') | translate }}
+            </button>
+          }
+          <button type="button" class="ops-btn-secondary" [disabled]="saving()" (click)="cancelEdit()">
+            <span class="ms text-[18px]" aria-hidden="true">close</span>
+            {{ (d.canEditProfileAndSkills ? 'common.cancel' : 'team.doneEditing') | translate }}
+          </button>
+        } @else {
+          <button type="button" class="ops-btn-secondary" (click)="startEdit()">
+            <span class="ms text-[18px]" aria-hidden="true">edit</span>
+            {{ 'team.edit' | translate }}
+          </button>
+        }
+      </div>
     }
   </header>
+
+  @if (notice(); as n) {
+    <p class="mt-3 text-body-sm text-on-surface" role="status">{{ n | translate }}</p>
+  }
+
+  @if (editing() && d.canChangeRoleAndStatus) {
+    <section class="ops-card mt-4 flex flex-col gap-2 p-4 sm:flex-row sm:items-start sm:justify-between" [attr.aria-label]="'team.roleStatus' | translate">
+      <p class="text-body-sm text-on-surface-variant">{{ 'team.editHint' | translate }}</p>
+      <app-member-actions class="sm:max-w-md" [member]="d.member" (changed)="reloadKeepingEdits()" />
+    </section>
+  }
 
   <div class="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
     <!-- Overview and profile -->
     <section class="ops-card p-4 lg:col-span-1" aria-labelledby="overview-title">
       <h2 id="overview-title" class="ops-label mb-3">{{ 'team.overview' | translate }}</h2>
-      @if (d.canEditProfileAndSkills) {
-        <form class="flex flex-col gap-3" [formGroup]="profile" (ngSubmit)="saveProfile()" novalidate>
+      @if (editing() && d.canEditProfileAndSkills) {
+        <form class="flex flex-col gap-3" [formGroup]="profile" (ngSubmit)="save()" novalidate>
           <label class="flex flex-col gap-1">
             <span class="text-body-sm font-semibold text-on-surface">{{ 'team.jobTitle' | translate }}</span>
             <input class="ops-input" formControlName="jobTitle" maxlength="100" autocomplete="organization-title" />
@@ -51,9 +80,6 @@
           @if (profileMessage(); as msg) {
             <p class="text-body-sm" [class.text-error]="msg.error" [attr.role]="msg.error ? 'alert' : 'status'">{{ msg.key | translate }}</p>
           }
-          <button type="submit" class="ops-btn-primary h-10 self-start px-5" [disabled]="savingProfile() || profile.pristine || profile.invalid">
-            {{ (savingProfile() ? 'common.saving' : 'team.saveProfile') | translate }}
-          </button>
         </form>
       } @else {
         <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-body-sm">
@@ -100,17 +126,14 @@
         <p class="mt-3 text-body-sm text-on-surface-variant">{{ 'team.stats.note' | translate }}</p>
       </section>
 
-      <!-- Skills -->
+      <!-- Skills: this member's assignments only; the workspace catalog is administered on the Skills tab of the Team page -->
       <section class="ops-card p-4" aria-labelledby="skills-title">
         <h2 id="skills-title" class="ops-label mb-3">{{ 'team.skills' | translate }}</h2>
         <ul class="flex flex-wrap gap-2" [attr.aria-label]="'team.skills' | translate">
-          @for (s of selectedSkills(); track s.id) {
+          @for (s of activeSkills(); track s.id) {
             <li class="ops-badge bg-surface-container text-on-surface">
               {{ s.name }}
-              @if (!s.isActive) {
-                <span class="text-on-surface-variant">({{ 'common.inactive' | translate }})</span>
-              }
-              @if (d.canEditProfileAndSkills) {
+              @if (editing() && d.canEditProfileAndSkills) {
                 <button
                   type="button"
                   class="ml-1 rounded-xs px-1 hover:bg-surface-container-high focus-visible:outline-2 focus-visible:outline-primary-container"
@@ -126,40 +149,49 @@
           }
         </ul>
 
-        @if (d.canEditProfileAndSkills) {
-          <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-            @if (addable().length) {
-              <label class="flex flex-col gap-1">
-                <span class="text-body-sm font-semibold text-on-surface">{{ 'team.addSkill' | translate }}</span>
-                <select class="ops-select h-10" (change)="addSkill($any($event.target).value); $any($event.target).value = ''">
-                  <option value="">—</option>
-                  @for (s of addable(); track s.id) {
-                    <option [value]="s.id">{{ s.name }}</option>
-                  }
-                </select>
-              </label>
-            }
-            <form class="flex items-end gap-2" (submit)="$event.preventDefault(); createSkill()">
-              <label class="flex flex-col gap-1">
-                <span class="text-body-sm font-semibold text-on-surface">{{ 'team.newSkill' | translate }}</span>
-                <input class="ops-input" [formControl]="newSkill" [attr.maxlength]="skillNameMax" />
-              </label>
-              <button type="submit" class="ops-btn-secondary h-10 px-3" [disabled]="savingSkills() || !newSkill.value.trim()">
-                {{ 'team.createSkill' | translate }}
-              </button>
-            </form>
+        @if (inactiveSkills().length && d.canEditProfileAndSkills) {
+          <div class="mt-4 rounded-lg bg-surface-container-low p-3">
+            <h3 class="text-body-sm font-semibold text-on-surface">{{ 'team.inactiveSkills' | translate }}</h3>
+            <p class="mt-1 text-body-sm text-on-surface-variant">{{ 'team.inactiveSkillsHint' | translate }}</p>
+            <ul class="mt-2 flex flex-wrap gap-2" [attr.aria-label]="'team.inactiveSkills' | translate">
+              @for (s of inactiveSkills(); track s.id) {
+                <li class="ops-badge bg-surface-container-high text-on-surface-variant">
+                  {{ s.name }} ({{ 'common.inactive' | translate }})
+                  <button
+                    type="button"
+                    class="ml-1 rounded-xs px-1 hover:bg-surface-container focus-visible:outline-2 focus-visible:outline-primary-container"
+                    [attr.aria-label]="'team.removeSkill' | translate: { name: s.name }"
+                    (click)="removeSkill(s.id)"
+                  >
+                    ×
+                  </button>
+                </li>
+              }
+            </ul>
           </div>
-          @if (skillsMessage(); as msg) {
-            <p class="mt-2 text-body-sm" [class.text-error]="msg.error" [attr.role]="msg.error ? 'alert' : 'status'">{{ msg.key | translate }}</p>
-          }
-          <div class="mt-3 flex flex-wrap gap-2">
-            <button type="button" class="ops-btn-primary h-10 px-5" [disabled]="savingSkills() || !skillsDirty()" (click)="saveSkills()">
-              {{ (savingSkills() ? 'common.saving' : 'team.saveSkills') | translate }}
-            </button>
-            @if (skillsDirty()) {
-              <button type="button" class="ops-btn-secondary h-10 px-4" [disabled]="savingSkills()" (click)="resetSkills()">
-                {{ 'team.discardChanges' | translate }}
-              </button>
+        }
+
+        @if (editing() && d.canEditProfileAndSkills) {
+          <div class="mt-4">
+            <label class="flex flex-col gap-1 sm:max-w-sm">
+              <span class="text-body-sm font-semibold text-on-surface">{{ 'team.findSkill' | translate }}</span>
+              <input type="search" class="ops-input" [value]="skillQuery()" (input)="skillQuery.set($any($event.target).value)" />
+            </label>
+            <ul class="mt-2 max-h-56 overflow-y-auto rounded-lg bg-surface-container-low p-1" [attr.aria-label]="'team.pickSkills' | translate">
+              @for (s of pickable(); track s.id) {
+                <li>
+                  <label class="flex min-h-10 cursor-pointer items-center gap-2 rounded-md px-2 hover:bg-surface-container-high">
+                    <input type="checkbox" class="size-4" [checked]="selected().includes(s.id)" (change)="toggleSkill(s.id)" />
+                    <span class="text-body-sm text-on-surface">{{ s.name }}</span>
+                  </label>
+                </li>
+              } @empty {
+                <li class="px-2 py-3 text-body-sm text-on-surface-variant">{{ 'team.noSkillMatches' | translate }}</li>
+              }
+            </ul>
+            <p class="mt-2 text-body-sm text-on-surface-variant">{{ 'team.skillsCatalogHint' | translate }}</p>
+            @if (skillsMessage(); as msg) {
+              <p class="mt-2 text-body-sm" [class.text-error]="msg.error" [attr.role]="msg.error ? 'alert' : 'status'">{{ msg.key | translate }}</p>
             }
           </div>
         }

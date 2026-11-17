@@ -12,9 +12,12 @@ import { StrictHttpResponse } from '../strict-http-response';
 
 import { createSkill } from '../fn/team/create-skill';
 import { CreateSkill$Params } from '../fn/team/create-skill';
+import { SkillAssignmentResultDto } from '../models/skill-assignment-result-dto';
 import { SkillDto } from '../models/skill-dto';
 import { updateSkill } from '../fn/team/update-skill';
 import { UpdateSkill$Params } from '../fn/team/update-skill';
+import { updateSkillAssignments } from '../fn/team/update-skill-assignments';
+import { UpdateSkillAssignments$Params } from '../fn/team/update-skill-assignments';
 
 @Injectable({ providedIn: 'root' })
 export class TeamService extends BaseService {
@@ -54,6 +57,41 @@ export class TeamService extends BaseService {
     const resp = this.createSkill$Response(params, context);
     return resp.pipe(
       map((r: StrictHttpResponse<SkillDto>): SkillDto => r.body)
+    );
+  }
+
+  /** Path part for operation `updateSkillAssignments()` */
+  static readonly UpdateSkillAssignmentsPath = '/api/v1/tenants/{tenantId}/skills/{skillId}/assignments';
+
+  /**
+   * Assign or remove a skill for several members.
+   *
+   * Gives one skill to the listed memberships and/or removes it from others in a single all-or-nothing operation; the members' other skills are never touched and members that already match are skipped. Owners may change every staff member, Managers only Agents (403 otherwise); an unknown, cross-tenant or Customer membership is 404. Only active skills can be newly given (400). A member can have at most 30 skills. Each changed member is audited. Requires the Owner or Manager role in the tenant.
+   *
+   * This method provides access to the full `HttpResponse`, allowing access to response headers.
+   * To access only the response body, use `updateSkillAssignments()` instead.
+   *
+   * This method sends `application/json` and handles request body of type `application/json`.
+   */
+  updateSkillAssignments$Response(params: UpdateSkillAssignments$Params, context?: HttpContext): Observable<StrictHttpResponse<SkillAssignmentResultDto>> {
+    const obs = updateSkillAssignments(this.http, this.rootUrl, params, context);
+    return obs;
+  }
+
+  /**
+   * Assign or remove a skill for several members.
+   *
+   * Gives one skill to the listed memberships and/or removes it from others in a single all-or-nothing operation; the members' other skills are never touched and members that already match are skipped. Owners may change every staff member, Managers only Agents (403 otherwise); an unknown, cross-tenant or Customer membership is 404. Only active skills can be newly given (400). A member can have at most 30 skills. Each changed member is audited. Requires the Owner or Manager role in the tenant.
+   *
+   * This method provides access only to the response body.
+   * To access the full response (for headers, for example), `updateSkillAssignments$Response()` instead.
+   *
+   * This method sends `application/json` and handles request body of type `application/json`.
+   */
+  updateSkillAssignments(params: UpdateSkillAssignments$Params, context?: HttpContext): Observable<SkillAssignmentResultDto> {
+    const resp = this.updateSkillAssignments$Response(params, context);
+    return resp.pipe(
+      map((r: StrictHttpResponse<SkillAssignmentResultDto>): SkillAssignmentResultDto => r.body)
     );
   }
 

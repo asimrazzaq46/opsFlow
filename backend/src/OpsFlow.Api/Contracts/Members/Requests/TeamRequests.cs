@@ -22,3 +22,7 @@ public sealed record SetMemberSkillsRequest([Required, MaxLength(30)] Guid[]? Sk
 public sealed record CreateSkillRequest([Required, StringLength(50, MinimumLength = 1)] string Name);
 
 public sealed record UpdateSkillRequest([Required, StringLength(50, MinimumLength = 1)] string Name, bool IsActive);
+
+/// <summary>Memberships that should gain or lose ONE skill; every other skill of those members is left alone.</summary>
+/// <remarks>The two lists must not overlap. Members that already match are skipped; the whole request is refused if any member is not allowed.</remarks>
+public sealed record UpdateSkillAssignmentsRequest([MaxLength(100)] Guid[]? AddMembershipIds = null, [MaxLength(100)] Guid[]? RemoveMembershipIds = null);

@@ -54,7 +54,7 @@ public sealed class TenantsController(
     [Authorize(Policy = AuthPolicies.TenantOwner)]
     [EndpointSummary("Change member role")]
     [EndpointDescription(
-        "Changes a staff member's role in this workspace only. A tenant always keeps at least one usable Owner. An active Agent who still holds open ticket assignments or unfinished tasks cannot leave the Agent role (409 MEMBER_HAS_OPEN_WORK, listing the work); a stale expectedRole is refused (409 MEMBER_CHANGED). The change is audited and the member is told to reload. Requires the Owner role in the tenant."
+        "Changes a staff member's role in this workspace only. A tenant always keeps at least one usable Owner. An active Agent who still holds open ticket assignments or unfinished tasks cannot leave the Agent role (409 MEMBER_HAS_OPEN_WORK, listing the work); a stale expectedRole is refused (409 MEMBER_CHANGED). An Owner cannot change their own Owner role (403 OWNER_SELF_DEMOTION). The change is audited and the member is told to reload. Requires the Owner role in the tenant."
     )]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ProblemResponse>(

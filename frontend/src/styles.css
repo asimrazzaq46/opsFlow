@@ -217,6 +217,33 @@ body {
     @apply inline-flex h-10 items-center justify-center gap-2 rounded-sm bg-surface-container px-4 text-headline-sm text-on-surface shadow-sm transition-colors hover:bg-surface-container-high focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-container disabled:cursor-not-allowed disabled:opacity-60;
   }
 
+  /* Destructive and success actions: tinted surface plus dark text keeps AA contrast in both themes; the icon and label carry the meaning too. */
+  .ops-btn-danger {
+    @apply inline-flex h-10 items-center justify-center gap-2 rounded-sm bg-error-container px-4 text-headline-sm text-on-error-container shadow-sm transition-colors hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-error disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .ops-btn-success {
+    @apply inline-flex h-10 items-center justify-center gap-2 rounded-sm bg-emerald-100 px-4 text-headline-sm text-emerald-900 shadow-sm transition-colors hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-emerald-500/15 dark:text-emerald-200;
+  }
+
+  /* Native modal dialog; the base reset removes the default auto margins, so centering has to be restated. */
+  .ops-dialog {
+    margin: auto;
+    width: min(28rem, calc(100vw - 2rem));
+    max-height: calc(100dvh - 2rem);
+    overflow-y: auto;
+    border: 0;
+    border-radius: 0.75rem;
+    padding: 0;
+    background: var(--ops-surface-container-lowest);
+    color: var(--ops-on-surface);
+    box-shadow: 0 20px 40px rgb(0 0 0 / 0.25);
+  }
+
+  .ops-dialog::backdrop {
+    background: rgb(11 16 32 / 0.55);
+  }
+
   .ops-link {
     @apply rounded-xs text-primary transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-container;
   }

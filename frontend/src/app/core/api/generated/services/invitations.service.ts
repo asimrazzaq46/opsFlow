@@ -16,9 +16,12 @@ import { createInvitation } from '../fn/invitations/create-invitation';
 import { CreateInvitation$Params } from '../fn/invitations/create-invitation';
 import { InvitationDto } from '../models/invitation-dto';
 import { InvitationPreviewDto } from '../models/invitation-preview-dto';
+import { listInvitationHistory } from '../fn/invitations/list-invitation-history';
+import { ListInvitationHistory$Params } from '../fn/invitations/list-invitation-history';
 import { listInvitations } from '../fn/invitations/list-invitations';
 import { ListInvitations$Params } from '../fn/invitations/list-invitations';
 import { OrganizationDto } from '../models/organization-dto';
+import { PagedResultOfInvitationHistoryDto } from '../models/paged-result-of-invitation-history-dto';
 import { previewInvitation } from '../fn/invitations/preview-invitation';
 import { PreviewInvitation$Params } from '../fn/invitations/preview-invitation';
 import { resendInvitation } from '../fn/invitations/resend-invitation';
@@ -169,6 +172,41 @@ export class InvitationsService extends BaseService {
     const resp = this.createInvitation$Response(params, context);
     return resp.pipe(
       map((r: StrictHttpResponse<InvitationDto>): InvitationDto => r.body)
+    );
+  }
+
+  /** Path part for operation `listInvitationHistory()` */
+  static readonly ListInvitationHistoryPath = '/api/v1/tenants/{tenantId}/invitations/history';
+
+  /**
+   * List invitation history.
+   *
+   * Returns the tenant's complete invitation history (pending, accepted, revoked and expired), newest first, paged, with an optional status filter and email search. Owners and Managers can read every role's history; changing an invitation stays limited by the invitation permission matrix. Requires the Owner or Manager role in the tenant.
+   *
+   * This method provides access to the full `HttpResponse`, allowing access to response headers.
+   * To access only the response body, use `listInvitationHistory()` instead.
+   *
+   * This method doesn't expect any request body.
+   */
+  listInvitationHistory$Response(params: ListInvitationHistory$Params, context?: HttpContext): Observable<StrictHttpResponse<PagedResultOfInvitationHistoryDto>> {
+    const obs = listInvitationHistory(this.http, this.rootUrl, params, context);
+    return obs;
+  }
+
+  /**
+   * List invitation history.
+   *
+   * Returns the tenant's complete invitation history (pending, accepted, revoked and expired), newest first, paged, with an optional status filter and email search. Owners and Managers can read every role's history; changing an invitation stays limited by the invitation permission matrix. Requires the Owner or Manager role in the tenant.
+   *
+   * This method provides access only to the response body.
+   * To access the full response (for headers, for example), `listInvitationHistory$Response()` instead.
+   *
+   * This method doesn't expect any request body.
+   */
+  listInvitationHistory(params: ListInvitationHistory$Params, context?: HttpContext): Observable<PagedResultOfInvitationHistoryDto> {
+    const resp = this.listInvitationHistory$Response(params, context);
+    return resp.pipe(
+      map((r: StrictHttpResponse<PagedResultOfInvitationHistoryDto>): PagedResultOfInvitationHistoryDto => r.body)
     );
   }
 

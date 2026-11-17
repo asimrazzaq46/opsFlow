@@ -33,6 +33,7 @@ type Query {
   ): PagedResultOfTeamMemberRowDto! @cost(weight: "10")
   teamMember(membershipId: UUID!): TeamMemberDetailDto! @cost(weight: "10")
   skills(includeInactive: Boolean! = false): [SkillDto!]! @cost(weight: "5")
+  skillCatalog(search: String): [SkillUsageDto!]! @cost(weight: "5")
   teamMembers(page: Int! = 1, pageSize: Int! = 20): PagedResultOfMemberDto!
     @cost(weight: "10")
   dashboard(filter: AnalyticsFilterInput): DashboardDto! @cost(weight: "30")
@@ -237,6 +238,13 @@ type SkillDto {
   id: UUID!
   name: String!
   isActive: Boolean!
+}
+
+type SkillUsageDto {
+  id: UUID!
+  name: String!
+  isActive: Boolean!
+  memberCount: Int!
 }
 
 type SlaComplianceDto {

@@ -24,3 +24,32 @@ th[aria-sort='ascending'] .team-sort::after {
 th[aria-sort='descending'] .team-sort::after {
   content: '↓';
 }
+
+.team-tab {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: 0 1rem;
+  margin-bottom: -1px;
+  white-space: nowrap;
+  font-size: 0.875rem;
+  color: var(--ops-on-surface-variant);
+  border-bottom: 2px solid transparent;
+}
+
+.team-tab:hover {
+  color: var(--ops-on-surface);
+}
+
+/* The selected tab is marked by weight and an underline in addition to color. */
+.team-tab[aria-selected='true'] {
+  color: var(--ops-on-surface);
+  font-weight: 600;
+  border-bottom-color: var(--ops-primary-container);
+}
+
+.team-tab:focus-visible {
+  outline: 2px solid var(--ops-primary-container);
+  outline-offset: -2px;
+  border-radius: 0.25rem;
+}

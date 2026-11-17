@@ -22,36 +22,52 @@ describe('Team', () => {
   };
   const directory = vi.fn();
   const skills = vi.fn();
-  const listInvitations = vi.fn();
+  const listInvitationHistory = vi.fn();
   const createInvitation = vi.fn();
   const resendInvitation = vi.fn();
   const revokeInvitation = vi.fn();
   let fixture: ComponentFixture<Team>;
   const el = () => fixture.nativeElement as HTMLElement;
-  const invitation = (id: string, role: string, expiresAtUtc: string) => ({
+  const row = (id: string, role: string, status: string) => ({
     id,
     email: `${id}@example.com`,
     role,
+    status,
     createdAtUtc: '2026-01-01T00:00:00Z',
     sentAtUtc: '2026-01-01T00:00:00Z',
-    expiresAtUtc,
+    expiresAtUtc: '2026-01-04T00:00:00Z',
+    acceptedAtUtc: status === 'Accepted' ? '2026-01-02T00:00:00Z' : null,
+    revokedAtUtc: status === 'Revoked' ? '2026-01-02T00:00:00Z' : null,
   });
-  const rowButtons = () => Array.from(el().querySelectorAll<HTMLButtonElement>('section[aria-label] ul button'));
+  const history = (items: ReturnType<typeof row>[]) => of({ items, page: 1, pageSize: 25, totalCount: items.length });
+  const rowButtons = () => Array.from(el().querySelectorAll<HTMLButtonElement>('table tbody button'));
   const inviteOptions = () =>
-    Array.from(el().querySelector<HTMLSelectElement>('form select')?.options ?? []).map((o) => o.value);
+    Array.from(el().querySelector<HTMLSelectElement>('app-invite-member-dialog select')?.options ?? []).map((o) => o.value);
 
   const create = async () => {
     fixture = TestBed.createComponent(Team);
     await fixture.whenStable();
+  };
+  const openInvitations = async () => {
+    el().querySelector<HTMLButtonElement>('#team-tab-invitations')!.click();
+    await fixture.whenStable();
+  };
+  const submitInvite = async (email: string) => {
+    const input = el().querySelector<HTMLInputElement>('app-invite-member-dialog input[type="email"]')!;
+    input.value = email;
+    input.dispatchEvent(new Event('input'));
+    el().querySelector('app-invite-member-dialog form')!.dispatchEvent(new Event('submit'));
+    await fixture.whenStable();
+    return input;
   };
 
   beforeEach(() => {
     vi.clearAllMocks();
     role.set('Agent');
     tenantId.set('t1');
-    directory.mockReturnValue(of({ items: [], page: 1, pageSize: 20, totalCount: 0 }));
+    directory.mockReturnValue(of({ items: [], page: 1, pageSize: 25, totalCount: 0 }));
     skills.mockReturnValue(of([]));
-    listInvitations.mockReturnValue(of([]));
+    listInvitationHistory.mockReturnValue(history([]));
     createInvitation.mockReturnValue(of(undefined));
     resendInvitation.mockReturnValue(of(undefined));
     revokeInvitation.mockReturnValue(of(undefined));
@@ -63,18 +79,22 @@ describe('Team', () => {
         { provide: TenantService, useValue: tenant },
         { provide: AuthService, useValue: { user: signal({ id: 'u1' }) } },
         { provide: TeamApi, useValue: { directory, skills } },
-        { provide: InvitationsService, useValue: { listInvitations, createInvitation, resendInvitation, revokeInvitation } },
+        {
+          provide: InvitationsService,
+          useValue: { listInvitationHistory, createInvitation, resendInvitation, revokeInvitation },
+        },
       ],
     });
   });
 
-  it('shows an Agent the directory read-only: no invitation form or invitation request', async () => {
+  it('shows an Agent the directory only: no tabs, invite button, dialog or history request', async () => {
     await create();
     expect(directory).toHaveBeenCalled();
-    expect(el().querySelector('form')).toBeNull();
-    expect(el().textContent).not.toContain('invitations.title');
+    expect(el().querySelector('[role="tablist"]')).toBeNull();
+    expect(el().querySelector('app-invite-member-dialog')).toBeNull();
+    expect(el().textContent).not.toContain('team.inviteMember');
     expect(el().textContent).toContain('team.readOnly');
-    expect(listInvitations).not.toHaveBeenCalled();
+    expect(listInvitationHistory).not.toHaveBeenCalled();
   });
 
   it('shows a Customer neither the directory nor any request', async () => {
@@ -82,17 +102,22 @@ describe('Team', () => {
     await create();
     expect(el().textContent).toContain('common.forbidden');
     expect(directory).not.toHaveBeenCalled();
-    expect(listInvitations).not.toHaveBeenCalled();
+    expect(listInvitationHistory).not.toHaveBeenCalled();
   });
 
-  it('offers a Manager only the Agent and Customer roles', async () => {
+  it('gives a Manager both tabs and an Agent/Customer-only invite dialog, loading history only when opened', async () => {
     role.set('Manager');
     await create();
+    expect(el().querySelectorAll('[role="tab"]')).toHaveLength(2);
+    expect(el().textContent).toContain('team.inviteMember');
     expect(inviteOptions()).toEqual(['Agent', 'Customer']);
-    expect(listInvitations).toHaveBeenCalledWith({ tenantId: 't1', includeExpired: true });
+    expect(listInvitationHistory).not.toHaveBeenCalled();
+
+    await openInvitations();
+    expect(listInvitationHistory).toHaveBeenCalledWith({ tenantId: 't1', page: 1, pageSize: 25 });
   });
 
-  it('offers an Owner every role', async () => {
+  it('offers an Owner every role in the invite dialog', async () => {
     role.set('TenantOwner');
     await create();
     expect(inviteOptions()).toEqual(['Manager', 'Agent', 'Customer', 'TenantOwner']);
@@ -108,15 +133,26 @@ describe('Team', () => {
     expect(directory).toHaveBeenCalledWith(expect.objectContaining({ isActive: false, page: 1 }));
   });
 
+  it('changes the page size on the server and returns to page 1', async () => {
+    await create();
+    directory.mockClear();
+    const size = el().querySelector<HTMLSelectElement>('nav select');
+    if (!size) return; // the pager only exists once the directory has rows
+    size.value = '50';
+    size.dispatchEvent(new Event('change'));
+    await fixture.whenStable();
+    expect(directory).toHaveBeenCalledWith(expect.objectContaining({ pageSize: 50, page: 1 }));
+  });
+
   it('updates the available actions when the workspace (and so the role) changes', async () => {
     role.set('TenantOwner');
     await create();
-    expect(el().querySelector('form')).not.toBeNull();
+    expect(el().querySelector('app-invite-member-dialog')).not.toBeNull();
 
     role.set('Agent');
     tenantId.set('t2');
     await fixture.whenStable();
-    expect(el().querySelector('form')).toBeNull();
+    expect(el().querySelector('app-invite-member-dialog')).toBeNull();
     expect(el().textContent).toContain('team.readOnly');
 
     role.set('Manager');
@@ -125,18 +161,14 @@ describe('Team', () => {
     expect(inviteOptions()).toEqual(['Agent', 'Customer']);
   });
 
-  it('disables the button and shows pending text while sending, then reports the result', async () => {
+  it('disables the submit button while sending, then reports the result on the page', async () => {
     role.set('Manager');
     const pending = new Subject<void>();
     createInvitation.mockReturnValue(pending);
     await create();
-    const input = el().querySelector<HTMLInputElement>('input[type="email"]')!;
-    input.value = 'new@example.com';
-    input.dispatchEvent(new Event('input'));
-    el().querySelector('form')!.dispatchEvent(new Event('submit'));
-    await fixture.whenStable();
+    await submitInvite('new@example.com');
 
-    const button = el().querySelector<HTMLButtonElement>('button[type="submit"]')!;
+    const button = el().querySelector<HTMLButtonElement>('app-invite-member-dialog button[type="submit"]')!;
     expect(button.disabled).toBe(true);
     expect(button.textContent).toContain('invitations.sending');
 
@@ -144,48 +176,96 @@ describe('Team', () => {
     pending.complete();
     await fixture.whenStable();
     expect(button.disabled).toBe(false);
+    expect(createInvitation).toHaveBeenCalledWith({ tenantId: 't1', body: { email: 'new@example.com', role: 'Agent' } });
     expect(el().querySelector('[role="status"]')!.textContent).toContain('invitations.sent');
   });
 
-  it('shows pending and expired invitations with a visible state', async () => {
+  it('reloads the visible history after an invitation was created', async () => {
     role.set('TenantOwner');
-    listInvitations.mockReturnValue(
-      of([invitation('a', 'Agent', '2999-01-01T00:00:00Z'), invitation('b', 'Agent', '2000-01-01T00:00:00Z')]),
-    );
     await create();
-    expect(el().textContent).toContain('invitations.statePending');
-    expect(el().textContent).toContain('invitations.stateExpired');
+    await openInvitations();
+    listInvitationHistory.mockClear();
+    await submitInvite('new@example.com');
+    expect(listInvitationHistory).toHaveBeenCalledTimes(1);
   });
 
-  it('lets a Manager resend and revoke Agent invitations only and marks the others as Owner-managed', async () => {
-    role.set('Manager');
-    listInvitations.mockReturnValue(
-      of([invitation('a', 'Agent', '2999-01-01T00:00:00Z'), invitation('m', 'Manager', '2999-01-01T00:00:00Z')]),
+  it('shows every status with a visible label', async () => {
+    role.set('TenantOwner');
+    listInvitationHistory.mockReturnValue(
+      history([
+        row('a', 'Agent', 'Pending'),
+        row('b', 'Agent', 'Accepted'),
+        row('c', 'Agent', 'Revoked'),
+        row('d', 'Agent', 'Expired'),
+      ]),
     );
     await create();
-    expect(rowButtons()).toHaveLength(2); // resend + revoke of the Agent invitation
+    await openInvitations();
+    for (const s of ['Pending', 'Accepted', 'Revoked', 'Expired']) {
+      expect(el().textContent).toContain(`invitations.state${s}`);
+    }
+  });
+
+  it('offers actions only on open invitations and only for roles the actor may manage', async () => {
+    role.set('Manager');
+    listInvitationHistory.mockReturnValue(
+      history([
+        row('a', 'Agent', 'Pending'),
+        row('m', 'Manager', 'Pending'),
+        row('o', 'TenantOwner', 'Expired'),
+        row('x', 'Agent', 'Accepted'),
+        row('r', 'Customer', 'Revoked'),
+      ]),
+    );
+    await create();
+    await openInvitations();
+    expect(rowButtons()).toHaveLength(2); // resend + revoke of the pending Agent invitation only
     expect(el().textContent).toContain('invitations.ownerOnly');
   });
 
-  it('resends through the API, reports it and reloads the list', async () => {
+  it('lets an Owner act on open invitations of every role but not on closed ones', async () => {
     role.set('TenantOwner');
-    listInvitations.mockReturnValue(of([invitation('a', 'Agent', '2000-01-01T00:00:00Z')]));
+    listInvitationHistory.mockReturnValue(
+      history([row('m', 'Manager', 'Pending'), row('x', 'Agent', 'Accepted'), row('r', 'Agent', 'Revoked')]),
+    );
     await create();
-    listInvitations.mockClear();
+    await openInvitations();
+    expect(rowButtons()).toHaveLength(2);
+  });
+
+  it('sends the status filter and search to the server and restarts at page 1', async () => {
+    role.set('TenantOwner');
+    await create();
+    await openInvitations();
+    listInvitationHistory.mockClear();
+    const status = el().querySelector<HTMLSelectElement>('[role="tabpanel"] [role="search"] select')!;
+    status.value = 'Revoked';
+    status.dispatchEvent(new Event('change'));
+    await fixture.whenStable();
+    expect(listInvitationHistory).toHaveBeenCalledWith({ tenantId: 't1', page: 1, pageSize: 25, status: 'Revoked' });
+  });
+
+  it('resends through the API, reports it and reloads the history', async () => {
+    role.set('TenantOwner');
+    listInvitationHistory.mockReturnValue(history([row('a', 'Agent', 'Expired')]));
+    await create();
+    await openInvitations();
+    listInvitationHistory.mockClear();
     rowButtons()[0].click();
     await fixture.whenStable();
     expect(resendInvitation).toHaveBeenCalledWith({ tenantId: 't1', invitationId: 'a' });
-    expect(listInvitations).toHaveBeenCalledTimes(1);
+    expect(listInvitationHistory).toHaveBeenCalledTimes(1);
     expect(el().querySelector('[role="status"]')!.textContent).toContain('invitations.resent');
   });
 
   it('explains a resend cooldown instead of a generic failure', async () => {
     role.set('TenantOwner');
-    listInvitations.mockReturnValue(of([invitation('a', 'Agent', '2999-01-01T00:00:00Z')]));
+    listInvitationHistory.mockReturnValue(history([row('a', 'Agent', 'Pending')]));
     resendInvitation.mockReturnValue(
       throwError(() => new HttpErrorResponse({ status: 429, error: { code: 'INVITATION_RESEND_COOLDOWN' } })),
     );
     await create();
+    await openInvitations();
     rowButtons()[0].click();
     await fixture.whenStable();
     expect(el().querySelector('[role="alert"]')!.textContent).toContain('invitations.errors.cooldown');
@@ -197,11 +277,7 @@ describe('Team', () => {
       throwError(() => new HttpErrorResponse({ status: 409, error: { code: 'INVITATION_ALREADY_MEMBER' } })),
     );
     await create();
-    const input = el().querySelector<HTMLInputElement>('input[type="email"]')!;
-    input.value = 'member@example.com';
-    input.dispatchEvent(new Event('input'));
-    el().querySelector('form')!.dispatchEvent(new Event('submit'));
-    await fixture.whenStable();
+    const input = await submitInvite('member@example.com');
     expect(el().textContent).toContain('invitations.errors.alreadyMember');
     expect(input.value).toBe('member@example.com');
   });

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using OpsFlow.Api.Contracts;
 using OpsFlow.Api.Infrastructure;
 using OpsFlow.Api.Infrastructure.OpenApi;
+using OpsFlow.Application.Common;
 using OpsFlow.Application.Invitations;
 using OpsFlow.Application.Organizations;
 
@@ -60,6 +61,20 @@ public sealed class InvitationsController(InvitationService invitations) : Contr
     {
         return Ok(await invitations.ListPendingAsync(includeExpired, ct));
     }
+
+    [HttpGet("tenants/{tenantId:guid}/invitations/history", Name = "ListInvitationHistory")]
+    [Authorize(Policy = AuthPolicies.TenantManager)]
+    [EndpointSummary("List invitation history")]
+    [EndpointDescription(
+        "Returns the tenant's complete invitation history (pending, accepted, revoked and expired), newest first, paged, with an optional status filter and email search. Owners and Managers can read every role's history; changing an invitation stays limited by the invitation permission matrix. Requires the Owner or Manager role in the tenant."
+    )]
+    public async Task<ActionResult<PagedResult<InvitationHistoryDto>>> ListInvitationHistory(
+        CancellationToken ct,
+        InvitationStatus? status = null,
+        string? search = null,
+        int page = 1,
+        int pageSize = 25
+    ) => Ok(await invitations.ListHistoryAsync(status, search, page, pageSize, ct));
 
     [HttpPost("tenants/{tenantId:guid}/invitations", Name = "CreateInvitation")]
     [Authorize(Policy = AuthPolicies.TenantManager)]

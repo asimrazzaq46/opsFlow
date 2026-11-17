@@ -1,9 +1,11 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, inject, input, output, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal, viewChild } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { TranslatePipe } from '@ngx-translate/core';
 import { TimeoutError } from 'rxjs';
 import { TenantRole } from '../../../core/api/generated/models';
+import { AuthService } from '../../../core/auth/auth.service';
+import { TenantService } from '../../../core/auth/tenant.service';
 import { ConfirmDialog } from '../../../shared/components/confirm-dialog/confirm-dialog';
 import { ManagedMember, TeamApi, restRole } from '../team-api';
 
@@ -42,6 +44,8 @@ export class MemberActions {
   readonly changed = output<void>();
 
   private readonly api = inject(TeamApi);
+  private readonly auth = inject(AuthService);
+  private readonly tenant = inject(TenantService);
   private readonly dialog = viewChild<ConfirmDialog>('dialog');
 
   protected readonly staffRoles = STAFF_ROLES;
@@ -51,13 +55,23 @@ export class MemberActions {
   protected readonly openWork = signal<OpenWork | null>(null);
   protected readonly message = signal<{ key: string; error: boolean } | null>(null);
 
+  /** The caller's own row: losing the Owner role or access here ends their own administration of the workspace. */
+  private readonly isSelf = computed(() => this.member().userId === this.auth.user()?.id);
+  /** An Owner's own role is read-only: the server refuses self-demotion (another Owner has to change it). */
+  protected readonly ownOwnerRole = computed(() => this.isSelf() && restRole(this.member().role) === 'TenantOwner');
+  protected readonly dialogKeys = computed(() => {
+    const kind = this.pending()?.role ? 'Role' : this.pending()?.isActive ? 'Reactivate' : 'Suspend';
+    const self = this.isSelf() && kind === 'Suspend' ? 'Self' : '';
+    return { title: `team.confirm${self}${kind}Title`, message: `team.confirm${self}${kind}` };
+  });
+
   /** Changing the select only proposes the change; the select keeps the server's value until it succeeds. */
   protected proposeRole(event: Event): void {
     const select = event.target as HTMLSelectElement;
     const role = select.value as TenantRole;
     const current = restRole(this.member().role);
     select.value = current;
-    if (role === current) return;
+    if (role === current || this.ownOwnerRole()) return;
     this.pending.set({ role });
     this.dialog()?.open();
   }
@@ -91,6 +105,8 @@ export class MemberActions {
         this.busy.set(false);
         this.dialog()?.close();
         this.message.set({ key: 'team.changed', error: false });
+        // Own change: refresh the caller's memberships now so navigation and actions match the server (shell revalidates the page).
+        if (this.isSelf()) this.tenant.load().subscribe({ error: () => undefined });
         this.changed.emit();
       },
       error: (e: unknown) => {
@@ -122,6 +138,7 @@ export function errorKey(e: unknown, code: unknown): string {
   if (e instanceof TimeoutError) return 'invitations.timeout';
   if (!(e instanceof HttpErrorResponse)) return 'team.errors.failed';
   if (code === 'MEMBER_CHANGED') return 'team.errors.stale';
+  if (code === 'OWNER_SELF_DEMOTION') return 'team.errors.selfDemotion';
   switch (e.status) {
     case 400:
       return 'team.errors.invalid';

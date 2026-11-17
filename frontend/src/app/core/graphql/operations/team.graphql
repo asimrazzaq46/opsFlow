@@ -24,3 +24,7 @@ query TeamMember($membershipId: UUID!) {
 query Skills($includeInactive: Boolean!) {
   skills(includeInactive: $includeInactive) { id name isActive }
 }
+
+query SkillCatalog($search: String) {
+  skillCatalog(search: $search) { id name isActive memberCount }
+}

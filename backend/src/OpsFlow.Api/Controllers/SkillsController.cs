@@ -32,6 +32,23 @@ public sealed class SkillsController(TeamService team) : ControllerBase
         return Created($"/api/v1/tenants/{tenantId}/skills/{skill.Id}", skill);
     }
 
+    [HttpPost("{skillId:guid}/assignments", Name = "UpdateSkillAssignments")]
+    [EndpointSummary("Assign or remove a skill for several members")]
+    [EndpointDescription(
+        "Gives one skill to the listed memberships and/or removes it from others in a single all-or-nothing operation; the members' other skills are never touched and members that already match are skipped. Owners may change every staff member, Managers only Agents (403 otherwise); an unknown, cross-tenant or Customer membership is 404. Only active skills can be newly given (400). A member can have at most 30 skills. Each changed member is audited. Requires the Owner or Manager role in the tenant."
+    )]
+    [ProducesResponseType<SkillAssignmentResultDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemResponse>(StatusCodes.Status409Conflict, "application/problem+json")]
+    public async Task<ActionResult<SkillAssignmentResultDto>> UpdateSkillAssignments(
+        Guid skillId,
+        UpdateSkillAssignmentsRequest request,
+        CancellationToken ct
+    )
+    {
+        var result = await team.UpdateSkillAssignmentsAsync(skillId, request.AddMembershipIds, request.RemoveMembershipIds, ct);
+        return result.Result is ObjectResult failure ? this.Answer(failure) : Ok(result.Value);
+    }
+
     [HttpPut("{skillId:guid}", Name = "UpdateSkill")]
     [EndpointSummary("Rename or deactivate skill")]
     [EndpointDescription(

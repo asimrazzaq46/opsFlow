@@ -32,7 +32,7 @@ public class OwnerProtectionTests(ApiFactory factory) : IClassFixture<ApiFactory
         var org = await owner.CreateOrganizationAsync();
         var self = (await owner.MembersAsync(org.Id)).Single();
 
-        Assert.Equal(HttpStatusCode.Conflict, (await owner.PutAsync(RoleUrl(org.Id, self.Id), new { role = "Manager" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await owner.PutAsync(RoleUrl(org.Id, self.Id), new { role = "Manager" })).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await owner.PutAsync(StatusUrl(org.Id, self.Id), new { isActive = false })).StatusCode);
         Assert.Equal(1, await ActiveOwnersAsync(org.Id));
     }
@@ -131,32 +131,18 @@ public class OwnerProtectionTests(ApiFactory factory) : IClassFixture<ApiFactory
         }
     }
 
-    [PostgresOnlyFact]
-    public async Task Stale_demotion_retry_rechecks_the_current_owner_count()
+    [Fact]
+    public async Task An_owner_cannot_change_their_own_role_even_when_another_owner_exists()
     {
-        var (org, owner1, owner2) = await TwoOwnersAsync("Interleave count");
-        var (winner, _, winnerScope) = ServiceAs(org.Id, owner1);
-        var (loser, loserDb, loserScope) = ServiceAs(org.Id, owner1);
-        using (winnerScope)
-        using (loserScope)
+        var (org, owner1, _) = await TwoOwnersAsync("Self demotion");
+        var (service, _, scope) = ServiceAs(org.Id, owner1);
+        using (scope)
         {
-            // owner1 starts stepping down (owner2 still counts as the other Owner) and is frozen
-            factory.Gate.PauseAfterNextCount(loserDb);
-            var stepDown = Task.Run(() => loser.ChangeRoleAsync(owner1, TenantRole.Manager, CancellationToken.None));
-            Assert.True(await factory.Gate.WaitUntilPausedAsync());
+            var failure = await ServiceOutcome.FailureAsync(service.ChangeRoleAsync(owner1, TenantRole.Manager, CancellationToken.None));
 
-            // owner1 (another request) demotes owner2 first: owner1 becomes the last Owner
-            await winner.ChangeRoleAsync(owner2, TenantRole.Agent, CancellationToken.None);
-            var afterWinner = await StateAsync(org.Id, owner2);
-
-            factory.Gate.Resume();
-            var failure = await ServiceOutcome.FailureAsync(stepDown.WaitAsync(QueryGate.Timeout));
-
-            Assert.Equal(409, failure.StatusCode);
-            var after = await StateAsync(org.Id, owner1);
-            Assert.Equal(TenantRole.TenantOwner, after.Role);
-            Assert.Equal(afterWinner.Stamp, after.Stamp);
-            Assert.Equal(1, await ActiveOwnersAsync(org.Id));
+            Assert.Equal(403, failure.StatusCode);
+            Assert.Equal(TenantRole.TenantOwner, (await StateAsync(org.Id, owner1)).Role);
+            Assert.Equal(2, await ActiveOwnersAsync(org.Id));
         }
     }
 
@@ -221,7 +207,7 @@ public class OwnerProtectionTests(ApiFactory factory) : IClassFixture<ApiFactory
         Assert.Equal(HttpStatusCode.NoContent, (await f.Owner2.PostAsync("/api/v1/auth/deactivate", new { password = ApiClient.Password })).StatusCode);
 
         Assert.Equal(1, await UsableOwnersAsync(f.Org.Id));
-        Assert.Equal(HttpStatusCode.Conflict, (await f.Owner1.PutAsync(RoleUrl(f.Org.Id, f.Membership1), new { role = "Manager" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await f.Owner1.PutAsync(RoleUrl(f.Org.Id, f.Membership1), new { role = "Manager" })).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await f.Owner1.PutAsync(StatusUrl(f.Org.Id, f.Membership1), new { isActive = false })).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await f.Owner1.PostAsync("/api/v1/auth/deactivate", new { password = ApiClient.Password })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await f.Owner1.GetAsync("/api/v1/auth/me")).StatusCode); // the rejected deactivation changed nothing

@@ -1,8 +1,42 @@
-<h1 class="text-headline-lg text-on-surface">{{ 'team.title' | translate }}</h1>
+<div class="flex flex-wrap items-center justify-between gap-3">
+  <h1 class="text-headline-lg text-on-surface">{{ 'team.title' | translate }}</h1>
+  @if (canView() && canInvite()) {
+    <button type="button" class="ops-btn-primary h-10" aria-haspopup="dialog" (click)="openInvite()">
+      <span class="ms text-[20px]" aria-hidden="true">person_add</span>
+      {{ 'team.inviteMember' | translate }}
+    </button>
+  }
+</div>
+
+@if (notice(); as n) {
+  <p class="mt-3 text-body-sm text-on-surface" role="status">{{ n | translate }}</p>
+}
 
 @if (!canView()) {
   <p role="alert" class="mt-6 text-on-surface-variant">{{ 'common.forbidden' | translate }}</p>
 } @else {
+  @if (canInvite()) {
+    <div role="tablist" class="mt-6 flex gap-1 overflow-x-auto border-b border-outline-variant/50" [attr.aria-label]="'team.tabs.label' | translate">
+      @for (tb of tabs(); track tb; let i = $index) {
+        <button
+          type="button"
+          role="tab"
+          [id]="'team-tab-' + tb"
+          class="team-tab"
+          [attr.aria-selected]="tab() === tb"
+          [attr.aria-controls]="'team-panel-' + tb"
+          [tabindex]="tab() === tb ? 0 : -1"
+          (click)="selectTab(tb)"
+          (keydown)="onTabKey($event, i)"
+        >
+          {{ 'team.tabs.' + tb | translate }}
+        </button>
+      }
+    </div>
+  }
+
+  @if (tab() === 'team') {
+  <div role="tabpanel" id="team-panel-team" [attr.aria-labelledby]="canInvite() ? 'team-tab-team' : null">
   <!-- Filters: every change goes to the server and starts again at page 1. -->
   <div class="mt-6 flex flex-col gap-2 md:flex-row md:flex-wrap md:items-end" role="search">
     <label class="flex min-w-0 flex-1 flex-col gap-1">
@@ -175,10 +209,18 @@
           }
         </ul>
 
-        <nav class="flex items-center justify-between border-t border-outline-variant/40 px-4 py-3 text-body-sm" [attr.aria-label]="'team.pagination' | translate">
+        <nav class="flex flex-wrap items-center justify-between gap-3 border-t border-outline-variant/40 px-4 py-3 text-body-sm" [attr.aria-label]="'team.pagination' | translate">
           <button type="button" class="ops-btn-secondary h-9 px-3" [disabled]="d.page <= 1 || loading()" (click)="go(d.page - 1)">
             ‹ {{ 'common.previous' | translate }}
           </button>
+          <label class="flex items-center gap-2">
+            <span>{{ 'team.rowsPerPage' | translate }}</span>
+            <select class="ops-select h-9 w-auto" (change)="onPageSize($any($event.target).value)">
+              @for (n of pageSizes; track n) {
+                <option [value]="n" [selected]="query().pageSize === n">{{ n }}</option>
+              }
+            </select>
+          </label>
           <span>{{ 'team.pageOf' | translate: { page: d.page, pages: pages(), total: d.totalCount } }}</span>
           <button type="button" class="ops-btn-secondary h-9 px-3" [disabled]="d.page >= pages() || loading()" (click)="go(d.page + 1)">
             {{ 'common.next' | translate }} ›
@@ -190,9 +232,21 @@
     }
   </section>
 
-  @if (canInvite()) {
-    <app-team-invitations />
-  } @else {
+  @if (!canInvite()) {
     <p class="mt-8 text-body-sm text-on-surface-variant">{{ 'team.readOnly' | translate }}</p>
+  }
+  </div>
+  } @else if (tab() === 'invitations') {
+    <div role="tabpanel" id="team-panel-invitations" aria-labelledby="team-tab-invitations" class="mt-6">
+      <app-team-invitations />
+    </div>
+  } @else {
+    <div role="tabpanel" id="team-panel-skills" aria-labelledby="team-tab-skills" class="mt-6">
+      <app-team-skills (changed)="onSkillsChanged()" />
+    </div>
+  }
+
+  @if (canInvite()) {
+    <app-invite-member-dialog (created)="onInvited()" />
   }
 }

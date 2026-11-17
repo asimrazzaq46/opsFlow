@@ -6,6 +6,12 @@ namespace OpsFlow.Application.Memberships;
 
 public sealed record SkillDto(Guid Id, string Name, bool IsActive);
 
+/// <summary>A catalog entry with the number of memberships that currently hold the skill (any membership status).</summary>
+public sealed record SkillUsageDto(Guid Id, string Name, bool IsActive, int MemberCount);
+
+/// <summary>How many memberships actually gained or lost the skill; members that already matched are not counted.</summary>
+public sealed record SkillAssignmentResultDto(int AddedCount, int RemovedCount);
+
 /// <summary>One staff member in the workspace directory. Email is null when the caller may not see it (Agents see only their own).</summary>
 public sealed record TeamMemberRowDto(
     Guid MembershipId,

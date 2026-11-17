@@ -6,22 +6,27 @@ import {
   inject,
   signal,
   untracked,
+  viewChild,
 } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { TranslatePipe } from '@ngx-translate/core';
 import { Subscription, debounceTime, distinctUntilChanged, map } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { TenantService } from '../../core/auth/tenant.service';
 import { TenantRole as GqlTenantRole } from '../../core/graphql/generated';
 import { pascal } from '../../shared/format';
+import { InviteMemberDialog } from './invitations/invite-member-dialog';
 import { TeamInvitations } from './invitations/team-invitations';
+import { TeamSkills } from './skills/team-skills';
 import { MemberActions } from './member-actions/member-actions';
 import { Skill, TeamApi, TeamPage, TeamQuery, TeamRow, TeamSort } from './team-api';
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 25;
+const PAGE_SIZES = [10, 25, 50] as const;
 const SKILLS_SHOWN = 3;
+export type TeamTab = 'team' | 'invitations' | 'skills';
 const FILTER_ROLES: readonly GqlTenantRole[] = ['TENANT_OWNER', 'MANAGER', 'AGENT'];
 
 /**
@@ -31,7 +36,7 @@ const FILTER_ROLES: readonly GqlTenantRole[] = ['TENANT_OWNER', 'MANAGER', 'AGEN
  */
 @Component({
   selector: 'app-team',
-  imports: [ReactiveFormsModule, TranslatePipe, RouterLink, MemberActions, TeamInvitations],
+  imports: [ReactiveFormsModule, TranslatePipe, RouterLink, MemberActions, TeamInvitations, InviteMemberDialog, TeamSkills],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './team.html',
   styleUrl: './team.css',
@@ -39,10 +44,13 @@ const FILTER_ROLES: readonly GqlTenantRole[] = ['TENANT_OWNER', 'MANAGER', 'AGEN
 export class Team {
   private readonly api = inject(TeamApi);
   private readonly auth = inject(AuthService);
+  private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   protected readonly tenant = inject(TenantService);
   protected readonly pascal = pascal;
   protected readonly filterRoles = FILTER_ROLES;
   protected readonly skillsShown = SKILLS_SHOWN;
+  protected readonly pageSizes = PAGE_SIZES;
 
   protected readonly canView = computed(() => this.tenant.isStaff());
   protected readonly isAdmin = computed(() => this.tenant.isManager());
@@ -50,12 +58,23 @@ export class Team {
   protected readonly canManageMembers = computed(() => this.tenant.isOwner());
   protected readonly canInvite = computed(() => this.tenant.isManager());
 
+  /** The selected tab lives in `?tab=`; an unknown value, or Invitations/Skills for someone who may not see it, falls back to Team. */
+  private readonly tabParam = toSignal(this.route.queryParamMap, { initialValue: this.route.snapshot.queryParamMap });
+  protected readonly tab = computed<TeamTab>(() => {
+    const requested = this.tabParam().get('tab');
+    return (requested === 'invitations' || requested === 'skills') && this.canInvite() ? requested : 'team';
+  });
+  protected readonly tabs = computed<TeamTab[]>(() => (this.canInvite() ? ['team', 'invitations', 'skills'] : ['team']));
+  protected readonly notice = signal<string | null>(null);
+  private readonly inviteDialog = viewChild(InviteMemberDialog);
+  private readonly invitations = viewChild(TeamInvitations);
+
   protected readonly query = signal<TeamQuery>(initialQuery());
   protected readonly data = signal<TeamPage | null>(null);
   protected readonly loading = signal(false);
   protected readonly error = signal(false);
   protected readonly skills = signal<Skill[]>([]);
-  protected readonly pages = computed(() => Math.max(1, Math.ceil((this.data()?.totalCount ?? 0) / PAGE_SIZE)));
+  protected readonly pages = computed(() => Math.max(1, Math.ceil((this.data()?.totalCount ?? 0) / this.query().pageSize)));
   protected readonly search = new FormControl('', { nonNullable: true });
 
   private request?: Subscription;
@@ -71,6 +90,7 @@ export class Team {
         this.skills.set([]);
         this.search.setValue('', { emitEvent: false });
         this.query.set(initialQuery());
+        this.notice.set(null);
         if (!tenantId || !canView) return;
         this.loadSkills();
       });
@@ -89,8 +109,60 @@ export class Team {
       .subscribe((search) => this.update({ search }));
   }
 
+  /** The catalog or an assignment changed on the Skills tab: refresh the (active-only) skill filter and the member badges. */
+  protected onSkillsChanged(): void {
+    this.loadSkills();
+    this.reload();
+  }
+
+  protected selectTab(tab: TeamTab): void {
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { tab: tab === 'team' ? null : tab },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
+  }
+
+  /** Arrow keys move between tabs (WAI-ARIA tabs pattern with automatic activation). */
+  protected onTabKey(event: KeyboardEvent, index: number): void {
+    const tabs = this.tabs();
+    const next =
+      event.key === 'ArrowRight'
+        ? index + 1
+        : event.key === 'ArrowLeft'
+          ? index - 1
+          : event.key === 'Home'
+            ? 0
+            : event.key === 'End'
+              ? tabs.length - 1
+              : null;
+    if (next === null) return;
+    event.preventDefault();
+    const target = tabs[(next + tabs.length) % tabs.length];
+    this.selectTab(target);
+    document.getElementById('team-tab-' + target)?.focus();
+  }
+
+  protected openInvite(): void {
+    this.notice.set(null);
+    this.inviteDialog()?.open();
+  }
+
+  /** The server accepted the invitation; the history reloads at once when it is on screen, otherwise it loads when opened. */
+  protected onInvited(): void {
+    this.notice.set('invitations.sent');
+    this.invitations()?.reload();
+  }
+
   protected update(change: Partial<TeamQuery>): void {
     this.query.update((q) => ({ ...q, page: 1, ...change }));
+  }
+
+  /** Only the offered sizes are accepted; a new size restarts at page 1 and the server returns that slice. */
+  protected onPageSize(value: string): void {
+    const size = Number(value);
+    if ((PAGE_SIZES as readonly number[]).includes(size)) this.update({ pageSize: size });
   }
 
   protected go(page: number): void {
@@ -149,9 +221,13 @@ export class Team {
 
   private loadSkills(): void {
     const tenantId = this.tenant.tenantId();
-    this.api.skills(true).subscribe({
+    this.api.skills(false).subscribe({
       next: (s) => {
-        if (tenantId === this.tenant.tenantId()) this.skills.set(s);
+        if (tenantId !== this.tenant.tenantId()) return;
+        this.skills.set(s);
+        // A skill that is no longer active cannot filter the directory: drop the stale filter (the query change reloads the list).
+        const selected = this.query().skillId;
+        if (selected && !s.some((k) => k.id === selected)) this.update({ skillId: null });
       },
       error: () => undefined, // the skill filter is optional; the directory itself reports its own errors
     });

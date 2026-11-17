@@ -1,41 +1,60 @@
-<h2 #heading tabindex="-1" class="mt-10 text-xl font-bold tracking-tight text-on-surface outline-none">
-  {{ 'invitations.title' | translate }}
-</h2>
+<h2 #heading tabindex="-1" class="sr-only">{{ 'invitations.title' | translate }}</h2>
 
-<form
-  [formGroup]="invite"
-  (ngSubmit)="send()"
-  class="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end"
-  novalidate
->
-  <label class="flex min-w-0 flex-col gap-1 sm:w-72">
-    <span class="ops-label">{{ 'customers.email' | translate }}</span>
-    <input
-      type="email"
-      formControlName="email"
-      autocomplete="off"
-      class="ops-input"
-      [attr.aria-invalid]="invite.controls.email.invalid && invite.controls.email.touched"
-      [attr.aria-describedby]="invite.controls.email.invalid && invite.controls.email.touched ? 'invite-email-error' : null"
-    />
+<ng-template #badge let-i>
+  <span class="ops-badge gap-1" [class]="statusClass(i.status)">
+    <span class="ms text-[14px]" aria-hidden="true">{{ statusIcon(i.status) }}</span>
+    {{ 'invitations.state' + i.status | translate }}
+  </span>
+</ng-template>
+
+<ng-template #actions let-i>
+  @if (canAct(i)) {
+    <button
+      type="button"
+      class="ops-btn-secondary h-9 px-3 text-body-sm"
+      [disabled]="!!rowBusy()[i.id]"
+      [attr.aria-busy]="rowBusy()[i.id] === 'resend'"
+      (click)="resend(i)"
+    >
+      {{ (rowBusy()[i.id] === 'resend' ? 'invitations.resending' : 'invitations.resend') | translate }}
+      <span class="sr-only">: {{ i.email }}</span>
+    </button>
+    <button type="button" class="ops-btn-danger h-9 px-3 text-body-sm" [disabled]="!!rowBusy()[i.id]" (click)="askRevoke(i)">
+      <span class="ms text-[18px]" aria-hidden="true">block</span>
+      {{ 'invitations.revoke' | translate }}
+      <span class="sr-only">: {{ i.email }}</span>
+    </button>
+  } @else if (i.status === 'Pending' || i.status === 'Expired') {
+    <span class="text-body-sm text-on-surface-variant">{{ 'invitations.ownerOnly' | translate }}</span>
+  } @else {
+    <span class="text-body-sm text-on-surface-variant" aria-hidden="true">—</span>
+  }
+</ng-template>
+
+<ng-template #when let-iso let-label="label">
+  @let text = format(iso);
+  @if (text) {
+    <time [attr.datetime]="iso">{{ text }}</time>
+  } @else {
+    <span>{{ label | translate }}</span>
+  }
+</ng-template>
+
+<div class="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-end" role="search">
+  <label class="flex min-w-0 flex-1 flex-col gap-1">
+    <span class="ops-label">{{ 'filters.search' | translate }}</span>
+    <input type="search" class="ops-input" [formControl]="search" [placeholder]="'invitations.searchPlaceholder' | translate" />
   </label>
   <label class="flex flex-col gap-1">
-    <span class="ops-label">{{ 'team.role' | translate }}</span>
-    <select formControlName="role" class="ops-select h-10">
-      @for (r of roles(); track r) {
-        <option [value]="r">{{ 'roles.' + r | translate }}</option>
+    <span class="ops-label">{{ 'common.status' | translate }}</span>
+    <select class="ops-select h-10" (change)="onStatus($any($event.target).value)">
+      <option value="" [selected]="!query().status">{{ 'invitations.statusAll' | translate }}</option>
+      @for (s of statuses; track s) {
+        <option [value]="s" [selected]="query().status === s">{{ 'invitations.state' + s | translate }}</option>
       }
     </select>
   </label>
-  <button type="submit" class="ops-btn-primary" [disabled]="creating()" [attr.aria-busy]="creating()">
-    {{ (creating() ? 'invitations.sending' : 'invitations.send') | translate }}
-  </button>
-</form>
-@if (invite.controls.email.invalid && invite.controls.email.touched) {
-  <p id="invite-email-error" role="alert" class="ops-error">
-    {{ 'authFlow.validation.email' | translate }}
-  </p>
-}
+</div>
 
 @if (message(); as m) {
   <p
@@ -54,65 +73,98 @@
       {{ 'invitations.loadError' | translate }}
       <button type="button" class="ops-link underline" (click)="load()">{{ 'common.retry' | translate }}</button>
     </p>
-  } @else if (loading() && !invitations().length) {
-    <p class="p-6 text-center text-body-sm text-on-surface-variant" role="status">{{ 'common.loading' | translate }}</p>
-  } @else {
-    <ul class="divide-y divide-outline-variant/40" [class.opacity-60]="loading()">
-      @for (i of invitations(); track i.id) {
-        @let expired = isExpired(i);
-        <li class="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
-          <div class="min-w-0">
-            <p class="truncate font-semibold text-on-surface">{{ i.email }}</p>
-            <p class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-body-sm text-on-surface-variant">
-              <span class="ops-badge bg-surface-container-high text-on-surface">{{ 'roles.' + i.role | translate }}</span>
-              <span
-                class="ops-badge"
-                [class.bg-secondary-container]="!expired"
-                [class.text-on-secondary-container]="!expired"
-                [class.bg-error-container]="expired"
-                [class.text-on-error-container]="expired"
-                >{{ (expired ? 'invitations.stateExpired' : 'invitations.statePending') | translate }}</span
-              >
-              <span>
-                {{ 'invitations.sentAt' | translate }}
-                <time [attr.datetime]="i.sentAtUtc">{{ format(i.sentAtUtc) }}</time>
-              </span>
-              <span>
-                {{ (expired ? 'invitations.expiredAt' : 'invitations.expiresAt') | translate }}
-                <time [attr.datetime]="i.expiresAtUtc">{{ format(i.expiresAtUtc) }}</time>
-              </span>
-            </p>
-          </div>
-          <div class="flex flex-wrap items-center gap-2">
-            @if (canManage(i.role)) {
-              <button
-                type="button"
-                class="ops-btn-secondary h-9 px-3 text-body-sm"
-                [disabled]="!!rowBusy()[i.id]"
-                [attr.aria-busy]="rowBusy()[i.id] === 'resend'"
-                (click)="resend(i)"
-              >
-                {{ (rowBusy()[i.id] === 'resend' ? 'invitations.resending' : 'invitations.resend') | translate }}
-                <span class="sr-only">: {{ i.email }}</span>
-              </button>
-              <button
-                type="button"
-                class="ops-btn-secondary h-9 px-3 text-body-sm"
-                [disabled]="!!rowBusy()[i.id]"
-                (click)="askRevoke(i)"
-              >
-                {{ 'invitations.revoke' | translate }}
-                <span class="sr-only">: {{ i.email }}</span>
-              </button>
-            } @else {
-              <span class="text-body-sm text-on-surface-variant">{{ 'invitations.ownerOnly' | translate }}</span>
+  } @else if (data(); as d) {
+    @if (!d.items.length) {
+      <p class="p-8 text-center text-body-sm text-on-surface-variant">{{ 'invitations.empty' | translate }}</p>
+    } @else {
+      <!-- Desktop / tablet: table -->
+      <div class="hidden overflow-x-auto md:block" [class.opacity-60]="loading()">
+        <table class="w-full border-collapse text-left">
+          <caption class="sr-only">{{ 'invitations.caption' | translate }}</caption>
+          <thead class="bg-surface-container-low">
+            <tr>
+              <th scope="col" class="ops-th">{{ 'customers.email' | translate }}</th>
+              <th scope="col" class="ops-th">{{ 'team.role' | translate }}</th>
+              <th scope="col" class="ops-th">{{ 'common.status' | translate }}</th>
+              <th scope="col" class="ops-th">{{ 'invitations.sentAt' | translate }}</th>
+              <th scope="col" class="ops-th">{{ 'invitations.expiresAt' | translate }}</th>
+              <th scope="col" class="ops-th"><span class="sr-only">{{ 'team.actions' | translate }}</span></th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-outline-variant/40">
+            @for (i of d.items; track i.id) {
+              <tr>
+                <td class="max-w-64 truncate px-3 py-3 font-semibold text-on-surface" [attr.title]="i.email">{{ i.email }}</td>
+                <td class="px-3 py-3 text-body-sm">{{ 'roles.' + i.role | translate }}</td>
+                <td class="px-3 py-3 text-body-sm">
+                  <ng-container [ngTemplateOutlet]="badge" [ngTemplateOutletContext]="{ $implicit: i }" />
+                </td>
+                <td class="px-3 py-3 text-body-sm text-on-surface-variant">
+                  <ng-container [ngTemplateOutlet]="when" [ngTemplateOutletContext]="{ $implicit: i.sentAtUtc, label: 'invitations.sentUnknown' }" />
+                </td>
+                <td class="px-3 py-3 text-body-sm text-on-surface-variant">
+                  <ng-container [ngTemplateOutlet]="when" [ngTemplateOutletContext]="{ $implicit: i.expiresAtUtc, label: 'invitations.expiryUnknown' }" />
+                </td>
+                <td class="px-3 py-3">
+                  <div class="flex flex-wrap items-center justify-end gap-2">
+                    <ng-container [ngTemplateOutlet]="actions" [ngTemplateOutletContext]="{ $implicit: i }" />
+                  </div>
+                </td>
+              </tr>
             }
-          </div>
-        </li>
-      } @empty {
-        <li class="px-4 py-6 text-center text-body-sm text-on-surface-variant">{{ 'invitations.empty' | translate }}</li>
-      }
-    </ul>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Mobile: cards -->
+      <ul class="divide-y divide-outline-variant/40 md:hidden" [class.opacity-60]="loading()">
+        @for (i of d.items; track i.id) {
+          <li class="flex flex-col gap-3 p-4">
+            <div class="min-w-0">
+              <p class="truncate font-semibold text-on-surface">{{ i.email }}</p>
+              <p class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-body-sm text-on-surface-variant">
+                <span class="ops-badge bg-surface-container-high text-on-surface">{{ 'roles.' + i.role | translate }}</span>
+                <ng-container [ngTemplateOutlet]="badge" [ngTemplateOutletContext]="{ $implicit: i }" />
+              </p>
+              <p class="mt-1 text-body-sm text-on-surface-variant">
+                {{ 'invitations.sentAt' | translate }}
+                <ng-container [ngTemplateOutlet]="when" [ngTemplateOutletContext]="{ $implicit: i.sentAtUtc, label: 'invitations.sentUnknown' }" />
+              </p>
+              <p class="text-body-sm text-on-surface-variant">
+                {{ (i.status === 'Expired' ? 'invitations.expiredAt' : 'invitations.expiresAt') | translate }}
+                <ng-container [ngTemplateOutlet]="when" [ngTemplateOutletContext]="{ $implicit: i.expiresAtUtc, label: 'invitations.expiryUnknown' }" />
+              </p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <ng-container [ngTemplateOutlet]="actions" [ngTemplateOutletContext]="{ $implicit: i }" />
+            </div>
+          </li>
+        }
+      </ul>
+
+      <nav
+        class="flex flex-wrap items-center justify-between gap-3 border-t border-outline-variant/40 px-4 py-3 text-body-sm"
+        [attr.aria-label]="'invitations.pagination' | translate"
+      >
+        <button type="button" class="ops-btn-secondary h-9 px-3" [disabled]="current() <= 1 || loading()" (click)="go(current() - 1)">
+          ‹ {{ 'common.previous' | translate }}
+        </button>
+        <label class="flex items-center gap-2">
+          <span>{{ 'team.rowsPerPage' | translate }}</span>
+          <select class="ops-select h-9 w-auto" (change)="onPageSize($any($event.target).value)">
+            @for (n of pageSizes; track n) {
+              <option [value]="n" [selected]="query().pageSize === n">{{ n }}</option>
+            }
+          </select>
+        </label>
+        <span>{{ 'invitations.pageOf' | translate: { page: current(), pages: pages(), total: total() } }}</span>
+        <button type="button" class="ops-btn-secondary h-9 px-3" [disabled]="current() >= pages() || loading()" (click)="go(current() + 1)">
+          {{ 'common.next' | translate }} ›
+        </button>
+      </nav>
+    }
+  } @else {
+    <p class="p-8 text-center text-body-sm text-on-surface-variant" role="status">{{ 'common.loading' | translate }}</p>
   }
 </section>
 

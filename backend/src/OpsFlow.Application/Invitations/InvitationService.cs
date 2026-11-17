@@ -28,6 +28,7 @@ public sealed partial class InvitationService(
 )
 {
     private const int MaxAttempts = 3;
+    private const int MaxHistoryPageSize = 100;
 
     // 72-hour expiry per the approved requirement.
     private static readonly TimeSpan Lifetime = TimeSpan.FromHours(72);
@@ -134,6 +135,8 @@ public sealed partial class InvitationService(
     public async Task<IReadOnlyList<InvitationDto>> ListPendingAsync(bool includeExpired, CancellationToken ct)
     {
         var now = clock.GetUtcNow().UtcDateTime;
+        // Filtering, ordering and the column list run in SQL (no token hash is read); only the sent time is derived afterwards, because
+        // DateTime arithmetic is not translatable on every provider.
         var open = await db
             .Invitations.AsNoTracking()
             .Where(i =>
@@ -143,8 +146,78 @@ public sealed partial class InvitationService(
             )
             .OrderBy(i => i.CreatedAtUtc)
             .ThenBy(i => i.Id)
+            .Select(i => new { i.Id, i.Email, i.Role, i.CreatedAtUtc, i.ExpiresAtUtc })
             .ToListAsync(ct);
-        return open.ConvertAll(ToDto); // mapped in memory: the sent time is derived from the expiry
+        return open.ConvertAll(i => new InvitationDto(i.Id, i.Email, i.Role, i.CreatedAtUtc, i.ExpiresAtUtc, LastSentAt(i.ExpiresAtUtc)));
+    }
+
+    /// <summary>
+    /// Complete invitation history of the tenant (pending, accepted, revoked and expired), newest first. Tenant isolation comes from the
+    /// query filter; status, search, count, ordering and paging run in SQL and only the listed columns are read (never the token hash).
+    /// </summary>
+    public async Task<PagedResult<InvitationHistoryDto>> ListHistoryAsync(
+        InvitationStatus? status,
+        string? search,
+        int page,
+        int pageSize,
+        CancellationToken ct
+    )
+    {
+        (page, pageSize, var skip) = Paging.Normalize(page, pageSize, MaxHistoryPageSize);
+        var now = clock.GetUtcNow().UtcDateTime; // one instant classifies every row of this request
+        var query = db.Invitations.AsNoTracking();
+        query = status switch
+        {
+            InvitationStatus.Accepted => query.Where(i => i.AcceptedAtUtc != null),
+            InvitationStatus.Revoked => query.Where(i => i.AcceptedAtUtc == null && i.RevokedAtUtc != null),
+            InvitationStatus.Expired => query.Where(i =>
+                i.AcceptedAtUtc == null && i.RevokedAtUtc == null && i.ExpiresAtUtc <= now
+            ),
+            InvitationStatus.Pending => query.Where(i =>
+                i.AcceptedAtUtc == null && i.RevokedAtUtc == null && i.ExpiresAtUtc > now
+            ),
+            _ => query,
+        };
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLowerInvariant();
+            query = query.Where(i => i.NormalizedEmail.Contains(term));
+        }
+
+        var total = await query.CountAsync(ct);
+        var rows = await query
+            .OrderByDescending(i => i.CreatedAtUtc)
+            .ThenByDescending(i => i.Id)
+            .Skip(skip)
+            .Take(pageSize)
+            .Select(i => new
+            {
+                i.Id,
+                i.Email,
+                i.Role,
+                i.CreatedAtUtc,
+                i.ExpiresAtUtc,
+                i.AcceptedAtUtc,
+                i.RevokedAtUtc,
+            })
+            .ToListAsync(ct);
+        var items = rows.ConvertAll(i =>
+            new InvitationHistoryDto(
+                i.Id,
+                i.Email,
+                i.Role,
+                i.AcceptedAtUtc is not null ? InvitationStatus.Accepted
+                : i.RevokedAtUtc is not null ? InvitationStatus.Revoked
+                : i.ExpiresAtUtc <= now ? InvitationStatus.Expired
+                : InvitationStatus.Pending,
+                i.CreatedAtUtc,
+                LastSentAt(i.ExpiresAtUtc),
+                i.ExpiresAtUtc,
+                i.AcceptedAtUtc,
+                i.RevokedAtUtc
+            )
+        );
+        return new PagedResult<InvitationHistoryDto>(items, page, pageSize, total);
     }
 
     /// <summary>
@@ -266,7 +339,7 @@ public sealed partial class InvitationService(
             }
 
             var now = clock.GetUtcNow().UtcDateTime;
-            if (now - LastSentAt(invitation) < ResendCooldown)
+            if (now - LastSentAt(invitation.ExpiresAtUtc) < ResendCooldown)
             {
                 return new ObjectResult(
                     new ProblemDetails
@@ -694,10 +767,10 @@ public sealed partial class InvitationService(
     /// When the current link was emailed. Create and resend are the only writers of ExpiresAtUtc and both set it to "now + Lifetime"
     /// (always 72 hours), so no separate column is needed; changing Lifetime or writing ExpiresAtUtc elsewhere would break this.
     /// </summary>
-    private static DateTime LastSentAt(Invitation i) => i.ExpiresAtUtc - Lifetime;
+    private static DateTime LastSentAt(DateTime expiresAtUtc) => expiresAtUtc - Lifetime;
 
     private static InvitationDto ToDto(Invitation i) =>
-        new(i.Id, i.Email, i.Role, i.CreatedAtUtc, i.ExpiresAtUtc, LastSentAt(i));
+        new(i.Id, i.Email, i.Role, i.CreatedAtUtc, i.ExpiresAtUtc, LastSentAt(i.ExpiresAtUtc));
 
     [LoggerMessage(
         Level = LogLevel.Information,

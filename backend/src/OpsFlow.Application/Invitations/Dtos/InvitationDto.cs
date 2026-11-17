@@ -21,6 +21,28 @@ public sealed record InvitationDto(
     DateTime SentAtUtc
 );
 
+/// <summary>Lifecycle state derived from the persisted invitation: accepted, revoked, open but past its expiry, or still pending.</summary>
+public enum InvitationStatus
+{
+    Pending,
+    Accepted,
+    Revoked,
+    Expired,
+}
+
+/// <summary>One row of the complete invitation history. Role is the role the invitation was issued for; it never follows later membership changes.</summary>
+public sealed record InvitationHistoryDto(
+    Guid Id,
+    string Email,
+    TenantRole Role,
+    InvitationStatus Status,
+    DateTime CreatedAtUtc,
+    DateTime SentAtUtc,
+    DateTime ExpiresAtUtc,
+    DateTime? AcceptedAtUtc,
+    DateTime? RevokedAtUtc
+);
+
 public enum InvitationPreviewState
 {
     Valid,

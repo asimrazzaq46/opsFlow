@@ -1,10 +1,12 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable, map, timeout } from 'rxjs';
-import { SkillDto, TenantRole } from '../../core/api/generated/models';
+import { SkillAssignmentResultDto, SkillDto, TenantRole } from '../../core/api/generated/models';
 import { TeamService as GeneratedTeamService } from '../../core/api/generated/services/team.service';
 import { TenantsService } from '../../core/api/generated/services/tenants.service';
 import { TenantService } from '../../core/auth/tenant.service';
 import {
+  SkillCatalogDocument,
+  SkillCatalogQuery,
   SkillsDocument,
   SkillsQuery,
   TeamDirectoryDocument,
@@ -20,6 +22,7 @@ export type TeamPage = TeamDirectoryQuery['teamDirectory'];
 export type TeamRow = TeamPage['items'][number];
 export type TeamMemberDetail = TeamMemberQuery['teamMember'];
 export type Skill = SkillsQuery['skills'][number];
+export type SkillUsage = SkillCatalogQuery['skillCatalog'][number];
 export type TeamSort = 'name' | 'role' | 'status' | 'joined';
 
 export interface TeamQuery {
@@ -36,6 +39,7 @@ export interface TeamQuery {
 /** Fields of a member the role/status actions need; both the list row and the detail provide them. */
 export interface ManagedMember {
   membershipId: string;
+  userId: string;
   displayName: string;
   role: GqlTenantRole;
   isActive: boolean;
@@ -83,6 +87,11 @@ export class TeamApi {
     return this.gql.query(SkillsDocument, { includeInactive }).pipe(map((r) => r.skills));
   }
 
+  /** Catalog administration view: every skill with its number of holders, optionally filtered by name. */
+  skillUsage(search: string): Observable<SkillUsage[]> {
+    return this.gql.query(SkillCatalogDocument, { search: search || null }).pipe(map((r) => r.skillCatalog));
+  }
+
   changeRole(m: ManagedMember, role: TenantRole): Observable<void> {
     return this.tenants
       .changeMemberRole({
@@ -122,6 +131,24 @@ export class TeamApi {
   setSkills(membershipId: string, skillIds: string[], expectedSkillIds: string[]): Observable<void> {
     return this.tenants
       .setMemberSkills({ tenantId: this.tenantId, membershipId, body: { skillIds, expectedSkillIds } })
+      .pipe(timeout(WRITE_TIMEOUT_MS));
+  }
+
+  /** Renaming and (de)activating share one operation; members keep a deactivated skill. */
+  updateSkill(skill: SkillDto, change: { name?: string; isActive?: boolean }): Observable<SkillDto> {
+    return this.skillCatalog
+      .updateSkill({
+        tenantId: this.tenantId,
+        skillId: skill.id,
+        body: { name: change.name ?? skill.name, isActive: change.isActive ?? skill.isActive },
+      })
+      .pipe(timeout(WRITE_TIMEOUT_MS));
+  }
+
+  /** One skill for several members in one all-or-nothing request; the members' other skills are untouched. */
+  assignSkill(skillId: string, addMembershipIds: string[], removeMembershipIds: string[]): Observable<SkillAssignmentResultDto> {
+    return this.skillCatalog
+      .updateSkillAssignments({ tenantId: this.tenantId, skillId, body: { addMembershipIds, removeMembershipIds } })
       .pipe(timeout(WRITE_TIMEOUT_MS));
   }
 

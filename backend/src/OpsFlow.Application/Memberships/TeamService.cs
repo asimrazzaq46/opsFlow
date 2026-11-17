@@ -70,7 +70,11 @@ public sealed class TeamService(
 
         if (skillId is { } skill)
         {
-            query = query.Where(x => db.MemberSkills.Any(s => s.MembershipId == x.Id && s.SkillId == skill));
+            // A deactivated skill stays on its members but never matches: only active catalog skills filter the directory.
+            query = query.Where(x =>
+                db.MemberSkills.Any(s => s.MembershipId == x.Id && s.SkillId == skill)
+                && db.Skills.Any(k => k.Id == skill && k.IsActive)
+            );
         }
 
         if (search?.Trim().ToLowerInvariant() is { Length: > 0 } term)
@@ -96,7 +100,7 @@ public sealed class TeamService(
         var rows = await ordered.ThenBy(x => x.Id).Skip(skip).Take(pageSize).ToListAsync(ct);
 
         var ids = rows.ConvertAll(x => x.Id);
-        var skills = await SkillsOfAsync(ids, ct);
+        var skills = await SkillsOfAsync(ids, includeInactive: false, ct);
         var profiles = await db
             .MemberProfiles.AsNoTracking()
             .Where(p => ids.Contains(p.MembershipId))
@@ -179,7 +183,8 @@ public sealed class TeamService(
             m.Status == MembershipStatus.Active,
             profile?.JobTitle,
             profile?.Department,
-            (await SkillsOfAsync([m.Id], ct)).GetValueOrDefault(m.Id) ?? [],
+            // Inactive assignments are preserved data; only someone who may edit this member sees them (to keep or remove them).
+            (await SkillsOfAsync([m.Id], MayAdminister(caller, m.Role), ct)).GetValueOrDefault(m.Id) ?? [],
             stats.OpenAssignmentCount,
             m.CreatedAtUtc
         );
@@ -215,6 +220,23 @@ public sealed class TeamService(
             .Where(s => includeInactive || s.IsActive)
             .OrderBy(s => s.Name)
             .Select(s => new SkillDto(s.Id, s.Name, s.IsActive))
+            .ToListAsync(ct);
+    }
+
+    /// <summary>Catalog administration view: every skill (active or not) with its holder count, optionally filtered by name.</summary>
+    public async Task<IReadOnlyList<SkillUsageDto>> SkillCatalogAsync(string? search, CancellationToken ct)
+    {
+        await actor.RequireManagerAsync("Only Owners and Managers can manage skills.", ct);
+        var query = db.Skills.AsNoTracking();
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = Skill.Normalize(search);
+            query = query.Where(s => s.NormalizedName.Contains(term));
+        }
+
+        return await query
+            .OrderBy(s => s.Name)
+            .Select(s => new SkillUsageDto(s.Id, s.Name, s.IsActive, db.MemberSkills.Count(m => m.SkillId == s.Id)))
             .ToListAsync(ct);
     }
 
@@ -307,6 +329,102 @@ public sealed class TeamService(
         var names = await db.Skills.Where(s => wanted.Contains(s.Id)).OrderBy(s => s.Name).Select(s => s.Name).ToListAsync(ct);
         Audit(target.TenantId, AuditAction.MemberSkillsChanged, target.Id, null, string.Join(", ", names), now);
         return await CommitAsync(transaction, UniqueConstraintKind.MemberSkill, ct);
+    }
+
+    /// <summary>
+    /// Gives ONE skill to several members and/or takes it from several, leaving every other skill of those members untouched. The actor and
+    /// every target membership are locked inside the transaction (so a concurrent demotion or suspension cannot commit meanwhile), each
+    /// target is checked against the CURRENT role matrix (Owners any staff member, Managers only Agents) and the request is all-or-nothing.
+    /// </summary>
+    public async Task<ActionResult<SkillAssignmentResultDto>> UpdateSkillAssignmentsAsync(
+        Guid skillId,
+        IReadOnlyCollection<Guid>? addMembershipIds,
+        IReadOnlyCollection<Guid>? removeMembershipIds,
+        CancellationToken ct
+    )
+    {
+        var toAdd = (addMembershipIds ?? []).Distinct().ToList();
+        var toRemove = (removeMembershipIds ?? []).Distinct().ToList();
+        if (toAdd.Count + toRemove.Count == 0 || toAdd.Intersect(toRemove).Any())
+        {
+            return new BadRequestObjectResult(new ProblemDetails { Title = "Choose members to add or remove, and not the same member in both lists." });
+        }
+
+        var ids = toAdd.Concat(toRemove).ToList();
+        if (await actor.TryBeginAuthorizedAsync(ids, ct) is not { } begun)
+        {
+            return ActorAccess.AccessNoLongerValid();
+        }
+
+        var (transaction, role) = begun;
+        await using var _ = transaction;
+        if (!IsAdmin(role))
+        {
+            return ActorAccess.Forbidden("Only Owners and Managers can manage skills.");
+        }
+
+        var skill = await db.Skills.SingleOrDefaultAsync(s => s.Id == skillId, ct);
+        if (skill is null)
+        {
+            return new NotFoundObjectResult(new ProblemDetails { Title = "Skill not found." });
+        }
+
+        // The query filter keeps this to the current tenant; Customers are not staff and never qualify.
+        var targets = await db.Memberships.Where(m => ids.Contains(m.Id) && m.Role != TenantRole.Customer)
+            .Select(m => new { m.Id, m.Role })
+            .ToListAsync(ct);
+        if (targets.Count != ids.Count)
+        {
+            return new NotFoundObjectResult(new ProblemDetails { Title = "Member not found." });
+        }
+
+        if (targets.Exists(t => !MayAdminister(role, t.Role)))
+        {
+            return ActorAccess.Forbidden("Managers can only manage Agents.");
+        }
+
+        if (toAdd.Count > 0 && !skill.IsActive)
+        {
+            return new BadRequestObjectResult(new ProblemDetails { Title = "Unknown or inactive skill." });
+        }
+
+        var existing = await db.MemberSkills.Where(m => m.SkillId == skillId && ids.Contains(m.MembershipId)).ToListAsync(ct);
+        var holders = existing.Select(m => m.MembershipId).ToHashSet();
+        var added = toAdd.Where(id => !holders.Contains(id)).ToList();
+        var removed = existing.Where(m => toRemove.Contains(m.MembershipId)).ToList();
+        if (added.Count == 0 && removed.Count == 0)
+        {
+            return new SkillAssignmentResultDto(0, 0); // everyone already matched: nothing to write or audit
+        }
+
+        if (added.Count > 0)
+        {
+            var full = await db.MemberSkills.Where(m => added.Contains(m.MembershipId))
+                .GroupBy(m => m.MembershipId)
+                .Where(g => g.Count() >= MaxSkillsPerMember)
+                .AnyAsync(ct);
+            if (full)
+            {
+                return new BadRequestObjectResult(new ProblemDetails { Title = $"A member can have at most {MaxSkillsPerMember} skills." });
+            }
+        }
+
+        var now = clock.GetUtcNow().UtcDateTime;
+        db.MemberSkills.RemoveRange(removed);
+        db.MemberSkills.AddRange(added.ConvertAll(id => MemberSkill.Create(skill.TenantId, id, skill.Id, now)));
+        foreach (var id in added)
+        {
+            Audit(skill.TenantId, AuditAction.MemberSkillsChanged, id, skill.Id, $"{skill.Name} added", now);
+        }
+
+        foreach (var row in removed)
+        {
+            Audit(skill.TenantId, AuditAction.MemberSkillsChanged, row.MembershipId, skill.Id, $"{skill.Name} removed", now);
+        }
+
+        return await CommitAsync(transaction, UniqueConstraintKind.MemberSkill, ct) is { } failure
+            ? failure
+            : new SkillAssignmentResultDto(added.Count, removed.Count);
     }
 
     public async Task<ActionResult<SkillDto>> CreateSkillAsync(string name, CancellationToken ct)
@@ -486,12 +604,13 @@ public sealed class TeamService(
             .Select(g => new { g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.Key, x => x.Count, ct);
 
-    private async Task<Dictionary<Guid, IReadOnlyList<SkillDto>>> SkillsOfAsync(List<Guid> ids, CancellationToken ct) =>
+    private async Task<Dictionary<Guid, IReadOnlyList<SkillDto>>> SkillsOfAsync(List<Guid> ids, bool includeInactive, CancellationToken ct) =>
         (
             await (
                 from ms in db.MemberSkills.AsNoTracking()
                 where ids.Contains(ms.MembershipId)
                 join s in db.Skills on ms.SkillId equals s.Id
+                where includeInactive || s.IsActive
                 orderby s.Name
                 select new { ms.MembershipId, Dto = new SkillDto(s.Id, s.Name, s.IsActive) }
             ).ToListAsync(ct)

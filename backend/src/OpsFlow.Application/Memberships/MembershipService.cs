@@ -28,6 +28,7 @@ public sealed partial class MembershipService(
     private const int MaxListedOpenWork = 20;
     public const string OpenWorkCode = "MEMBER_HAS_OPEN_WORK";
     public const string StaleCode = "MEMBER_CHANGED";
+    public const string SelfDemotionCode = "OWNER_SELF_DEMOTION";
 
     public async Task<PagedResult<MemberDto>> ListAsync(
         int page,
@@ -175,7 +176,24 @@ public sealed partial class MembershipService(
                     u => u.Id == member.UserId && u.Status == UserStatus.Active,
                     ct
                 );
+            var wasOwner = member.Role == TenantRole.TenantOwner;
             change(member);
+
+            // An Owner cannot give up their own Owner role; another Owner has to do it. Suspension is not a role change and stays possible.
+            if (
+                action == AuditAction.MemberRoleChanged
+                && wasOwner
+                && member.Role != TenantRole.TenantOwner
+                && member.UserId == currentUser.UserId
+            )
+            {
+                return Problem(
+                    StatusCodesForbidden,
+                    "You cannot change your own Owner role.",
+                    "Ask another Owner to change your role.",
+                    SelfDemotionCode
+                );
+            }
 
             if (removesUsableOwner && !member.IsActiveOwner)
             {
@@ -244,6 +262,7 @@ public sealed partial class MembershipService(
     }
 
     private const int StatusCodesConflict = 409;
+    private const int StatusCodesForbidden = 403;
 
     /// <summary>
     /// The member's responsibilities that would stop counting: open assignments and unfinished tasks on tickets that are not yet resolved

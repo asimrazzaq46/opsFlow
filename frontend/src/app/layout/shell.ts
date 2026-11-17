@@ -30,6 +30,7 @@ import { RealtimeService } from '../core/realtime/realtime.service';
 import { ThemeService } from '../core/services/theme.service';
 import { initials } from '../features/workspaces/workspace-api';
 import { Language, LanguageService, SUPPORTED_LANGUAGES } from '../i18n/language.service';
+import { ConfirmDialog } from '../shared/components/confirm-dialog/confirm-dialog';
 import { HealthStatus } from '../shared/components/health-status';
 import { NotificationCenter } from './notification-center';
 
@@ -43,11 +44,12 @@ import { NotificationCenter } from './notification-center';
     TranslatePipe,
     HealthStatus,
     NotificationCenter,
+    ConfirmDialog,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './shell.html',
   styleUrl: './shell.css',
-  host: { '(document:keydown.escape)': 'menuOpen() && closeMenu()' },
+  host: { '(document:keydown.escape)': 'menuOpen() && !hasOpenDialog() && closeMenu()' },
 })
 export class Shell {
   protected readonly auth = inject(AuthService);
@@ -65,6 +67,12 @@ export class Shell {
   protected readonly menuOpen = signal(false);
   private readonly menuButton = viewChild<ElementRef<HTMLButtonElement>>('menuButton');
   private readonly closeButton = viewChild<ElementRef<HTMLButtonElement>>('closeButton');
+  private readonly tenantSelect = viewChild<ElementRef<HTMLSelectElement>>('tenantSelect');
+  private readonly switchDialog = viewChild.required<ConfirmDialog>('switchDialog');
+  private readonly logoutDialog = viewChild.required<ConfirmDialog>('logoutDialog');
+  /** Workspace awaiting confirmation; null when no switch dialog is open. */
+  protected readonly switchTarget = signal<{ id: string; name: string } | null>(null);
+  private loggingOut = false;
 
   // Role-aware navigation shapes the UX only; the backend authorizes every request. Same rule as the route guard (`canAccess`).
   protected readonly navItems = computed(() => {
@@ -123,6 +131,11 @@ export class Shell {
       });
   }
 
+  /** Escape belongs to an open confirmation dialog; it must not also close the sidebar and steal focus. */
+  protected hasOpenDialog(): boolean {
+    return !!document.querySelector('dialog[open]');
+  }
+
   protected openMenu(): void {
     this.menuOpen.set(true);
     setTimeout(() => this.closeButton()?.nativeElement.focus());
@@ -133,8 +146,46 @@ export class Shell {
     if (restoreFocus) this.menuButton()?.nativeElement.focus();
   }
 
+  /** Only a different workspace asks for confirmation; the dropdown keeps showing the active one until the user confirms. */
   protected selectTenant(event: Event): void {
-    this.tenant.select((event.target as HTMLSelectElement).value);
+    const id = (event.target as HTMLSelectElement).value;
+    const target = this.tenant.organizations().find((o) => o.id === id);
+    if (!target || id === this.tenant.tenantId() || this.switchTarget()) {
+      this.restoreTenantSelect();
+      return;
+    }
+    this.switchTarget.set(target);
+    this.switchDialog().open();
+  }
+
+  protected confirmSwitch(): void {
+    const target = this.switchTarget();
+    if (!target) return;
+    this.switchTarget.set(null); // a second click on Confirm finds nothing to do
+    this.tenant.select(target.id);
+    this.switchDialog().close();
+  }
+
+  /** Runs on every close (Cancel, Escape, after Confirm): the select must mirror the workspace that is actually active. */
+  protected switchClosed(): void {
+    this.switchTarget.set(null);
+    this.restoreTenantSelect();
+  }
+
+  protected askLogout(): void {
+    this.logoutDialog().open();
+  }
+
+  protected confirmLogout(): void {
+    if (this.loggingOut) return;
+    this.loggingOut = true;
+    this.logoutDialog().close();
+    this.auth.logout();
+  }
+
+  private restoreTenantSelect(): void {
+    const select = this.tenantSelect()?.nativeElement;
+    if (select) select.value = this.tenant.tenantId() ?? '';
   }
 
   protected setLanguage(lang: Language): void {
