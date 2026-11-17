@@ -40,6 +40,7 @@
     "menu": "Navigazione principale",
     "account": "Account",
     "workspaces": "Workspace",
+    "settings": "Organizzazione",
     "sidebar": "Barra laterale dell'applicazione",
     "operations": "Operatività",
     "preferences": "Preferenze",
@@ -52,6 +53,7 @@
     "password": "Password",
     "submit": "Accedi",
     "signOut": "Esci",
+    "signOutUnsavedMessage": "Hai impostazioni dell'organizzazione non salvate. Uscendo andranno perse.",
     "signOutTitle": "Uscire?",
     "signOutMessage": "Verrai disconnesso da OpsFlow su questo dispositivo.",
     "invalid": "Accesso non riuscito. Controlla email e password.",
@@ -62,6 +64,7 @@
     "switchTitle": "Cambiare spazio di lavoro?",
     "switchMessage": "Stai per passare a \"{{name}}\". Le viste verranno ricaricate per quello spazio di lavoro.",
     "switchConfirm": "Cambia",
+    "switchUnsavedMessage": "Hai impostazioni dell'organizzazione non salvate. Passando a \"{{name}}\" andranno perse.",
     "none": "Nessuno spazio di lavoro disponibile."
   },
   "tickets": {
@@ -911,6 +914,42 @@
       "rateLimited": "Troppi tentativi. Attendi un minuto e riprova.",
       "generic": "Accesso con Google non riuscito. Riprova."
     }
+  },
+  "settings": {
+    "title": "Impostazioni dell'organizzazione",
+    "subtitle": "Controlla come viene identificato questo spazio di lavoro e quale fuso orario guida i suoi report.",
+    "readOnlyNotice": "Solo un Owner può modificare queste impostazioni. Qui puoi consultarle.",
+    "loadError": "Impossibile caricare le impostazioni dell'organizzazione.",
+    "saveError": "Impossibile salvare le impostazioni dell'organizzazione.",
+    "notFound": "Impossibile trovare questa organizzazione.",
+    "saved": "Impostazioni salvate.",
+    "save": "Salva modifiche",
+    "edit": "Modifica",
+    "conflict": "L'organizzazione è stata modificata contemporaneamente. Le tue modifiche sono conservate; ricarica per vedere i valori attuali oppure salva di nuovo.",
+    "reload": "Ricarica i valori attuali",
+    "general": {
+      "title": "Generale",
+      "subtitle": "Come il tuo team e i clienti identificano questa organizzazione."
+    },
+    "regional": {
+      "title": "Regionale",
+      "subtitle": "Usato per dashboard, report ed esportazioni CSV su base giornaliera."
+    },
+    "name": "Nome dell'organizzazione",
+    "nameHint": "Da 2 a 100 caratteri. Mostrato nel selettore dello spazio di lavoro e nelle intestazioni.",
+    "slug": "Slug dello spazio di lavoro",
+    "slugHint": "Sola lettura. Modificarlo romperebbe gli identificatori esistenti.",
+    "prefix": "Prefisso numero ticket",
+    "prefixHint": "Sola lettura. Modificarlo riscriverebbe i numeri dei ticket esistenti.",
+    "timezone": "Fuso orario dei report",
+    "timezoneHint": "Un id IANA esatto come Europe/Rome, oppure UTC. Il fuso orario del browser non viene mai applicato automaticamente.",
+    "validation": {
+      "name": "Usa da 2 a 100 caratteri senza caratteri di controllo o invisibili.",
+      "timezone": "Scegli un fuso orario dall'elenco."
+    },
+    "leaveTitle": "Scartare le modifiche non salvate?",
+    "leaveMessage": "Hai impostazioni dell'organizzazione non salvate. Continuando andranno perse.",
+    "leaveConfirm": "Scarta"
   },
   "account": {
     "title": "Impostazioni account",

@@ -40,6 +40,7 @@
     "menu": "Main navigation",
     "account": "Account",
     "workspaces": "Workspaces",
+    "settings": "Organization",
     "sidebar": "Application sidebar",
     "operations": "Operations",
     "preferences": "Preferences",
@@ -52,6 +53,7 @@
     "password": "Password",
     "submit": "Sign in",
     "signOut": "Sign out",
+    "signOutUnsavedMessage": "You have unsaved organization settings. Signing out discards them.",
     "signOutTitle": "Sign out?",
     "signOutMessage": "You will be signed out of OpsFlow on this device.",
     "invalid": "Sign-in failed. Check your email and password.",
@@ -62,6 +64,7 @@
     "switchTitle": "Switch workspace?",
     "switchMessage": "You are about to switch to \"{{name}}\". Views will reload for that workspace.",
     "switchConfirm": "Switch",
+    "switchUnsavedMessage": "You have unsaved organization settings. Switching to \"{{name}}\" discards them.",
     "none": "No workspace available."
   },
   "tickets": {
@@ -911,6 +914,42 @@
       "rateLimited": "Too many attempts. Please wait a minute and try again.",
       "generic": "Google sign-in failed. Please try again."
     }
+  },
+  "settings": {
+    "title": "Organization settings",
+    "subtitle": "Review how this workspace is identified and which timezone drives its reports.",
+    "readOnlyNotice": "Only an Owner can change these settings. You can view them here.",
+    "loadError": "Could not load the organization settings.",
+    "saveError": "Could not save the organization settings.",
+    "notFound": "This organization could not be found.",
+    "saved": "Settings saved.",
+    "save": "Save changes",
+    "edit": "Edit",
+    "conflict": "The organization was changed concurrently. Your input is kept; reload to see the current values, or save again.",
+    "reload": "Reload current values",
+    "general": {
+      "title": "General",
+      "subtitle": "How your team and customers identify this organization."
+    },
+    "regional": {
+      "title": "Regional",
+      "subtitle": "Used for day-based dashboards, reports and CSV exports."
+    },
+    "name": "Organization name",
+    "nameHint": "2 to 100 characters. Shown in the workspace selector and page headers.",
+    "slug": "Workspace slug",
+    "slugHint": "Read-only. Changing it would break existing identifiers.",
+    "prefix": "Ticket number prefix",
+    "prefixHint": "Read-only. Changing it would rewrite existing ticket numbers.",
+    "timezone": "Reporting timezone",
+    "timezoneHint": "An exact IANA id such as Europe/Rome, or UTC. Your browser's timezone is never applied automatically.",
+    "validation": {
+      "name": "Use 2 to 100 characters without control or invisible characters.",
+      "timezone": "Choose a timezone from the list."
+    },
+    "leaveTitle": "Discard unsaved changes?",
+    "leaveMessage": "You have unsaved organization settings. Continuing discards them.",
+    "leaveConfirm": "Discard"
   },
   "account": {
     "title": "Account settings",
