@@ -234,10 +234,7 @@
     <app-confirm-dialog
       #switchDialog
       [title]="'tenant.switchTitle' | translate"
-      [message]="
-        (unsaved.dirty() ? 'tenant.switchUnsavedMessage' : 'tenant.switchMessage')
-          | translate: { name: switchTarget()?.name ?? '' }
-      "
+      [message]="switchMessageKey() | translate: { name: switchTarget()?.name ?? '' }"
       [confirmLabel]="'tenant.switchConfirm' | translate"
       (confirmed)="confirmSwitch()"
       (closed)="switchClosed()"
@@ -245,7 +242,7 @@
     <app-confirm-dialog
       #logoutDialog
       [title]="'auth.signOutTitle' | translate"
-      [message]="(unsaved.dirty() ? 'auth.signOutUnsavedMessage' : 'auth.signOutMessage') | translate"
+      [message]="signOutMessageKey() | translate"
       [confirmLabel]="'auth.signOut' | translate"
       (confirmed)="confirmLogout()"
     />

@@ -56,6 +56,21 @@ export class WorkspaceLayout {
   protected readonly auth = inject(AuthService);
   protected readonly tenant = inject(TenantService);
   protected readonly unsaved = inject(UnsavedChanges);
+  /** Warning text follows the form that is actually dirty; organization settings keep their own wording. */
+  protected readonly switchMessageKey = computed(() =>
+    !this.unsaved.dirty()
+      ? 'tenant.switchMessage'
+      : this.unsaved.kind() === 'deadlines'
+        ? 'settings.sla.unsavedMessage'
+        : 'tenant.switchUnsavedMessage',
+  );
+  protected readonly signOutMessageKey = computed(() =>
+    !this.unsaved.dirty()
+      ? 'auth.signOutMessage'
+      : this.unsaved.kind() === 'deadlines'
+        ? 'settings.sla.unsavedMessage'
+        : 'auth.signOutUnsavedMessage',
+  );
   protected readonly realtime = inject(RealtimeService);
   protected readonly theme = inject(ThemeService);
   protected readonly language = inject(LanguageService);

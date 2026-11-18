@@ -1000,7 +1000,6 @@
       }
     },
     "sla": {
-      "title": "SLA policies",
       "subtitle": "Response and resolution targets for each ticket priority in this workspace.",
       "rulesTitle": "How changes take effect",
       "ruleNewTickets": "A change applies to tickets created after it is saved.",
@@ -1035,6 +1034,7 @@
       "saved": "The {{priority}} targets were saved.",
       "leaveTitle": "Discard unsaved changes?",
       "leaveMessage": "You have unsaved SLA targets. Continuing discards them.",
+      "unsavedMessage": "You have unsaved deadline changes. Discard them and continue?",
       "errors": {
         "invalid": "The targets are not valid. Check the values and try again.",
         "notFound": "This policy no longer exists. The list was refreshed.",

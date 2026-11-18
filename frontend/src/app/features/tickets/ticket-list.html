@@ -127,7 +127,7 @@
         <label class="sr-only" for="f-category">{{ 'tickets.form.category' | translate }}</label>
         <select
           id="f-category"
-          class="ops-select max-w-56"
+          class="ops-select max-w-xs"
           (change)="setFilter('category', $event)"
         >
           <option value="" [selected]="!query().categoryId">

@@ -1000,7 +1000,6 @@
       }
     },
     "sla": {
-      "title": "Policy SLA",
       "subtitle": "Obiettivi di prima risposta e risoluzione per ogni priorità dei ticket di questo spazio di lavoro.",
       "rulesTitle": "Quando le modifiche hanno effetto",
       "ruleNewTickets": "Una modifica si applica ai ticket creati dopo il salvataggio.",
@@ -1035,6 +1034,7 @@
       "saved": "Obiettivi della priorità {{priority}} salvati.",
       "leaveTitle": "Eliminare le modifiche non salvate?",
       "leaveMessage": "Hai obiettivi SLA non salvati. Continuando andranno persi.",
+      "unsavedMessage": "Hai modifiche alle scadenze non salvate. Vuoi scartarle e continuare?",
       "errors": {
         "invalid": "Gli obiettivi non sono validi. Controlla i valori e riprova.",
         "notFound": "Questa policy non esiste più. L'elenco è stato aggiornato.",

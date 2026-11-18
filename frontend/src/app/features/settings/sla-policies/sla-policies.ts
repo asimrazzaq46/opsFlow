@@ -154,13 +154,12 @@ export class SlaPolicies {
 
   private readonly formats = computed(() => {
     const locale = this.lang.current();
-    const make = (unit: string, unitDisplay: 'long' | 'short') =>
-      new Intl.NumberFormat(locale, { style: 'unit', unit, unitDisplay });
+    const make = (unit: string) =>
+      new Intl.NumberFormat(locale, { style: 'unit', unit, unitDisplay: 'long' });
     return {
-      minutes: make('minute', 'long'),
-      hours: make('hour', 'long'),
-      days: make('day', 'long'),
-      shortMinutes: make('minute', 'short'),
+      minutes: make('minute'),
+      hours: make('hour'),
+      days: make('day'),
     };
   });
 
@@ -189,7 +188,11 @@ export class SlaPolicies {
       if (!this.canEdit()) untracked(() => this.exitEdit());
     });
     // The shell reads this to warn before a workspace switch or sign-out.
-    effect(() => this.unsaved.dirty.set(this.dirty()));
+    effect(() => {
+      const dirty = this.dirty();
+      if (dirty) this.unsaved.kind.set('deadlines');
+      this.unsaved.dirty.set(dirty);
+    });
     inject(DestroyRef).onDestroy(() => {
       this.request?.unsubscribe();
       this.unsaved.dirty.set(false);
@@ -325,12 +328,6 @@ export class SlaPolicies {
   protected duration(minutes: number | string): string {
     const { amount, unit } = splitMinutes(Number(minutes));
     return this.formats()[unit].format(amount);
-  }
-
-  /** Exact stored minutes, only worth showing when the main label uses a larger unit. */
-  protected exact(minutes: number | string): string | null {
-    const value = Number(minutes);
-    return splitMinutes(value).unit === 'minutes' ? null : this.formats().shortMinutes.format(value);
   }
 
   private policyFor(priority: TicketPriority): SlaPolicyDto | null {

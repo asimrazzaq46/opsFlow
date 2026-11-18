@@ -95,11 +95,6 @@
                         <span class="ms text-[16px] text-primary" aria-hidden="true">timer</span>
                         <span class="font-semibold">{{ duration(p.responseMinutes) }}</span>
                       </span>
-                      <!-- @if (exact(p.responseMinutes); as exactText) {
-                          <span class="block pl-6 text-body-sm text-on-surface-variant">{{
-                            exactText
-                          }}</span>
-                        } -->
                     </td>
                     <td class="px-3 py-3">
                       <span
@@ -108,11 +103,6 @@
                         <span class="ms text-[16px] text-primary" aria-hidden="true">flag</span>
                         <span class="font-semibold">{{ duration(p.resolutionMinutes) }}</span>
                       </span>
-                      <!-- @if (exact(p.resolutionMinutes); as exactText) {
-                          <span class="block pl-6 text-body-sm text-on-surface-variant">{{
-                            exactText
-                          }}</span>
-                        } -->
                     </td>
                   } @else {
                     <td colspan="2" class="px-3 py-3">
