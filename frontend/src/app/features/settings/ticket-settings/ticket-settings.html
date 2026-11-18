@@ -1,0 +1,53 @@
+<div class="mx-auto flex max-w-4xl flex-col gap-4">
+  <div class="relative overflow-hidden rounded-lg bg-surface-container-lowest p-6 shadow-sm">
+    <div
+      class="pointer-events-none absolute -top-24 -right-16 size-80 rounded-full bg-primary/5 blur-3xl"
+      aria-hidden="true"
+    ></div>
+    <div class="relative z-10 min-w-0">
+      <h1 class="text-headline-lg tracking-tight text-on-surface sm:text-headline-xl">
+        {{ 'settings.tickets.title' | translate }}
+      </h1>
+      <p class="mt-1 text-body-md text-on-surface-variant">{{ 'settings.tickets.subtitle' | translate }}</p>
+    </div>
+  </div>
+
+  <div
+    #tablist
+    role="tablist"
+    aria-orientation="horizontal"
+    class="flex gap-1 overflow-x-auto rounded-lg bg-surface-container-low p-1"
+    [attr.aria-label]="'settings.tickets.tablistLabel' | translate"
+    (keydown)="onKeydown($event)"
+  >
+    @for (t of tabs(); track t.id) {
+      <button
+        type="button"
+        role="tab"
+        class="flex min-h-10 shrink-0 items-center gap-2 rounded-md px-4 text-headline-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary-container"
+        [class]="
+          active() === t.id
+            ? 'bg-surface-container-lowest font-semibold text-primary shadow-[inset_0_-2px_0_var(--ops-primary-container)]'
+            : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
+        "
+        [id]="'ticket-settings-tab-' + t.id"
+        aria-controls="ticket-settings-panel"
+        [attr.aria-selected]="active() === t.id"
+        [attr.tabindex]="active() === t.id ? 0 : -1"
+        (click)="select(t.id)"
+      >
+        <span class="ms text-[18px]" aria-hidden="true">{{ t.icon }}</span>
+        <span>{{ t.label | translate }}</span>
+      </button>
+    }
+  </div>
+
+  <div
+    id="ticket-settings-panel"
+    role="tabpanel"
+    class="flex flex-col gap-4"
+    [attr.aria-labelledby]="'ticket-settings-tab-' + active()"
+  >
+    <router-outlet />
+  </div>
+</div>

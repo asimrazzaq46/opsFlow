@@ -120,6 +120,18 @@ export class TicketEdit implements OnInit, OnDestroy {
     stream: () => this.api.categories(),
   });
 
+  /**
+   * Active categories plus the ticket's persisted one: an inactive category stays visible and keepable, but can never be newly chosen.
+   * The server list only holds active categories, so the persisted name comes from the ticket itself.
+   */
+  protected readonly categoryOptions = computed(() => {
+    const active = (this.categories.hasValue() ? this.categories.value() : []).filter((c) => c.isActive);
+    const current = this.base()?.summary;
+    return current && !active.some((c) => c.id === current.categoryId)
+      ? [{ id: current.categoryId, name: current.categoryName }, ...active]
+      : active;
+  });
+
   /** The page received a newer version (realtime) while the user was editing: warn before they hit a conflict. */
   protected readonly staleBase = computed(
     () =>
@@ -286,8 +298,10 @@ export class TicketEdit implements OnInit, OnDestroy {
   }
 
   private display(field: Field, value: string): string {
-    if (field === 'categoryId')
-      return this.categories.value()?.find((c) => c.id === value)?.name ?? value;
-    return value;
+    if (field !== 'categoryId') return value;
+    // Persisted names first: the active list lacks inactive categories, which would otherwise show as a raw id.
+    for (const t of [this.base(), this.conflict(), this.ticket()])
+      if (t?.summary.categoryId === value) return t.summary.categoryName;
+    return this.categories.hasValue() ? (this.categories.value().find((c) => c.id === value)?.name ?? value) : value;
   }
 }

@@ -133,6 +133,11 @@
           <option value="" [selected]="!query().categoryId">
             {{ 'tickets.form.category' | translate }}: {{ 'filters.any' | translate }}
           </option>
+          @if (unlistedCategoryId(); as id) {
+            <option [value]="id" selected>
+              {{ 'tickets.form.category' | translate }}: {{ 'tickets.list.unlistedCategory' | translate }}
+            </option>
+          }
           @for (c of categories.value() ?? []; track c.id) {
             <option [value]="c.id" [selected]="query().categoryId === c.id">{{ c.name }}</option>
           }

@@ -1,0 +1,322 @@
+<div class="flex flex-col gap-4">
+  @if (!canView()) {
+    <p role="alert" class="text-on-surface-variant">{{ 'common.forbidden' | translate }}</p>
+  } @else {
+    <div class="min-w-0">
+      <h2 class="text-headline-lg text-on-surface">
+        {{ 'settings.tickets.deadlinesHeading' | translate }}
+      </h2>
+      <p class="mt-1 text-body-md text-on-surface-variant">
+        {{ 'settings.sla.subtitle' | translate }}
+      </p>
+    </div>
+
+    <div
+      class="flex gap-3 rounded-lg bg-surface-container-low px-4 py-3 text-body-sm text-on-surface-variant"
+    >
+      <span class="ms text-[20px] text-primary" aria-hidden="true">info</span>
+      <div class="flex flex-col gap-1">
+        <p class="font-semibold text-on-surface">{{ 'settings.sla.rulesTitle' | translate }}</p>
+        <ul class="list-disc space-y-0.5 pl-5">
+          <li>{{ 'settings.sla.ruleNewTickets' | translate }}</li>
+          <li>{{ 'settings.sla.ruleExisting' | translate }}</li>
+          <li>{{ 'settings.sla.rulePriorityReopen' | translate }}</li>
+          <li>{{ 'settings.sla.ruleCalendar' | translate }}</li>
+        </ul>
+      </div>
+    </div>
+
+    @if (!canEdit()) {
+      <p
+        class="flex items-center gap-2 rounded-lg bg-surface-container-low px-4 py-3 text-body-sm text-on-surface-variant"
+      >
+        <span class="ms text-[18px]" aria-hidden="true">lock</span
+        >{{ 'settings.sla.readOnlyNotice' | translate }}
+      </p>
+    }
+
+    @if (message(); as m) {
+      <p class="text-body-sm text-on-surface" role="status">
+        {{
+          m.key
+            | translate: { priority: ('tickets.priority.' + m.params?.['priority'] | translate) }
+        }}
+      </p>
+    }
+
+    <section
+      class="ops-card overflow-hidden"
+      [attr.aria-label]="'settings.tickets.deadlinesHeading' | translate"
+      [attr.aria-busy]="loading()"
+    >
+      @if (loadError(); as key) {
+        <p role="alert" class="p-4 text-body-sm text-error">
+          {{ key | translate }}
+          <button type="button" class="ops-link underline" (click)="load()">
+            {{ 'common.retry' | translate }}
+          </button>
+        </p>
+      } @else if (rows(); as list) {
+        <div class="overflow-x-auto" [class.opacity-60]="loading()">
+          <table class="w-full min-w-[34rem] border-collapse text-left">
+            <caption class="sr-only">
+              {{
+                'settings.sla.caption' | translate
+              }}
+            </caption>
+            <thead class="bg-surface-container-low">
+              <tr>
+                <th scope="col" class="ops-th">{{ 'settings.sla.priority' | translate }}</th>
+                <th scope="col" class="ops-th">{{ 'settings.sla.response' | translate }}</th>
+                <th scope="col" class="ops-th">{{ 'settings.sla.resolution' | translate }}</th>
+                <th scope="col" class="ops-th">
+                  <span class="sr-only">{{ 'team.actions' | translate }}</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-outline-variant/40">
+              @for (r of list; track r.priority) {
+                <tr [class.bg-surface-container-low]="editing() === r.priority">
+                  <th scope="row" class="px-3 py-3 text-left">
+                    <span class="flex items-center gap-2 font-semibold text-on-surface">
+                      <span
+                        class="size-2.5 shrink-0 rounded-full"
+                        [class]="dot[r.priority]"
+                        aria-hidden="true"
+                      ></span>
+                      {{ 'tickets.priority.' + r.priority | translate }}
+                    </span>
+                  </th>
+                  @if (r.policy; as p) {
+                    <td class="px-3 py-3">
+                      <span
+                        class="flex items-center gap-2 font-mono text-mono-data text-on-surface"
+                      >
+                        <span class="ms text-[16px] text-primary" aria-hidden="true">timer</span>
+                        <span class="font-semibold">{{ duration(p.responseMinutes) }}</span>
+                      </span>
+                      <!-- @if (exact(p.responseMinutes); as exactText) {
+                          <span class="block pl-6 text-body-sm text-on-surface-variant">{{
+                            exactText
+                          }}</span>
+                        } -->
+                    </td>
+                    <td class="px-3 py-3">
+                      <span
+                        class="flex items-center gap-2 font-mono text-mono-data text-on-surface"
+                      >
+                        <span class="ms text-[16px] text-primary" aria-hidden="true">flag</span>
+                        <span class="font-semibold">{{ duration(p.resolutionMinutes) }}</span>
+                      </span>
+                      <!-- @if (exact(p.resolutionMinutes); as exactText) {
+                          <span class="block pl-6 text-body-sm text-on-surface-variant">{{
+                            exactText
+                          }}</span>
+                        } -->
+                    </td>
+                  } @else {
+                    <td colspan="2" class="px-3 py-3">
+                      <span class="ops-badge gap-1 bg-error-container text-on-error-container">
+                        <span class="ms text-[14px]" aria-hidden="true">warning</span>
+                        {{ 'settings.sla.missing' | translate }}
+                      </span>
+                      <span class="mt-1 block text-body-sm text-on-surface-variant">{{
+                        'settings.sla.missingHint' | translate
+                      }}</span>
+                    </td>
+                  }
+                  <td class="px-3 py-3 text-right">
+                    @if (canEdit()) {
+                      @if (editing() === r.priority) {
+                        <span class="ops-badge bg-primary-fixed text-on-primary-fixed">{{
+                          'settings.sla.editing' | translate
+                        }}</span>
+                      } @else {
+                        <button
+                          type="button"
+                          [id]="'sla-edit-' + r.priority"
+                          class="inline-flex h-9 min-w-9 items-center justify-center gap-1.5 rounded-sm border border-outline-variant bg-surface-container-lowest px-2 text-body-sm font-semibold text-primary shadow-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-container enabled:hover:border-primary enabled:hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-50 sm:min-w-24 sm:px-3.5"
+                          [attr.aria-label]="
+                            ((r.policy ? 'settings.sla.edit' : 'settings.sla.create') | translate) +
+                            ': ' +
+                            ('tickets.priority.' + r.priority | translate)
+                          "
+                          [disabled]="!!editing() || busy()"
+                          (click)="startEdit(r.priority)"
+                        >
+                          <span class="ms text-[18px]" aria-hidden="true">{{
+                            r.policy ? 'edit' : 'add'
+                          }}</span>
+                          <span class="hidden sm:inline" aria-hidden="true">{{
+                            (r.policy ? 'settings.sla.edit' : 'settings.sla.create') | translate
+                          }}</span>
+                        </button>
+                      }
+                    } @else {
+                      <span class="text-body-sm text-on-surface-variant" aria-hidden="true">—</span>
+                    }
+                  </td>
+                </tr>
+                @if (editing() === r.priority) {
+                  <tr class="bg-surface-container-low">
+                    <td colspan="4" class="px-3 pt-2 pb-4">
+                      <form
+                        [formGroup]="form"
+                        (submit)="$event.preventDefault(); save()"
+                        class="flex flex-col gap-4"
+                        novalidate
+                        [attr.aria-label]="'tickets.priority.' + r.priority | translate"
+                      >
+                        <div class="grid gap-4 sm:grid-cols-2">
+                          <fieldset class="flex min-w-0 flex-col gap-1" [disabled]="busy()">
+                            <legend class="ops-label mb-1">
+                              {{ 'settings.sla.response' | translate }}
+                            </legend>
+                            <div
+                              class="flex h-10 w-full items-stretch overflow-hidden rounded-sm border bg-surface-container-lowest shadow-sm transition-shadow dark:bg-surface-container"
+                              [class]="
+                                responseError()
+                                  ? 'border-error ring-1 ring-error focus-within:ring-2'
+                                  : 'border-outline focus-within:border-primary-container focus-within:ring-2 focus-within:ring-primary-container'
+                              "
+                            >
+                              <label class="sr-only" for="sla-response-amount">{{
+                                'settings.sla.amount' | translate
+                              }}</label>
+                              <input
+                                id="sla-response-amount"
+                                type="number"
+                                inputmode="decimal"
+                                step="any"
+                                min="0"
+                                formControlName="responseAmount"
+                                class="min-w-0 flex-1 bg-transparent px-3 text-body-md text-on-surface outline-none placeholder:text-outline disabled:opacity-60"
+                                [attr.aria-invalid]="!!responseError()"
+                                [attr.aria-describedby]="
+                                  responseError() ? 'sla-response-error' : null
+                                "
+                              />
+                              <label class="sr-only" for="sla-response-unit">{{
+                                'settings.sla.unit' | translate
+                              }}</label>
+                              <select
+                                id="sla-response-unit"
+                                formControlName="responseUnit"
+                                class="h-full shrink-0 cursor-pointer border-l border-outline-variant bg-surface-container-lowest pr-2 pl-3 text-body-sm font-medium text-on-surface outline-none hover:bg-surface-container-low dark:bg-surface-container dark:hover:bg-surface-container-high"
+                              >
+                                @for (u of units; track u) {
+                                  <option [value]="u">
+                                    {{ 'settings.sla.units.' + u | translate }}
+                                  </option>
+                                }
+                              </select>
+                            </div>
+                            @if (responseError(); as err) {
+                              <p id="sla-response-error" role="alert" class="ops-error">
+                                {{
+                                  'settings.sla.validation.' + err | translate
+                                }}
+                              </p>
+                            }
+                          </fieldset>
+                          <fieldset class="flex min-w-0 flex-col gap-1" [disabled]="busy()">
+                            <legend class="ops-label mb-1">
+                              {{ 'settings.sla.resolution' | translate }}
+                            </legend>
+                            <div
+                              class="flex h-10 w-full items-stretch overflow-hidden rounded-sm border bg-surface-container-lowest shadow-sm transition-shadow dark:bg-surface-container"
+                              [class]="
+                                resolutionError()
+                                  ? 'border-error ring-1 ring-error focus-within:ring-2'
+                                  : 'border-outline focus-within:border-primary-container focus-within:ring-2 focus-within:ring-primary-container'
+                              "
+                            >
+                              <label class="sr-only" for="sla-resolution-amount">{{
+                                'settings.sla.amount' | translate
+                              }}</label>
+                              <input
+                                id="sla-resolution-amount"
+                                type="number"
+                                inputmode="decimal"
+                                step="any"
+                                min="0"
+                                formControlName="resolutionAmount"
+                                class="min-w-0 flex-1 bg-transparent px-3 text-body-md text-on-surface outline-none placeholder:text-outline disabled:opacity-60"
+                                [attr.aria-invalid]="!!resolutionError()"
+                                [attr.aria-describedby]="
+                                  resolutionError() ? 'sla-resolution-error' : null
+                                "
+                              />
+                              <label class="sr-only" for="sla-resolution-unit">{{
+                                'settings.sla.unit' | translate
+                              }}</label>
+                              <select
+                                id="sla-resolution-unit"
+                                formControlName="resolutionUnit"
+                                class="h-full shrink-0 cursor-pointer border-l border-outline-variant bg-surface-container-lowest pr-2 pl-3 text-body-sm font-medium text-on-surface outline-none hover:bg-surface-container-low dark:bg-surface-container dark:hover:bg-surface-container-high"
+                              >
+                                @for (u of units; track u) {
+                                  <option [value]="u">
+                                    {{ 'settings.sla.units.' + u | translate }}
+                                  </option>
+                                }
+                              </select>
+                            </div>
+                            @if (resolutionError(); as err) {
+                              <p id="sla-resolution-error" role="alert" class="ops-error">
+                                {{
+                                  'settings.sla.validation.' + err | translate
+                                }}
+                              </p>
+                            }
+                          </fieldset>
+                        </div>
+                        <p class="text-body-sm text-on-surface-variant">
+                          {{ 'settings.sla.formHint' | translate }}
+                        </p>
+                        @if (saveError(); as key) {
+                          <p role="alert" class="text-body-sm text-error">{{ key | translate }}</p>
+                        }
+                        <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                          <button
+                            type="button"
+                            class="ops-btn-secondary w-full sm:w-auto sm:min-w-28"
+                            [disabled]="busy()"
+                            (click)="cancel()"
+                          >
+                            <span class="ms text-[18px]" aria-hidden="true">close</span>
+                            {{ 'common.cancel' | translate }}
+                          </button>
+                          <button
+                            type="submit"
+                            class="ops-btn-primary h-10 w-full px-5 sm:w-auto sm:min-w-36"
+                            [disabled]="busy()"
+                            [attr.aria-busy]="busy()"
+                          >
+                            <span class="ms text-[18px]" aria-hidden="true">check</span>
+                            {{ (busy() ? 'common.saving' : 'settings.sla.save') | translate }}
+                          </button>
+                        </div>
+                      </form>
+                    </td>
+                  </tr>
+                }
+              }
+            </tbody>
+          </table>
+        </div>
+      } @else {
+        <p role="status" class="p-4 text-on-surface-variant">{{ 'common.loading' | translate }}</p>
+      }
+    </section>
+  }
+</div>
+
+<app-confirm-dialog
+  #leaveDialog
+  [title]="'settings.sla.leaveTitle' | translate"
+  [message]="'settings.sla.leaveMessage' | translate"
+  [confirmLabel]="'settings.leaveConfirm' | translate"
+  (confirmed)="leaveConfirmed()"
+  (closed)="leaveClosed()"
+/>

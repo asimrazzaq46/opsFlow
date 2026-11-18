@@ -111,6 +111,14 @@ export class TicketList {
     stream: () => this.api.categories(),
   });
 
+  /** A filtered category the list does not offer (inactive or unknown): shown as such so the active filter is never hidden behind "Any". */
+  protected readonly unlistedCategoryId = computed(() => {
+    const id = this.query().categoryId;
+    if (!id || this.categories.isLoading()) return null;
+    const known = this.categories.hasValue() ? this.categories.value() : [];
+    return known.some((c) => c.id === id) ? null : id;
+  });
+
   protected readonly page = computed(() => {
     const r = this.tickets.hasValue() ? this.tickets.value() : undefined;
     return r && r.tenantId === this.tenant.tenantId() ? r.page : null;

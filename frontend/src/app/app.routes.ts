@@ -1,7 +1,10 @@
-import { Routes } from '@angular/router';
+import { inject } from '@angular/core';
+import { Router, Routes } from '@angular/router';
 import { accessGuard, authGuard, emailLinkGuard, guestGuard } from './core/auth/auth.guard';
 import { RouteAccess } from './core/auth/route-access';
+import { TenantService } from './core/auth/tenant.service';
 import type { OrganizationSettings } from './features/settings/organization-settings';
+import type { SlaPolicies } from './features/settings/sla-policies/sla-policies';
 
 /** `data.access` of a workspace page; the guard, the sidebar and the shell's live revalidation all read it through `canAccess`. */
 const access = (level: RouteAccess) => ({ access: level });
@@ -152,6 +155,45 @@ export const routes: Routes = [
     data: access('staff'),
     loadComponent: () =>
       import('./features/settings/organization-settings').then((m) => m.OrganizationSettings),
+  },
+  // Bookmarks of the former separate pages keep working.
+  { path: 'settings/categories', redirectTo: '/settings/tickets/categories' },
+  { path: 'settings/sla-policies', redirectTo: '/settings/tickets/deadlines' },
+  {
+    path: 'settings/tickets',
+    canActivate: [authGuard, accessGuard],
+    data: access('staff'),
+    loadComponent: () =>
+      import('./features/settings/ticket-settings/ticket-settings').then((m) => m.TicketSettings),
+    children: [
+      {
+        // Runs after the parent guards, so the role is known: Managers start on Categories, Agents on Deadlines.
+        path: '',
+        pathMatch: 'full',
+        canActivate: [
+          () =>
+            inject(Router).createUrlTree([
+              '/settings/tickets',
+              inject(TenantService).isManager() ? 'categories' : 'deadlines',
+            ]),
+        ],
+        children: [],
+      },
+      {
+        path: 'categories',
+        canActivate: [accessGuard],
+        data: access('manager'),
+        loadComponent: () =>
+          import('./features/settings/categories/ticket-categories').then((m) => m.TicketCategories),
+      },
+      {
+        path: 'deadlines',
+        canDeactivate: [(page: SlaPolicies) => page.confirmLeave()],
+        data: access('staff'),
+        loadComponent: () =>
+          import('./features/settings/sla-policies/sla-policies').then((m) => m.SlaPolicies),
+      },
+    ],
   },
   { path: '**', redirectTo: '' },
 ];

@@ -222,11 +222,8 @@
               class="ops-input h-11"
               [attr.aria-invalid]="!!serverErrors()['CategoryId']"
             >
-              @for (c of categories.value() ?? []; track c.id) {
-                <!-- inactive categories stay listed only when they are the current value -->
-                @if (c.isActive || c.id === form.controls.categoryId.value) {
-                  <option [value]="c.id">{{ c.name }}</option>
-                }
+              @for (c of categoryOptions(); track c.id) {
+                <option [value]="c.id">{{ c.name }}</option>
               }
             </select>
           </div>

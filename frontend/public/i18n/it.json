@@ -41,6 +41,7 @@
     "account": "Account",
     "workspaces": "Workspace",
     "settings": "Organizzazione",
+    "ticketSettings": "Impostazioni ticket",
     "sidebar": "Barra laterale dell'applicazione",
     "operations": "Operatività",
     "preferences": "Preferenze",
@@ -157,6 +158,7 @@
       "search": "Cerca ticket",
       "searchPlaceholder": "Cerca per numero o titolo del ticket…",
       "reset": "Azzera filtri",
+      "unlistedCategory": "Inattiva o sconosciuta",
       "range": "{{from}}–{{to}} di {{total}}",
       "results": "Risultati dei ticket",
       "caption": "Ticket corrispondenti ai filtri attuali",
@@ -949,7 +951,98 @@
     },
     "leaveTitle": "Scartare le modifiche non salvate?",
     "leaveMessage": "Hai impostazioni dell'organizzazione non salvate. Continuando andranno perse.",
-    "leaveConfirm": "Scarta"
+    "leaveConfirm": "Scarta",
+    "tickets": {
+      "title": "Impostazioni ticket",
+      "subtitle": "Gestisci le categorie dei ticket e le scadenze di risposta e risoluzione di questo spazio di lavoro.",
+      "tablistLabel": "Sezioni delle impostazioni ticket",
+      "deadlinesHeading": "Scadenze di risposta e risoluzione",
+      "tabs": {
+        "categories": "Categorie",
+        "deadlines": "Scadenze"
+      }
+    },
+    "categories": {
+      "title": "Categorie dei ticket",
+      "subtitle": "Gestisci le categorie usate per classificare i ticket di questo spazio di lavoro. Una categoria disattivata resta sui ticket esistenti ma non può essere scelta per quelli nuovi.",
+      "create": "Crea categoria",
+      "listLabel": "Categorie dei ticket",
+      "caption": "Categorie dei ticket di questo spazio di lavoro",
+      "filterLabel": "Mostra categorie",
+      "filter": {
+        "active": "Solo attive",
+        "all": "Tutte"
+      },
+      "name": "Nome categoria",
+      "nameHint": "Da 2 a 100 caratteri. I nomi sono univoci, senza distinguere maiuscole e minuscole.",
+      "empty": "Nessuna categoria da mostrare.",
+      "rename": "Rinomina",
+      "createTitle": "Crea categoria",
+      "renameTitle": "Rinomina categoria",
+      "saveCreate": "Crea",
+      "saveRename": "Salva",
+      "created": "Categoria \"{{name}}\" creata.",
+      "renamed": "Categoria rinominata in \"{{name}}\".",
+      "activated": "Categoria \"{{name}}\" attivata.",
+      "deactivated": "Categoria \"{{name}}\" disattivata.",
+      "deactivateTitle": "Disattivare la categoria?",
+      "deactivateMessage": "\"{{name}}\" non potrà più essere scelta per i nuovi ticket. I ticket esistenti la mantengono.",
+      "activateTitle": "Attivare la categoria?",
+      "activateMessage": "\"{{name}}\" potrà essere scelta di nuovo per i nuovi ticket.",
+      "validation": {
+        "name": "Usa da 2 a 100 caratteri."
+      },
+      "errors": {
+        "duplicate": "Esiste già una categoria con questo nome.",
+        "invalid": "Il nome non è valido. Usa da 2 a 100 caratteri.",
+        "notFound": "Questa categoria non esiste più. L'elenco è stato aggiornato.",
+        "generic": "Impossibile completare la richiesta. Riprova."
+      }
+    },
+    "sla": {
+      "title": "Policy SLA",
+      "subtitle": "Obiettivi di prima risposta e risoluzione per ogni priorità dei ticket di questo spazio di lavoro.",
+      "rulesTitle": "Quando le modifiche hanno effetto",
+      "ruleNewTickets": "Una modifica si applica ai ticket creati dopo il salvataggio.",
+      "ruleExisting": "Le scadenze dei ticket già aperti non vengono ricalcolate.",
+      "rulePriorityReopen": "La modifica della priorità di un ticket e la riapertura seguono le regole di scadenza già in vigore nello spazio di lavoro.",
+      "ruleCalendar": "Gli obiettivi contano il tempo di calendario, 24 ore su 24. Gli orari di lavoro non vengono applicati.",
+      "readOnlyNotice": "Solo Owner e Manager possono modificare questi obiettivi. Qui puoi consultarli.",
+      "loadError": "Impossibile caricare le policy SLA.",
+      "caption": "Obiettivi SLA per priorità del ticket",
+      "priority": "Priorità",
+      "response": "Prima risposta",
+      "resolution": "Risoluzione",
+      "missing": "Nessuna policy",
+      "missingHint": "Finché non esiste una policy, non è possibile creare ticket con questa priorità né portarvi un ticket.",
+      "editing": "In modifica",
+      "edit": "Modifica",
+      "create": "Crea policy",
+      "save": "Salva obiettivi",
+      "amount": "Quantità",
+      "unit": "Unità",
+      "units": {
+        "minutes": "Minuti",
+        "hours": "Ore",
+        "days": "Giorni"
+      },
+      "formHint": "Imposta una scadenza compresa tra 1 minuto e 365 giorni. Il tempo di risoluzione deve essere uguale o superiore al tempo di prima risposta.",
+      "validation": {
+        "invalid": "Inserisci una durata valida.",
+        "range": "Scegli una durata compresa tra 1 minuto e 365 giorni.",
+        "order": "Il tempo di risoluzione non può essere inferiore al tempo di prima risposta."
+      },
+      "saved": "Obiettivi della priorità {{priority}} salvati.",
+      "leaveTitle": "Eliminare le modifiche non salvate?",
+      "leaveMessage": "Hai obiettivi SLA non salvati. Continuando andranno persi.",
+      "errors": {
+        "invalid": "Gli obiettivi non sono validi. Controlla i valori e riprova.",
+        "notFound": "Questa policy non esiste più. L'elenco è stato aggiornato.",
+        "exists": "Esiste già una policy per questa priorità. L'elenco è stato aggiornato.",
+        "conflict": "La policy è stata modificata in parallelo. L'elenco è stato aggiornato; controlla e salva di nuovo.",
+        "generic": "Impossibile completare la richiesta. Riprova."
+      }
+    }
   },
   "account": {
     "title": "Impostazioni account",

@@ -94,7 +94,7 @@
               <select
                 #tenantSelect
                 id="tenant-select"
-                class="h-11 w-full appearance-none truncate rounded-xl bg-surface-container-low pl-3 pr-8 text-headline-sm text-on-surface transition-colors hover:bg-surface-container-high focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-container"
+                class="h-11 w-full appearance-none truncate rounded-xl border border-outline-variant bg-surface-container-lowest pl-3 pr-8 text-headline-sm text-on-surface transition-colors hover:border-outline hover:bg-surface-container-low focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-container"
                 (change)="selectTenant($event)"
               >
                 @for (o of tenant.organizations(); track o.id) {
@@ -165,10 +165,24 @@
                 routerLink="/settings"
                 routerLinkActive
                 ariaCurrentWhenActive="page"
+                [routerLinkActiveOptions]="{ exact: true }"
                 class="ops-nav-link"
               >
                 <span class="ms text-[20px]" aria-hidden="true">corporate_fare</span
                 ><span>{{ 'nav.settings' | translate }}</span>
+              </a>
+            </li>
+          }
+          @if (tenant.isStaff()) {
+            <li>
+              <a
+                routerLink="/settings/tickets"
+                routerLinkActive
+                ariaCurrentWhenActive="page"
+                class="ops-nav-link"
+              >
+                <span class="ms text-[20px]" aria-hidden="true">tune</span
+                ><span>{{ 'nav.ticketSettings' | translate }}</span>
               </a>
             </li>
           }
