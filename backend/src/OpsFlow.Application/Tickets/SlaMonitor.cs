@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OpsFlow.Application.Abstractions;
 using OpsFlow.Application.Notifications;
+using OpsFlow.Application.Outbox;
 using OpsFlow.Domain.Notifications;
 using OpsFlow.Domain.Tickets;
 
@@ -32,6 +33,7 @@ public sealed partial class SlaMonitor(
     IOpsFlowDbContext db,
     ITenantContext tenantContext,
     NotificationService notifications,
+    IOutboxSignal outboxSignal,
     IOptions<SlaOptions> options,
     TimeProvider clock,
     ILogger<SlaMonitor> logger
@@ -205,6 +207,11 @@ public sealed partial class SlaMonitor(
 
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
+        if (cycle.IsActive)
+        {
+            outboxSignal.Notify(); // notifications are staged only for active cycles
+        }
+
         return true;
     }
 

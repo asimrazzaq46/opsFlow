@@ -9,7 +9,9 @@
         <h1 class="text-headline-lg tracking-tight text-on-surface sm:text-headline-xl">
           {{ 'settings.title' | translate }}
         </h1>
-        <p class="mt-1 text-body-md text-on-surface-variant">{{ 'settings.subtitle' | translate }}</p>
+        <p class="mt-1 text-body-md text-on-surface-variant">
+          {{ 'settings.subtitle' | translate }}
+        </p>
       </div>
       @if (canEdit() && data()) {
         <div class="flex flex-wrap items-center gap-2">
@@ -44,7 +46,9 @@
   } @else if (loading() && !data()) {
     <p role="status" class="text-on-surface-variant">{{ 'common.loading' | translate }}</p>
   } @else if (loadError(); as key) {
-    <div class="flex flex-wrap items-center gap-3 rounded-lg bg-surface-container-lowest p-6 shadow-sm">
+    <div
+      class="flex flex-wrap items-center gap-3 rounded-lg bg-surface-container-lowest p-6 shadow-sm"
+    >
       <p role="alert" class="text-body-md text-error">{{ key | translate }}</p>
       <button type="button" class="ops-btn-secondary h-9" (click)="load()">
         {{ 'common.retry' | translate }}
@@ -55,11 +59,18 @@
       <p
         class="flex items-center gap-2 rounded-lg bg-surface-container-low px-4 py-3 text-body-sm text-on-surface-variant"
       >
-        <span class="ms text-[18px]" aria-hidden="true">lock</span>{{ 'settings.readOnlyNotice' | translate }}
+        <span class="ms text-[18px]" aria-hidden="true">lock</span
+        >{{ 'settings.readOnlyNotice' | translate }}
       </p>
     }
 
-    <form id="org-settings-form" class="flex flex-col gap-4" (ngSubmit)="save()" [formGroup]="form" novalidate>
+    <form
+      id="org-settings-form"
+      class="flex flex-col gap-4"
+      (ngSubmit)="save()"
+      [formGroup]="form"
+      novalidate
+    >
       <section
         class="flex flex-col rounded-lg bg-surface-container-lowest p-6 shadow-sm"
         aria-labelledby="general-title"
@@ -72,7 +83,9 @@
             <h2 id="general-title" class="text-headline-md text-on-surface">
               {{ 'settings.general.title' | translate }}
             </h2>
-            <p class="text-body-sm text-on-surface-variant">{{ 'settings.general.subtitle' | translate }}</p>
+            <p class="text-body-sm text-on-surface-variant">
+              {{ 'settings.general.subtitle' | translate }}
+            </p>
           </div>
         </div>
 
@@ -87,7 +100,11 @@
                 maxlength="100"
                 formControlName="name"
                 aria-describedby="org-name-hint"
-                [attr.aria-invalid]="(form.controls.name.invalid && form.controls.name.touched) || serverErrors().name ? 'true' : null"
+                [attr.aria-invalid]="
+                  (form.controls.name.invalid && form.controls.name.touched) || serverErrors().name
+                    ? 'true'
+                    : null
+                "
                 class="ops-input h-11 text-headline-sm"
               />
               <p id="org-name-hint" class="text-body-sm text-on-surface-variant">
@@ -114,7 +131,9 @@
               <span class="ms text-[16px] text-on-surface-variant" aria-hidden="true">lock</span>
             </dd>
             @if (editing()) {
-              <p class="text-body-sm text-on-surface-variant">{{ 'settings.slugHint' | translate }}</p>
+              <p class="text-body-sm text-on-surface-variant">
+                {{ 'settings.slugHint' | translate }}
+              </p>
             }
           </dl>
 
@@ -125,7 +144,9 @@
               <span class="ms text-[16px] text-on-surface-variant" aria-hidden="true">lock</span>
             </dd>
             @if (editing()) {
-              <p class="text-body-sm text-on-surface-variant">{{ 'settings.prefixHint' | translate }}</p>
+              <p class="text-body-sm text-on-surface-variant">
+                {{ 'settings.prefixHint' | translate }}
+              </p>
             }
           </dl>
         </div>
@@ -143,7 +164,9 @@
             <h2 id="regional-title" class="text-headline-md text-on-surface">
               {{ 'settings.regional.title' | translate }}
             </h2>
-            <p class="text-body-sm text-on-surface-variant">{{ 'settings.regional.subtitle' | translate }}</p>
+            <p class="text-body-sm text-on-surface-variant">
+              {{ 'settings.regional.subtitle' | translate }}
+            </p>
           </div>
         </div>
 
@@ -178,14 +201,18 @@
 
       @if (saved()) {
         <p role="status" class="flex items-center gap-1 text-body-sm text-secondary">
-          <span class="ms text-[16px]" aria-hidden="true">check_circle</span>{{ 'settings.saved' | translate }}
+          <span class="ms text-[16px]" aria-hidden="true">check_circle</span
+          >{{ 'settings.saved' | translate }}
         </p>
       }
       @if (saveError(); as key) {
         <p role="alert" class="text-body-sm text-error">{{ key | translate }}</p>
       }
       @if (conflict()) {
-        <div role="alert" class="flex flex-wrap items-center gap-3 rounded-lg bg-error-container px-4 py-3 text-body-sm text-on-error-container">
+        <div
+          role="alert"
+          class="flex flex-wrap items-center gap-3 rounded-lg bg-error-container px-4 py-3 text-body-sm text-on-error-container"
+        >
           <span>{{ 'settings.conflict' | translate }}</span>
           <button type="button" class="ops-btn-secondary h-9" (click)="reload()">
             {{ 'settings.reload' | translate }}

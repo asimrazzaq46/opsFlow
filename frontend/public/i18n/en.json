@@ -420,6 +420,44 @@
     "markAll": "Mark all as read",
     "empty": "You have no notifications.",
     "loadMore": "Load more",
+    "viewAll": "View all notifications",
+    "viewTicket": "View ticket",
+    "markRead": "Mark as read",
+    "switch": {
+      "title": "Switch workspace?",
+      "message": "This ticket belongs to {{target}}. You are currently in {{current}}. Switch to {{target}} and open this ticket?",
+      "confirm": "Switch & Open Ticket"
+    },
+    "errors": {
+      "read": "Could not mark the notification as read. Try again.",
+      "readAll": "Could not mark the notifications as read. Try again.",
+      "ticketUnavailable": "This ticket is no longer available to you.",
+      "ticketFailed": "Could not open the ticket. Try again."
+    },
+    "history": {
+      "subtitle": "Your notification history across all your workspaces.",
+      "filters": "Notification filter",
+      "all": "All",
+      "unread": "Unread",
+      "results": "Notification history",
+      "noUnread": "You have no unread notifications.",
+      "range": "Showing {{from}}–{{to}} of {{total}}",
+      "pageOf": "Page {{page}} of {{pages}}",
+      "paging": "Notification pages",
+      "typeLabels": {
+        "TicketCreated": "New ticket",
+        "TicketAssigned": "Assigned",
+        "TicketUnassigned": "Removed",
+        "TicketStatusChanged": "Status change",
+        "TicketResolved": "Resolved",
+        "TicketClosed": "Closed",
+        "TicketReopened": "Reopened",
+        "MessageReceived": "Message",
+        "NoteAdded": "Internal note",
+        "SlaWarning": "Due soon",
+        "SlaBreached": "Overdue"
+      }
+    },
     "error": "Could not load notifications.",
     "workspace": "Workspace",
     "inaccessible": "You no longer have access to that workspace.",

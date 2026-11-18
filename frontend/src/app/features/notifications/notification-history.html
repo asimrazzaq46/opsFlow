@@ -1,0 +1,248 @@
+<div class="flex flex-col gap-4">
+  <div>
+    <h1 class="text-headline-lg tracking-tight text-on-surface sm:text-headline-xl">
+      {{ 'notifications.title' | translate }}
+    </h1>
+    <p class="mt-1 max-w-3xl text-body-md text-on-surface-variant">
+      {{ 'notifications.history.subtitle' | translate }}
+    </p>
+  </div>
+
+  <div class="flex flex-wrap items-center justify-between gap-2">
+    <div
+      class="flex gap-1 self-start rounded-lg bg-surface-container-low p-1"
+      role="group"
+      [attr.aria-label]="'notifications.history.filters' | translate"
+    >
+      @for (f of filters; track f) {
+        <button
+          type="button"
+          class="filter-btn inline-flex min-h-9 items-center gap-2 whitespace-nowrap rounded-md px-3.5 text-headline-sm transition-colors"
+          [class]="
+            query().filter === f
+              ? 'bg-surface-container-lowest text-on-surface shadow-sm'
+              : 'text-on-surface-variant hover:text-on-surface'
+          "
+          [attr.aria-pressed]="query().filter === f"
+          (click)="setFilter(f)"
+        >
+          {{ 'notifications.history.' + f | translate }}
+          @if (f === 'unread' && shared.unread() > 0) {
+            <span class="ops-unread-badge">{{
+              shared.unread() > 99 ? '99+' : shared.unread()
+            }}</span>
+          }
+        </button>
+      }
+    </div>
+    <div class="flex items-center gap-3">
+      <p class="font-mono text-mono-timer text-on-surface-variant" aria-live="polite">
+        @if (total()) {
+          {{ 'notifications.history.range' | translate: range() }}
+        }
+      </p>
+      <button
+        type="button"
+        class="ops-btn-secondary h-9 px-3"
+        [disabled]="shared.unread() === 0 || shared.markingAll()"
+        [attr.aria-busy]="shared.markingAll()"
+        (click)="shared.markAllRead()"
+      >
+        <span
+          [class]="
+            shared.markingAll() ? 'ms text-[18px] motion-safe:animate-spin' : 'ms text-[18px]'
+          "
+          aria-hidden="true"
+          >{{ shared.markingAll() ? 'progress_activity' : 'check_circle' }}</span
+        >{{ 'notifications.markAll' | translate }}
+      </button>
+    </div>
+  </div>
+
+  @if (shared.actionError(); as key) {
+    <p
+      role="alert"
+      class="flex items-center gap-2 rounded-lg bg-error-container px-3 py-2 text-body-sm text-on-error-container"
+    >
+      <span class="ms text-[18px]" aria-hidden="true">error</span>{{ key | translate }}
+    </p>
+  }
+
+  <section
+    class="ops-card overflow-hidden"
+    [attr.aria-busy]="history.isLoading()"
+    aria-labelledby="notification-results"
+  >
+    <h2 id="notification-results" class="sr-only">
+      {{ 'notifications.history.results' | translate }}
+    </h2>
+    @if (history.status() === 'error') {
+      <div role="alert" class="flex flex-col items-center gap-3 px-4 py-12 text-center">
+        <span class="ms text-[32px] text-error" aria-hidden="true">error</span>
+        <p class="text-body-md text-on-surface">{{ 'notifications.error' | translate }}</p>
+        <button type="button" class="ops-btn-secondary" (click)="history.reload()">
+          <span class="ms text-[18px]" aria-hidden="true">refresh</span
+          >{{ 'common.retry' | translate }}
+        </button>
+      </div>
+    } @else if (!result()) {
+      <p
+        role="status"
+        class="flex items-center justify-center gap-2 px-4 py-12 text-body-md text-on-surface-variant"
+      >
+        <span class="ms text-[20px] motion-safe:animate-spin" aria-hidden="true"
+          >progress_activity</span
+        >
+        {{ 'common.loading' | translate }}
+      </p>
+    } @else if (!result()!.items.length) {
+      <div class="flex flex-col items-center gap-2 px-4 py-12 text-center">
+        <span class="ms text-[32px] text-on-surface-variant" aria-hidden="true"
+          >notification_important</span
+        >
+        <p class="text-headline-sm text-on-surface">
+          {{
+            (query().filter === 'unread' ? 'notifications.history.noUnread' : 'notifications.empty')
+              | translate
+          }}
+        </p>
+      </div>
+    } @else {
+      <ul class="divide-y divide-outline-variant/40" [class.opacity-60]="history.isLoading()">
+        @for (n of result()!.items; track n.id) {
+          <li
+            class="flex items-start gap-3 p-3 sm:gap-4 sm:p-4"
+            [class.is-unread]="!n.isRead"
+            [class.bg-surface-container-low]="!n.isRead"
+          >
+            <span
+              class="grid size-10 shrink-0 place-items-center rounded-xl"
+              [class]="
+                n.type === 'SlaBreached' || n.type === 'SlaWarning'
+                  ? 'bg-error-container text-on-error-container'
+                  : 'bg-surface-container-high text-on-surface'
+              "
+              aria-hidden="true"
+            >
+              <span class="ms text-[20px]">{{ icon(n) }}</span>
+            </span>
+            <div class="min-w-0 flex-1">
+              <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span class="ops-badge bg-surface-container-high text-on-surface">
+                  {{ 'notifications.history.typeLabels.' + n.type | translate }}
+                </span>
+                <time
+                  class="font-mono text-mono-timer text-on-surface-variant"
+                  [attr.datetime]="n.createdAtUtc"
+                  >{{ when(n) }}</time
+                >
+                @if (workspaceName(n); as name) {
+                  <span class="inline-flex items-center gap-1 text-body-sm text-on-surface-variant">
+                    <span class="ms text-[14px]" aria-hidden="true">corporate_fare</span>
+                    <span class="sr-only">{{ 'notifications.workspace' | translate }}:</span
+                    >{{ name }}
+                  </span>
+                }
+              </div>
+              <p
+                class="mt-1 break-words text-body-md text-on-surface"
+                [class.font-semibold]="!n.isRead"
+              >
+                {{ 'notifications.types.' + n.type | translate: { subject: n.subject } }}
+                @if (n.detail) {
+                  <span class="font-normal text-on-surface-variant"
+                    >({{ detailKey(n) | translate }})</span
+                  >
+                }
+              </p>
+              @if (hasTicket(n) || !n.isRead) {
+                <div class="mt-2 flex flex-wrap items-center gap-2">
+                  @if (hasTicket(n)) {
+                    <button
+                      type="button"
+                      class="ops-btn-primary h-9 px-3 shadow-none"
+                      [disabled]="shared.opening() !== null"
+                      [attr.aria-busy]="shared.opening() === n.id"
+                      (click)="openTicket(n)"
+                    >
+                      <span
+                        [class]="
+                          shared.opening() === n.id
+                            ? 'ms text-[18px] motion-safe:animate-spin'
+                            : 'ms text-[18px]'
+                        "
+                        aria-hidden="true"
+                        >{{
+                          shared.opening() === n.id ? 'progress_activity' : 'arrow_forward'
+                        }}</span
+                      >{{ 'notifications.viewTicket' | translate }}
+                    </button>
+                  }
+                  @if (!n.isRead) {
+                    <button
+                      type="button"
+                      class="ops-btn-secondary h-9 px-3"
+                      [disabled]="shared.readBusy().has(n.id)"
+                      [attr.aria-busy]="shared.readBusy().has(n.id)"
+                      (click)="markRead(n)"
+                    >
+                      <span
+                        [class]="
+                          shared.readBusy().has(n.id)
+                            ? 'ms text-[18px] motion-safe:animate-spin'
+                            : 'ms text-[18px]'
+                        "
+                        aria-hidden="true"
+                        >{{
+                          shared.readBusy().has(n.id) ? 'progress_activity' : 'check_circle'
+                        }}</span
+                      >{{ 'notifications.markRead' | translate }}
+                    </button>
+                  }
+                </div>
+              }
+            </div>
+            @if (!n.isRead) {
+              <span class="mt-1.5 flex shrink-0 items-center">
+                <span
+                  class="size-2.5 rounded-full bg-primary-container ring-4 ring-primary-container/10"
+                  aria-hidden="true"
+                ></span>
+                <span class="sr-only">{{ 'notifications.unread' | translate }}</span>
+              </span>
+            }
+          </li>
+        }
+      </ul>
+
+      <div
+        class="flex flex-col items-center justify-between gap-3 border-t border-outline-variant/40 p-3 text-body-sm text-on-surface-variant sm:flex-row sm:px-4"
+      >
+        <span aria-live="polite">{{ 'notifications.history.pageOf' | translate: pageInfo() }}</span>
+        <nav
+          class="flex items-center gap-1"
+          [attr.aria-label]="'notifications.history.paging' | translate"
+        >
+          <button
+            type="button"
+            class="page-btn px-2.5"
+            [disabled]="query().page <= 1"
+            (click)="goTo(query().page - 1)"
+          >
+            <span class="ms text-[16px]" aria-hidden="true">chevron_left</span
+            >{{ 'common.previous' | translate }}
+          </button>
+          <button
+            type="button"
+            class="page-btn px-2.5"
+            [disabled]="query().page >= pages()"
+            (click)="goTo(query().page + 1)"
+          >
+            {{ 'common.next' | translate
+            }}<span class="ms text-[16px]" aria-hidden="true">chevron_right</span>
+          </button>
+        </nav>
+      </div>
+    }
+  </section>
+</div>

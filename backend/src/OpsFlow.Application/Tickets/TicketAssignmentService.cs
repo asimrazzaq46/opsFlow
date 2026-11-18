@@ -23,6 +23,7 @@ public sealed partial class TicketAssignmentService(
     TicketService tickets,
     NotificationService notifications,
     OutboxWriter outbox,
+    IOutboxSignal outboxSignal,
     TimeProvider clock,
     ILogger<TicketAssignmentService> logger
 )
@@ -163,7 +164,8 @@ public sealed partial class TicketAssignmentService(
             outbox.StageTicketChanged(ticket.TenantId, ticketId, TicketChanges.Assignment);
             try
             {
-                await db.SaveChangesAsync(ct);
+                await db.SaveChangesAsync(ct); // no explicit transaction here: a successful save is the commit
+                outboxSignal.Notify();
                 LogAssigned(logger, ticketId, agents.Count);
                 return await tickets.GetAsync(ticketId, ct);
             }
@@ -317,6 +319,7 @@ public sealed partial class TicketAssignmentService(
             {
                 await db.SaveChangesAsync(ct);
                 await transaction.CommitAsync(ct);
+                outboxSignal.Notify();
                 return await tickets.GetAsync(ticketId, ct);
             }
             catch (DbUpdateConcurrencyException)

@@ -23,6 +23,7 @@ public sealed partial class TicketWorkflowService(
     TicketService tickets,
     NotificationService notifications,
     OutboxWriter outbox,
+    IOutboxSignal outboxSignal,
     TimeProvider clock,
     ILogger<TicketWorkflowService> logger
 )
@@ -176,6 +177,7 @@ public sealed partial class TicketWorkflowService(
         }
 
         await transaction.CommitAsync(ct);
+        outboxSignal.Notify();
         LogChanged(logger, ticketId, old, target);
         return await tickets.GetAsync(ticketId, ct);
     }
@@ -288,6 +290,7 @@ public sealed partial class TicketWorkflowService(
         }
 
         await transaction.CommitAsync(ct);
+        outboxSignal.Notify();
         LogChanged(logger, ticketId, old, next);
         return await tickets.GetAsync(ticketId, ct);
     }

@@ -116,7 +116,8 @@ export class WorkspaceLayout {
     // memberships are loading, while a navigation is under way, or for pages outside a workspace; both targets are always allowed
     // (`/dashboard` for every member, `/workspaces` without access data), so this cannot loop.
     const revalidate = () => {
-      if (!this.auth.isAuthenticated() || this.tenant.loading() || router.getCurrentNavigation()) return;
+      if (!this.auth.isAuthenticated() || this.tenant.loading() || router.getCurrentNavigation())
+        return;
       const access = routeAccess(router.routerState.snapshot.root);
       if (!access) return;
       if (!this.tenant.tenantId()) void router.navigateByUrl('/workspaces');
@@ -131,7 +132,12 @@ export class WorkspaceLayout {
     });
     router.events
       .pipe(
-        filter((e) => e instanceof NavigationEnd || e instanceof NavigationCancel || e instanceof NavigationError),
+        filter(
+          (e) =>
+            e instanceof NavigationEnd ||
+            e instanceof NavigationCancel ||
+            e instanceof NavigationError,
+        ),
         takeUntilDestroyed(),
       )
       .subscribe(() => setTimeout(revalidate)); // after the router has finished the navigation (getCurrentNavigation() is null)
