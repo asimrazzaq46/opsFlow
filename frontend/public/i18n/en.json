@@ -41,6 +41,7 @@
     "account": "Account",
     "workspaces": "Workspaces",
     "settings": "Organization",
+    "ticketSettings": "Ticket Settings",
     "sidebar": "Application sidebar",
     "operations": "Operations",
     "preferences": "Preferences",
@@ -157,6 +158,7 @@
       "search": "Search tickets",
       "searchPlaceholder": "Search by ticket number or title…",
       "reset": "Reset filters",
+      "unlistedCategory": "Inactive or unknown",
       "range": "Showing {{from}}–{{to}} of {{total}}",
       "results": "Ticket results",
       "caption": "Tickets matching the current filters",
@@ -949,7 +951,98 @@
     },
     "leaveTitle": "Discard unsaved changes?",
     "leaveMessage": "You have unsaved organization settings. Continuing discards them.",
-    "leaveConfirm": "Discard"
+    "leaveConfirm": "Discard",
+    "tickets": {
+      "title": "Ticket Settings",
+      "subtitle": "Manage ticket categories and the response and resolution deadlines of this workspace.",
+      "tablistLabel": "Ticket settings sections",
+      "deadlinesHeading": "Response & Resolution Deadlines",
+      "tabs": {
+        "categories": "Categories",
+        "deadlines": "Deadlines"
+      }
+    },
+    "categories": {
+      "title": "Ticket categories",
+      "subtitle": "Manage the categories used to classify tickets in this workspace. A deactivated category stays on existing tickets but cannot be chosen for new ones.",
+      "create": "Create category",
+      "listLabel": "Ticket categories",
+      "caption": "Ticket categories of this workspace",
+      "filterLabel": "Show categories",
+      "filter": {
+        "active": "Active only",
+        "all": "All"
+      },
+      "name": "Category name",
+      "nameHint": "2 to 100 characters. Names are unique, ignoring upper and lower case.",
+      "empty": "No categories to show.",
+      "rename": "Rename",
+      "createTitle": "Create category",
+      "renameTitle": "Rename category",
+      "saveCreate": "Create",
+      "saveRename": "Save",
+      "created": "Category \"{{name}}\" created.",
+      "renamed": "Category renamed to \"{{name}}\".",
+      "activated": "Category \"{{name}}\" activated.",
+      "deactivated": "Category \"{{name}}\" deactivated.",
+      "deactivateTitle": "Deactivate category?",
+      "deactivateMessage": "\"{{name}}\" can no longer be chosen for new tickets. Existing tickets keep it.",
+      "activateTitle": "Activate category?",
+      "activateMessage": "\"{{name}}\" can be chosen for new tickets again.",
+      "validation": {
+        "name": "Use 2 to 100 characters."
+      },
+      "errors": {
+        "duplicate": "A category with this name already exists.",
+        "invalid": "The name is not valid. Use 2 to 100 characters.",
+        "notFound": "This category no longer exists. The list was refreshed.",
+        "generic": "The request could not be completed. Please try again."
+      }
+    },
+    "sla": {
+      "subtitle": "Response and resolution targets for each ticket priority in this workspace.",
+      "rulesTitle": "How changes take effect",
+      "ruleNewTickets": "A change applies to tickets created after it is saved.",
+      "ruleExisting": "Deadlines of tickets that are already open are not recalculated.",
+      "rulePriorityReopen": "Changing a ticket's priority and reopening a ticket follow the existing deadline rules of the workspace.",
+      "ruleCalendar": "Targets count calendar time, around the clock. Business hours are not applied.",
+      "readOnlyNotice": "Only Owners and Managers can change these targets. You can view them here.",
+      "loadError": "Could not load the SLA policies.",
+      "caption": "SLA targets by ticket priority",
+      "priority": "Priority",
+      "response": "First response",
+      "resolution": "Resolution",
+      "missing": "No policy",
+      "missingHint": "Tickets with this priority cannot be created or changed to it until a policy exists.",
+      "editing": "Editing",
+      "edit": "Edit",
+      "create": "Create policy",
+      "save": "Save targets",
+      "amount": "Amount",
+      "unit": "Unit",
+      "units": {
+        "minutes": "Minutes",
+        "hours": "Hours",
+        "days": "Days"
+      },
+      "formHint": "Set a deadline between 1 minute and 365 days. Resolution time must be equal to or longer than first response time.",
+      "validation": {
+        "invalid": "Enter a valid duration.",
+        "range": "Choose a duration between 1 minute and 365 days.",
+        "order": "Resolution time cannot be shorter than first response time."
+      },
+      "saved": "The {{priority}} targets were saved.",
+      "leaveTitle": "Discard unsaved changes?",
+      "leaveMessage": "You have unsaved SLA targets. Continuing discards them.",
+      "unsavedMessage": "You have unsaved deadline changes. Discard them and continue?",
+      "errors": {
+        "invalid": "The targets are not valid. Check the values and try again.",
+        "notFound": "This policy no longer exists. The list was refreshed.",
+        "exists": "A policy for this priority already exists. The list was refreshed.",
+        "conflict": "The policy was changed concurrently. The list was refreshed; review and save again.",
+        "generic": "The request could not be completed. Please try again."
+      }
+    }
   },
   "account": {
     "title": "Account settings",

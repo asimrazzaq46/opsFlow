@@ -4,11 +4,12 @@
 
 :root {
   --color-surface: #f8fafc;
-  --color-card: #ffffff;
+  --color-card: var(--ops-surface-container-lowest);
   --color-border: #e2e8f0;
   --color-fg: #0f172a;
-  --color-muted: #64748b;
-  --color-brand: #4f46e5;
+  --color-muted: var(--ops-outline);
+  /* Legacy brand follows the OpsFlow blue (previously indigo); charts keep distinct series via their own success/warning colors. */
+  --color-brand: var(--ops-primary-container);
   --color-brand-fg: #ffffff;
   --color-success: #059669;
   --color-danger: #dc2626;
@@ -17,11 +18,12 @@
 
 [data-theme="dark"] {
   --color-surface: #0b1020;
-  --color-card: #131a2e;
+  --color-card: var(--ops-surface-container-lowest);
   --color-border: #263049;
   --color-fg: #e2e8f0;
   --color-muted: #94a3b8;
-  --color-brand: #818cf8;
+  /* The light-mode fill color fails as text on dark cards, so the dark brand uses the lighter OpsFlow primary. */
+  --color-brand: var(--ops-primary);
   --color-brand-fg: #0b1020;
   --color-success: #34d399;
   --color-danger: #f87171;
@@ -59,7 +61,7 @@ body {
   --ops-primary: #004ac6;
   --ops-primary-container: #2563eb;
   --ops-on-primary: #ffffff;
-  --ops-primary-fixed: #dbe1ff;
+  --ops-primary-fixed: #dbeafe;
   --ops-on-primary-fixed: #00174b;
   --ops-secondary: #006a61;
   --ops-secondary-container: #86f2e4;
@@ -69,16 +71,19 @@ body {
   --ops-error-container: #ffdad6;
   --ops-on-error-container: #93000a;
   --ops-surface-container-lowest: #ffffff;
-  --ops-surface-container-low: #f2f3ff;
-  --ops-surface-container: #eaedff;
-  --ops-surface-container-high: #e2e7ff;
-  --ops-surface-container-highest: #dae2fd;
-  --ops-on-surface: #131b2e;
-  --ops-on-surface-variant: #434655;
-  --ops-outline: #737686;
-  --ops-outline-variant: #c3c6d7;
-  --ops-inverse-surface: #283044;
-  --ops-inverse-on-surface: #eef0ff;
+  --ops-surface-container-low: #f1f5f9;
+  --ops-surface-container: #e9eef5;
+  --ops-surface-container-high: #e2e8f0;
+  --ops-surface-container-highest: #cbd5e1;
+  /* Selected navigation: soft blue, distinct from the neutral hover surface. */
+  --ops-surface-selected: #eaf1ff;
+  --ops-on-surface: #0f172a;
+  --ops-on-surface-variant: #475569;
+  /* Control borders and placeholders need 3:1 / 4.5:1 on white; outline-variant is for decorative dividers only. */
+  --ops-outline: #5f6f86;
+  --ops-outline-variant: #cbd5e1;
+  --ops-inverse-surface: #1e293b;
+  --ops-inverse-on-surface: #f1f5f9;
 }
 
 [data-theme="dark"] {
@@ -99,9 +104,10 @@ body {
   --ops-surface-container: #1e293b;
   --ops-surface-container-high: #243247;
   --ops-surface-container-highest: #334155;
+  --ops-surface-selected: rgba(59, 130, 246, 0.16);
   --ops-on-surface: #f8fafc;
   --ops-on-surface-variant: #a3b1c6;
-  --ops-outline: #7c8aa0;
+  --ops-outline: #8593a8;
   --ops-outline-variant: #334155;
   --ops-inverse-surface: #111a2e;
   --ops-inverse-on-surface: #eef0ff;
@@ -125,6 +131,7 @@ body {
   --color-surface-container: var(--ops-surface-container);
   --color-surface-container-high: var(--ops-surface-container-high);
   --color-surface-container-highest: var(--ops-surface-container-highest);
+  --color-surface-selected: var(--ops-surface-selected);
   --color-on-surface: var(--ops-on-surface);
   --color-on-surface-variant: var(--ops-on-surface-variant);
   --color-outline: var(--ops-outline);
@@ -206,7 +213,12 @@ body {
   }
 
   .ops-input {
-    @apply h-10 w-full rounded-sm bg-surface-container-low px-3 text-body-md text-on-surface shadow-sm transition-all outline-none placeholder:text-outline focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary-container aria-invalid:ring-2 aria-invalid:ring-error disabled:opacity-60;
+    @apply h-10 w-full rounded-sm border border-outline bg-surface-container-lowest px-3 text-body-md text-on-surface shadow-sm transition-all outline-none placeholder:text-outline focus:border-primary-container focus:ring-2 focus:ring-primary-container aria-invalid:border-error aria-invalid:ring-2 aria-invalid:ring-error disabled:cursor-not-allowed disabled:border-outline-variant disabled:bg-surface-container-low disabled:opacity-60 dark:bg-surface-container-low;
+  }
+
+  /* Read-only: flat neutral field with full-contrast text and a quiet border; disabled stays dimmed with a not-allowed cursor. */
+  .ops-input[readonly] {
+    @apply border-outline-variant bg-surface-container-low shadow-none dark:bg-surface-container-low;
   }
 
   .ops-btn-primary {
@@ -258,11 +270,11 @@ body {
 
   /* Selection is shown by weight, background and an inset bar, never by color alone. */
   .ops-nav-link {
-    @apply flex min-h-10 items-center gap-2 rounded-xl px-2 text-body-md text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-on-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-container;
+    @apply flex min-h-10 items-center gap-2 rounded-xl px-2 text-body-md text-on-surface-variant transition-colors hover:bg-surface-container-low hover:text-on-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-container dark:hover:bg-surface-container;
   }
 
   .ops-nav-link[aria-current="page"] {
-    @apply bg-surface-container-high font-semibold text-on-surface shadow-[inset_3px_0_0_var(--ops-primary-container)];
+    @apply bg-surface-selected font-semibold text-primary shadow-[inset_3px_0_0_var(--ops-primary-container)];
   }
 
   .ops-skip-link {
@@ -283,6 +295,6 @@ body {
   }
 
   .ops-select {
-    @apply h-9 rounded-lg bg-surface-container-low pr-8 pl-2.5 text-body-sm text-on-surface transition-colors hover:bg-surface-container focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary-container;
+    @apply h-9 rounded-lg border border-outline bg-surface-container-lowest pr-8 pl-2.5 text-body-sm text-on-surface transition-colors hover:bg-surface-container-low focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary-container dark:bg-surface-container-low dark:hover:bg-surface-container;
   }
 }

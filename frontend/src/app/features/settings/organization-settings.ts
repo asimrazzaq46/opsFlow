@@ -276,6 +276,7 @@ export class OrganizationSettings {
 
   private setDirty(value: boolean): void {
     this.dirty.set(value);
+    if (value) this.unsaved.kind.set('organization');
     this.unsaved.dirty.set(value);
   }
 

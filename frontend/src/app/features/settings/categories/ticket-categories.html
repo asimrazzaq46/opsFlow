@@ -1,0 +1,238 @@
+<ng-template #badge let-c>
+  <span
+    class="ops-badge gap-1"
+    [class]="
+      c.isActive
+        ? 'bg-emerald-100 text-emerald-900 dark:bg-emerald-500/15 dark:text-emerald-200'
+        : 'bg-surface-container-high text-on-surface'
+    "
+  >
+    <span class="ms text-[14px]" aria-hidden="true">{{ c.isActive ? 'check_circle' : 'block' }}</span>
+    {{ (c.isActive ? 'common.active' : 'common.inactive') | translate }}
+  </span>
+</ng-template>
+
+<ng-template #actions let-c>
+  <button
+    type="button"
+    class="ops-btn-secondary h-9 px-3 text-body-sm"
+    [disabled]="!!rowBusy()[c.id]"
+    (click)="openRename(c)"
+  >
+    <span class="ms text-[18px]" aria-hidden="true">edit</span>
+    {{ 'settings.categories.rename' | translate }}
+    <span class="sr-only">: {{ c.name }}</span>
+  </button>
+  @if (c.isActive) {
+    <button
+      type="button"
+      class="ops-btn-danger h-9 px-3 text-body-sm"
+      [disabled]="!!rowBusy()[c.id]"
+      [attr.aria-busy]="!!rowBusy()[c.id]"
+      (click)="askStatus(c)"
+    >
+      <span class="ms text-[18px]" aria-hidden="true">block</span>
+      {{ 'common.deactivate' | translate }}
+      <span class="sr-only">: {{ c.name }}</span>
+    </button>
+  } @else {
+    <button
+      type="button"
+      class="ops-btn-success h-9 px-3 text-body-sm"
+      [disabled]="!!rowBusy()[c.id]"
+      [attr.aria-busy]="!!rowBusy()[c.id]"
+      (click)="askStatus(c)"
+    >
+      <span class="ms text-[18px]" aria-hidden="true">check_circle</span>
+      {{ 'common.activate' | translate }}
+      <span class="sr-only">: {{ c.name }}</span>
+    </button>
+  }
+</ng-template>
+
+<div class="flex flex-col gap-4">
+  @if (!tenant.isManager()) {
+    <p role="alert" class="text-on-surface-variant">{{ 'common.forbidden' | translate }}</p>
+  } @else {
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div class="min-w-0">
+        <h2 #heading tabindex="-1" class="text-headline-lg text-on-surface">
+          {{ 'settings.categories.title' | translate }}
+        </h2>
+        <p class="mt-1 text-body-md text-on-surface-variant">{{ 'settings.categories.subtitle' | translate }}</p>
+      </div>
+      <button type="button" class="ops-btn-primary h-10 px-5" (click)="openCreate()">
+        <span class="ms text-[18px]" aria-hidden="true">add</span>
+        {{ 'settings.categories.create' | translate }}
+      </button>
+    </div>
+
+    <div
+      role="group"
+      class="inline-flex self-start rounded-lg bg-surface-container-low p-1"
+      [attr.aria-label]="'settings.categories.filterLabel' | translate"
+    >
+      @for (f of filters; track f) {
+        <button
+          type="button"
+          class="h-8 rounded-sm px-3 text-body-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary-container"
+          [class]="
+            filter() === f
+              ? 'bg-surface-container-lowest font-semibold text-on-surface shadow-sm'
+              : 'font-medium text-on-surface-variant hover:text-on-surface'
+          "
+          [attr.aria-pressed]="filter() === f"
+          (click)="setFilter(f)"
+        >
+          {{ 'settings.categories.filter.' + f | translate }}
+        </button>
+      }
+    </div>
+
+    @if (message(); as m) {
+      <p
+        class="text-body-sm"
+        [class.text-error]="m.error"
+        [class.text-on-surface]="!m.error"
+        [attr.role]="m.error ? 'alert' : 'status'"
+      >
+        {{ m.key | translate: m.params }}
+      </p>
+    }
+
+    <section
+      class="ops-card overflow-hidden"
+      [attr.aria-label]="'settings.categories.listLabel' | translate"
+      [attr.aria-busy]="loading()"
+    >
+      @if (loadError(); as key) {
+        <p role="alert" class="p-4 text-body-sm text-error">
+          {{ key | translate }}
+          <button type="button" class="ops-link underline" (click)="load()">
+            {{ 'common.retry' | translate }}
+          </button>
+        </p>
+      } @else if (items(); as list) {
+        @if (!list.length) {
+          <p class="p-8 text-center text-body-sm text-on-surface-variant">
+            {{ 'settings.categories.empty' | translate }}
+          </p>
+        } @else {
+          <!-- Tablet and desktop: table -->
+          <div class="hidden overflow-x-auto md:block" [class.opacity-60]="loading()">
+            <table class="w-full border-collapse text-left">
+              <caption class="sr-only">
+                {{
+                  'settings.categories.caption' | translate
+                }}
+              </caption>
+              <thead class="bg-surface-container-low">
+                <tr>
+                  <th scope="col" class="ops-th">{{ 'settings.categories.name' | translate }}</th>
+                  <th scope="col" class="ops-th">{{ 'common.status' | translate }}</th>
+                  <th scope="col" class="ops-th">
+                    <span class="sr-only">{{ 'team.actions' | translate }}</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-outline-variant/40">
+                @for (c of list; track c.id) {
+                  <tr>
+                    <td class="max-w-80 truncate px-3 py-3 font-semibold text-on-surface" [attr.title]="c.name">
+                      {{ c.name }}
+                    </td>
+                    <td class="px-3 py-3 text-body-sm">
+                      <ng-container [ngTemplateOutlet]="badge" [ngTemplateOutletContext]="{ $implicit: c }" />
+                    </td>
+                    <td class="px-3 py-3">
+                      <div class="flex flex-wrap items-center justify-end gap-2">
+                        <ng-container [ngTemplateOutlet]="actions" [ngTemplateOutletContext]="{ $implicit: c }" />
+                      </div>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Mobile: cards -->
+          <ul class="divide-y divide-outline-variant/40 md:hidden" [class.opacity-60]="loading()">
+            @for (c of list; track c.id) {
+              <li class="flex flex-col gap-3 p-4">
+                <div class="flex min-w-0 flex-wrap items-center justify-between gap-2">
+                  <p class="min-w-0 break-words font-semibold text-on-surface">{{ c.name }}</p>
+                  <ng-container [ngTemplateOutlet]="badge" [ngTemplateOutletContext]="{ $implicit: c }" />
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  <ng-container [ngTemplateOutlet]="actions" [ngTemplateOutletContext]="{ $implicit: c }" />
+                </div>
+              </li>
+            }
+          </ul>
+        }
+      } @else {
+        <p role="status" class="p-4 text-on-surface-variant">{{ 'common.loading' | translate }}</p>
+      }
+    </section>
+  }
+</div>
+
+<dialog #nameDialog class="ops-dialog" aria-labelledby="category-dialog-title" (cancel)="onCancel($event)">
+  <form (submit)="$event.preventDefault(); submit()" class="flex flex-col gap-3 p-5 sm:p-6" novalidate>
+    <h2 id="category-dialog-title" class="text-headline-lg text-on-surface">
+      {{ (target() ? 'settings.categories.renameTitle' : 'settings.categories.createTitle') | translate }}
+    </h2>
+    <label class="flex min-w-0 flex-col gap-1">
+      <span class="ops-label">{{ 'settings.categories.name' | translate }}</span>
+      <input
+        type="text"
+        [formControl]="name"
+        autocomplete="off"
+        maxlength="200"
+        class="ops-input"
+        [readonly]="saving()"
+        [attr.aria-invalid]="name.invalid && name.touched"
+        aria-describedby="category-name-hint"
+      />
+    </label>
+    <p id="category-name-hint" class="text-body-sm text-on-surface-variant">
+      {{ 'settings.categories.nameHint' | translate }}
+    </p>
+    @if (name.invalid && name.touched) {
+      <p role="alert" class="ops-error">{{ 'settings.categories.validation.name' | translate }}</p>
+    }
+    @if (dialogError(); as key) {
+      <p role="alert" class="text-body-sm text-error">{{ key | translate }}</p>
+    }
+    <div class="mt-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+      <button type="button" class="ops-btn-secondary" [disabled]="saving()" (click)="closeNameDialog()">
+        {{ 'common.cancel' | translate }}
+      </button>
+      <button type="submit" class="ops-btn-primary h-10" [disabled]="saving()" [attr.aria-busy]="saving()">
+        {{
+          (saving()
+            ? 'common.saving'
+            : target()
+              ? 'settings.categories.saveRename'
+              : 'settings.categories.saveCreate'
+          ) | translate
+        }}
+      </button>
+    </div>
+  </form>
+</dialog>
+
+<app-confirm-dialog
+  #statusDialog
+  [title]="
+    (statusTarget()?.isActive ? 'settings.categories.deactivateTitle' : 'settings.categories.activateTitle') | translate
+  "
+  [message]="
+    (statusTarget()?.isActive ? 'settings.categories.deactivateMessage' : 'settings.categories.activateMessage')
+      | translate: { name: statusTarget()?.name }
+  "
+  [confirmLabel]="(statusTarget()?.isActive ? 'common.deactivate' : 'common.activate') | translate"
+  [busy]="statusBusy()"
+  (confirmed)="confirmStatus()"
+  (closed)="statusTarget.set(null)"
+/>
