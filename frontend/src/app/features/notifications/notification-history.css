@@ -1,0 +1,33 @@
+:host {
+  display: block;
+}
+
+.filter-btn:focus-visible,
+.page-btn:focus-visible {
+  outline: 2px solid var(--ops-primary-container);
+  outline-offset: 2px;
+}
+
+.page-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-height: 2.25rem;
+  border-radius: 0.5rem;
+  color: var(--ops-on-surface);
+  transition: background-color 0.15s;
+}
+
+.page-btn:hover:not(:disabled) {
+  background: var(--ops-surface-container-low);
+}
+
+.page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Unread cards get an inset bar in addition to the dot and bold title, so the state never relies on color alone. */
+.is-unread {
+  box-shadow: inset 3px 0 0 var(--ops-primary-container);
+}

@@ -1,11 +1,11 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
-import { Router } from '@angular/router';
+import { ChangeDetectionStrategy, Component, effect, inject, signal, untracked, viewChild } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { TranslatePipe } from '@ngx-translate/core';
-import { firstValueFrom } from 'rxjs';
+import { ConfirmDialog } from '../shared/components/confirm-dialog/confirm-dialog';
 import { NotificationDto } from '../core/api/generated/models';
 import { TenantService } from '../core/auth/tenant.service';
-import { NotificationService } from '../core/notifications/notification.service';
+import { NotificationService, hasTicket } from '../core/notifications/notification.service';
 
 /** SLA notifications carry an SLA kind (FirstResponse/Resolution) as detail, every other type a ticket status. */
 export const notificationDetailKey = (n: Pick<NotificationDto, 'type' | 'detail'>): string =>
@@ -16,7 +16,7 @@ export const notificationDetailKey = (n: Pick<NotificationDto, 'type' | 'detail'
 /** One bell for the user's notifications from every workspace; opening one switches to its own workspace first. */
 @Component({
   selector: 'app-notification-center',
-  imports: [TranslatePipe, DatePipe],
+  imports: [TranslatePipe, DatePipe, RouterLink, ConfirmDialog],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'relative', '(keydown.escape)': 'open.set(false)' },
   templateUrl: './notification-center.html',
@@ -25,15 +25,22 @@ export const notificationDetailKey = (n: Pick<NotificationDto, 'type' | 'detail'
 export class NotificationCenter {
   protected readonly notifications = inject(NotificationService);
   private readonly tenant = inject(TenantService);
-  private readonly router = inject(Router);
   protected readonly open = signal(false);
-  /** Set when a notification belongs to a workspace the user can no longer open. */
-  protected readonly blocked = signal(false);
 
   protected readonly detailKey = notificationDetailKey;
+  protected readonly hasTicket = hasTicket;
+  /** The one cross-workspace confirmation for the dropdown AND the /notifications page (this component is always in the shell). */
+  private readonly switchDialog = viewChild.required<ConfirmDialog>('switchDialog');
+
+  constructor() {
+    effect(() => {
+      const pending = this.notifications.pendingSwitch();
+      untracked(() => (pending ? this.switchDialog().open() : this.switchDialog().close()));
+    });
+  }
 
   protected toggle(): void {
-    this.blocked.set(false);
+    this.notifications.actionError.set(null);
     this.open.update((v) => !v);
   }
 
@@ -42,26 +49,17 @@ export class NotificationCenter {
   }
 
   /**
-   * The notification's tenant comes from the server row, never from the active workspace. Access is confirmed against the memberships
-   * the server lists; the ticket itself is authorized again by its own page, which handles a missing or inaccessible ticket.
+   * The service verifies the ticket with the notification's own tenant before anything changes: only a successfully opened ticket
+   * switches the workspace and marks the notification read; failures are reported in the panel.
    */
   protected async go(n: NotificationDto): Promise<void> {
-    this.blocked.set(false);
-    if (!this.tenant.organizations().some((o) => o.id === n.tenantId)) {
-      try {
-        await firstValueFrom(this.tenant.load()); // memberships may have changed since they were loaded
-      } catch {
-        // falls through to the access check below
-      }
-    }
+    if (await this.notifications.openTicket(n)) this.open.set(false);
+  }
 
-    if (!this.tenant.select(n.tenantId)) {
-      this.blocked.set(true);
-      return;
-    }
-
-    this.notifications.markRead(n);
-    this.open.set(false);
-    await this.router.navigate(['/tickets', n.ticketId]);
+  /** The dialog closes before navigating, so a page's own unsaved-changes prompt follows it instead of overlapping it. */
+  protected async confirmSwitch(): Promise<void> {
+    const opened = this.notifications.confirmSwitch();
+    this.switchDialog().close();
+    if (await opened) this.open.set(false);
   }
 }

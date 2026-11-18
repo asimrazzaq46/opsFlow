@@ -1,6 +1,6 @@
 import { inject } from '@angular/core';
 import { Router, Routes } from '@angular/router';
-import { accessGuard, authGuard, emailLinkGuard, guestGuard } from './core/auth/auth.guard';
+import { accessGuard, authGuard, emailLinkGuard, guestGuard, notificationWorkspaceGuard } from './core/auth/auth.guard';
 import { RouteAccess } from './core/auth/route-access';
 import { TenantService } from './core/auth/tenant.service';
 import type { OrganizationSettings } from './features/settings/organization-settings';
@@ -80,7 +80,7 @@ export const routes: Routes = [
   },
   {
     path: 'tickets/:id',
-    canActivate: [authGuard, accessGuard],
+    canActivate: [authGuard, notificationWorkspaceGuard], // includes the accessGuard check
     data: access('member'),
     loadComponent: () => import('./features/tickets/ticket-detail').then((m) => m.TicketDetail),
   },
@@ -89,6 +89,13 @@ export const routes: Routes = [
     canActivate: [authGuard, accessGuard],
     data: access('member'),
     loadComponent: () => import('./features/dashboard/dashboard').then((m) => m.Dashboard),
+  },
+  {
+    path: 'notifications',
+    canActivate: [authGuard, accessGuard],
+    data: access('member'),
+    loadComponent: () =>
+      import('./features/notifications/notification-history').then((m) => m.NotificationHistory),
   },
   {
     path: 'kanban',

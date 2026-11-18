@@ -107,19 +107,22 @@ export class TicketDetail {
 
   /** Workspace the shown ticket belongs to; follows the ticket when a notification opens another one in a different workspace. */
   private openedIn = this.tenant.tenantId();
+  private openedId?: string;
   private request?: Subscription;
 
   constructor() {
     effect(() => {
       // a ticket belongs to ONE workspace: switching workspaces leaves the page instead of showing stale data
-      // A navigation already under way (e.g. opening a notification of another workspace) decides where the user lands.
-      if (this.tenant.tenantId() !== this.openedIn && !this.router.getCurrentNavigation())
+      // A navigation already under way (e.g. opening a notification of another workspace) decides where the user lands, and so does a
+      // ticket id that changed together with the workspace (the load effect below adopts the new pair).
+      if (this.tenant.tenantId() !== this.openedIn && this.id() === this.openedId && !this.router.getCurrentNavigation())
         void this.router.navigateByUrl('/tickets');
     });
     effect(() => {
       this.id();
       untracked(() => {
         this.openedIn = this.tenant.tenantId();
+        this.openedId = this.id();
         this.load();
       });
     });

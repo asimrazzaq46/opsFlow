@@ -33,12 +33,15 @@
       <button
         type="button"
         class="text-sm underline disabled:opacity-50"
-        [disabled]="notifications.unread() === 0"
+        [disabled]="notifications.unread() === 0 || notifications.markingAll()"
         (click)="notifications.markAllRead()"
       >
         {{ 'notifications.markAll' | translate }}
       </button>
     </div>
+    @if (notifications.actionError(); as key) {
+      <p role="alert" class="mt-2 text-sm text-danger">{{ key | translate }}</p>
+    }
     <div class="mt-2 max-h-96 overflow-y-auto" aria-live="polite">
       @if (notifications.error()) {
         <p role="alert" class="text-sm text-danger">
@@ -57,7 +60,9 @@
           <li>
             <button
               type="button"
-              class="block w-full px-2 py-2 text-left hover:bg-surface focus-visible:outline-2 focus-visible:outline-brand"
+              class="block w-full px-2 py-2 text-left hover:bg-surface focus-visible:outline-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-60"
+              [disabled]="!hasTicket(n) || notifications.opening() !== null"
+              [attr.aria-busy]="notifications.opening() === n.id"
               (click)="go(n)"
             >
               <span class="flex items-start gap-2">
@@ -96,5 +101,24 @@
         </button>
       }
     </div>
+    <a
+      routerLink="/notifications"
+      class="mt-2 block border-t border-border pt-2 text-center text-sm font-medium underline focus-visible:outline-2 focus-visible:outline-brand"
+      (click)="open.set(false)"
+    >
+      {{ 'notifications.viewAll' | translate }}
+    </a>
   </div>
 }
+
+<app-confirm-dialog
+  #switchDialog
+  [title]="'notifications.switch.title' | translate"
+  [message]="
+    'notifications.switch.message'
+      | translate: { target: notifications.pendingSwitch()?.target ?? '', current: notifications.pendingSwitch()?.current ?? '' }
+  "
+  [confirmLabel]="'notifications.switch.confirm' | translate"
+  (confirmed)="confirmSwitch()"
+  (closed)="notifications.cancelSwitch()"
+/>

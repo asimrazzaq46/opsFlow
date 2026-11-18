@@ -420,6 +420,44 @@
     "markAll": "Segna tutte come lette",
     "empty": "Non hai notifiche.",
     "loadMore": "Carica altre",
+    "viewAll": "Vedi tutte le notifiche",
+    "viewTicket": "Vedi ticket",
+    "markRead": "Segna come letta",
+    "switch": {
+      "title": "Cambiare spazio di lavoro?",
+      "message": "Questo ticket appartiene a {{target}}. Al momento sei in {{current}}. Vuoi passare a {{target}} e aprire il ticket?",
+      "confirm": "Cambia e apri il ticket"
+    },
+    "errors": {
+      "read": "Impossibile segnare la notifica come letta. Riprova.",
+      "readAll": "Impossibile segnare le notifiche come lette. Riprova.",
+      "ticketUnavailable": "Questo ticket non è più disponibile per te.",
+      "ticketFailed": "Impossibile aprire il ticket. Riprova."
+    },
+    "history": {
+      "subtitle": "Lo storico delle tue notifiche in tutti i tuoi spazi di lavoro.",
+      "filters": "Filtro notifiche",
+      "all": "Tutte",
+      "unread": "Non lette",
+      "results": "Storico notifiche",
+      "noUnread": "Non hai notifiche non lette.",
+      "range": "Mostrate {{from}}–{{to}} di {{total}}",
+      "pageOf": "Pagina {{page}} di {{pages}}",
+      "paging": "Pagine delle notifiche",
+      "typeLabels": {
+        "TicketCreated": "Nuovo ticket",
+        "TicketAssigned": "Assegnato",
+        "TicketUnassigned": "Rimosso",
+        "TicketStatusChanged": "Cambio di stato",
+        "TicketResolved": "Risolto",
+        "TicketClosed": "Chiuso",
+        "TicketReopened": "Riaperto",
+        "MessageReceived": "Messaggio",
+        "NoteAdded": "Nota interna",
+        "SlaWarning": "In scadenza",
+        "SlaBreached": "In ritardo"
+      }
+    },
     "error": "Impossibile caricare le notifiche.",
     "workspace": "Spazio di lavoro",
     "inaccessible": "Non hai più accesso a quello spazio di lavoro.",
