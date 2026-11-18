@@ -7,7 +7,9 @@
         : 'bg-surface-container-high text-on-surface'
     "
   >
-    <span class="ms text-[14px]" aria-hidden="true">{{ c.isActive ? 'check_circle' : 'block' }}</span>
+    <span class="ms text-[14px]" aria-hidden="true">{{
+      c.isActive ? 'check_circle' : 'block'
+    }}</span>
     {{ (c.isActive ? 'common.active' : 'common.inactive') | translate }}
   </span>
 </ng-template>
@@ -59,7 +61,9 @@
         <h2 #heading tabindex="-1" class="text-headline-lg text-on-surface">
           {{ 'settings.categories.title' | translate }}
         </h2>
-        <p class="mt-1 text-body-md text-on-surface-variant">{{ 'settings.categories.subtitle' | translate }}</p>
+        <p class="mt-1 text-body-md text-on-surface-variant">
+          {{ 'settings.categories.subtitle' | translate }}
+        </p>
       </div>
       <button type="button" class="ops-btn-primary h-10 px-5" (click)="openCreate()">
         <span class="ms text-[18px]" aria-hidden="true">add</span>
@@ -138,15 +142,24 @@
               <tbody class="divide-y divide-outline-variant/40">
                 @for (c of list; track c.id) {
                   <tr>
-                    <td class="max-w-80 truncate px-3 py-3 font-semibold text-on-surface" [attr.title]="c.name">
+                    <td
+                      class="max-w-80 truncate px-3 py-3 font-semibold text-on-surface"
+                      [attr.title]="c.name"
+                    >
                       {{ c.name }}
                     </td>
                     <td class="px-3 py-3 text-body-sm">
-                      <ng-container [ngTemplateOutlet]="badge" [ngTemplateOutletContext]="{ $implicit: c }" />
+                      <ng-container
+                        [ngTemplateOutlet]="badge"
+                        [ngTemplateOutletContext]="{ $implicit: c }"
+                      />
                     </td>
                     <td class="px-3 py-3">
                       <div class="flex flex-wrap items-center justify-end gap-2">
-                        <ng-container [ngTemplateOutlet]="actions" [ngTemplateOutletContext]="{ $implicit: c }" />
+                        <ng-container
+                          [ngTemplateOutlet]="actions"
+                          [ngTemplateOutletContext]="{ $implicit: c }"
+                        />
                       </div>
                     </td>
                   </tr>
@@ -161,10 +174,16 @@
               <li class="flex flex-col gap-3 p-4">
                 <div class="flex min-w-0 flex-wrap items-center justify-between gap-2">
                   <p class="min-w-0 break-words font-semibold text-on-surface">{{ c.name }}</p>
-                  <ng-container [ngTemplateOutlet]="badge" [ngTemplateOutletContext]="{ $implicit: c }" />
+                  <ng-container
+                    [ngTemplateOutlet]="badge"
+                    [ngTemplateOutletContext]="{ $implicit: c }"
+                  />
                 </div>
                 <div class="flex flex-wrap gap-2">
-                  <ng-container [ngTemplateOutlet]="actions" [ngTemplateOutletContext]="{ $implicit: c }" />
+                  <ng-container
+                    [ngTemplateOutlet]="actions"
+                    [ngTemplateOutletContext]="{ $implicit: c }"
+                  />
                 </div>
               </li>
             }
@@ -177,10 +196,22 @@
   }
 </div>
 
-<dialog #nameDialog class="ops-dialog" aria-labelledby="category-dialog-title" (cancel)="onCancel($event)">
-  <form (submit)="$event.preventDefault(); submit()" class="flex flex-col gap-3 p-5 sm:p-6" novalidate>
+<dialog
+  #nameDialog
+  class="ops-dialog"
+  aria-labelledby="category-dialog-title"
+  (cancel)="onCancel($event)"
+>
+  <form
+    (submit)="$event.preventDefault(); submit()"
+    class="flex flex-col gap-3 p-5 sm:p-6"
+    novalidate
+  >
     <h2 id="category-dialog-title" class="text-headline-lg text-on-surface">
-      {{ (target() ? 'settings.categories.renameTitle' : 'settings.categories.createTitle') | translate }}
+      {{
+        (target() ? 'settings.categories.renameTitle' : 'settings.categories.createTitle')
+          | translate
+      }}
     </h2>
     <label class="flex min-w-0 flex-col gap-1">
       <span class="ops-label">{{ 'settings.categories.name' | translate }}</span>
@@ -205,10 +236,20 @@
       <p role="alert" class="text-body-sm text-error">{{ key | translate }}</p>
     }
     <div class="mt-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-      <button type="button" class="ops-btn-secondary" [disabled]="saving()" (click)="closeNameDialog()">
+      <button
+        type="button"
+        class="ops-btn-secondary"
+        [disabled]="saving()"
+        (click)="closeNameDialog()"
+      >
         {{ 'common.cancel' | translate }}
       </button>
-      <button type="submit" class="ops-btn-primary h-10" [disabled]="saving()" [attr.aria-busy]="saving()">
+      <button
+        type="submit"
+        class="ops-btn-primary h-10"
+        [disabled]="saving()"
+        [attr.aria-busy]="saving()"
+      >
         {{
           (saving()
             ? 'common.saving'
@@ -225,11 +266,16 @@
 <app-confirm-dialog
   #statusDialog
   [title]="
-    (statusTarget()?.isActive ? 'settings.categories.deactivateTitle' : 'settings.categories.activateTitle') | translate
+    (statusTarget()?.isActive
+      ? 'settings.categories.deactivateTitle'
+      : 'settings.categories.activateTitle'
+    ) | translate
   "
   [message]="
-    (statusTarget()?.isActive ? 'settings.categories.deactivateMessage' : 'settings.categories.activateMessage')
-      | translate: { name: statusTarget()?.name }
+    (statusTarget()?.isActive
+      ? 'settings.categories.deactivateMessage'
+      : 'settings.categories.activateMessage'
+    ) | translate: { name: statusTarget()?.name }
   "
   [confirmLabel]="(statusTarget()?.isActive ? 'common.deactivate' : 'common.activate') | translate"
   [busy]="statusBusy()"

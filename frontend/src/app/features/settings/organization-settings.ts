@@ -95,7 +95,10 @@ export class OrganizationSettings {
 
   protected readonly form = new FormGroup({
     name: new FormControl('', { nonNullable: true, validators: [nameRules] }),
-    reportingTimeZone: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
+    reportingTimeZone: new FormControl('', {
+      nonNullable: true,
+      validators: [Validators.required],
+    }),
   });
   private readonly browserZones = supportedZones().map((id) => ({ id, label: zoneLabel(id) }));
   /** The saved zone stays selectable even when this browser does not list it. */
@@ -147,7 +150,8 @@ export class OrganizationSettings {
       const d = this.data();
       this.setDirty(
         !!d &&
-          (this.form.controls.name.value.trim() !== d.name || this.form.controls.reportingTimeZone.value.trim() !== d.reportingTimeZone),
+          (this.form.controls.name.value.trim() !== d.name ||
+            this.form.controls.reportingTimeZone.value.trim() !== d.reportingTimeZone),
       );
       this.saved.set(false);
       this.serverErrors.set({});
@@ -183,12 +187,23 @@ export class OrganizationSettings {
   protected save(): void {
     const tenantId = this.tenant.tenantId();
     this.form.markAllAsTouched();
-    if (!tenantId || !this.canEdit() || !this.editing() || this.busy() || !this.dirty() || this.form.invalid) return;
+    if (
+      !tenantId ||
+      !this.canEdit() ||
+      !this.editing() ||
+      this.busy() ||
+      !this.dirty() ||
+      this.form.invalid
+    )
+      return;
     const { name, reportingTimeZone } = this.form.getRawValue();
     this.busy.set(true);
     this.resetMessages();
     this.request = this.api
-      .invoke(updateTenantSettings, { tenantId, body: { name: name.trim(), reportingTimeZone: reportingTimeZone.trim() } })
+      .invoke(updateTenantSettings, {
+        tenantId,
+        body: { name: name.trim(), reportingTimeZone: reportingTimeZone.trim() },
+      })
       .subscribe({
         next: (dto) => {
           if (tenantId !== this.tenant.tenantId()) return;
@@ -241,7 +256,8 @@ export class OrganizationSettings {
   /** Route guard hook: resolves true when there is nothing to lose or the user confirms discarding. */
   confirmLeave(): boolean | Promise<boolean> {
     // A signed-out session or a different workspace has nothing left to protect.
-    if (!this.dirty() || this.loadedFor !== this.tenant.tenantId() || !this.auth.isAuthenticated()) return true;
+    if (!this.dirty() || this.loadedFor !== this.tenant.tenantId() || !this.auth.isAuthenticated())
+      return true;
     return new Promise<boolean>((resolve) => {
       this.leaveResolve = resolve;
       this.leaveDialog().open();
@@ -270,7 +286,10 @@ export class OrganizationSettings {
 
   private apply(dto: TenantSettingsDto): void {
     this.data.set(dto);
-    this.form.reset({ name: dto.name, reportingTimeZone: dto.reportingTimeZone }, { emitEvent: false });
+    this.form.reset(
+      { name: dto.name, reportingTimeZone: dto.reportingTimeZone },
+      { emitEvent: false },
+    );
     this.setDirty(false);
   }
 

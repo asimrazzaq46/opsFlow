@@ -22,6 +22,7 @@ public sealed class TicketTaskService(
     IOpsFlowDbContext db,
     TicketAccess access,
     OutboxWriter outbox,
+    IOutboxSignal outboxSignal,
     TimeProvider clock
 )
 {
@@ -483,6 +484,10 @@ public sealed class TicketTaskService(
         {
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
+            if (outcome.Value is not null)
+            {
+                outboxSignal.Notify(); // only when an event was staged (no-change writes stay silent)
+            }
         }
         catch (DbUpdateConcurrencyException)
         {

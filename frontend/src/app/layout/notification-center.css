@@ -1,3 +1,13 @@
 :host {
   display: inline-block;
 }
+
+/* The list still scrolls (wheel, touch, keyboard); only the scrollbar track is hidden. */
+.notification-scroll {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* legacy Edge */
+}
+
+.notification-scroll::-webkit-scrollbar {
+  display: none; /* Chrome, Edge, Safari */
+}

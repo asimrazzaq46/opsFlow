@@ -21,6 +21,7 @@ public sealed partial class TicketService(
     ITenantContext tenantContext,
     NotificationService notifications,
     OutboxWriter outbox,
+    IOutboxSignal outboxSignal,
     TicketChatCursorService chatCursors,
     TimeProvider clock,
     ILogger<TicketService> logger
@@ -258,6 +259,7 @@ public sealed partial class TicketService(
         outbox.StageTicketChanged(ticket.TenantId, ticket.Id, TicketChanges.Created);
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
+        outboxSignal.Notify(); // dispatch the committed notifications now instead of at the next scheduled run
         LogCreated(logger, ticket.Id, ticket.TenantId);
         return await GetAsync(ticket.Id, ct);
     }
@@ -709,6 +711,7 @@ public sealed partial class TicketService(
             {
                 await db.SaveChangesAsync(ct);
                 await transaction.CommitAsync(ct);
+                outboxSignal.Notify();
             }
             catch (DbUpdateConcurrencyException)
             {

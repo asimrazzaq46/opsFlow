@@ -41,8 +41,11 @@ describe('NotificationService', () => {
         { provide: NotificationsService, useValue: notificationsApi },
         { provide: TicketsService, useValue: { getTicket: vi.fn() } },
         { provide: Api, useValue: { invoke: vi.fn() } }, // used by TenantService, which this service injects
-        { provide: AuthService, useValue: { isAuthenticated: signedIn } },
-        { provide: RealtimeService, useValue: { on: () => live.asObservable(), reconnected: reconnected.asObservable() } },
+        { provide: AuthService, useValue: { isAuthenticated: signedIn, user: signal({ id: 'u1' }) } },
+        {
+          provide: RealtimeService,
+          useValue: { on: () => live.asObservable(), reconnected: reconnected.asObservable(), state: signal('connected') },
+        },
       ],
     });
     service = TestBed.inject(NotificationService);
@@ -67,6 +70,30 @@ describe('NotificationService', () => {
     live.next({ notification: dto('n2', 'B') });
     expect(service.items().map((n) => n.id)).toEqual(['n2', 'n1']);
     expect(service.unread()).toBe(4);
+  });
+
+  it('settles a burst of live events with ONE server count, ignoring a count response that predates them', () => {
+    vi.useFakeTimers();
+    try {
+      signedIn.set(true);
+      TestBed.tick();
+      const late = new Subject<{ count: number }>();
+      notificationsApi.getMyUnreadNotificationCount.mockImplementationOnce(() => late);
+      reconnected.next(); // count request in flight
+      live.next({ notification: dto('n2', 'B') });
+      live.next({ notification: dto('n3', 'B') });
+      late.next({ count: 3 }); // requested before the events: must not overwrite
+      expect(service.unread()).toBe(5);
+      notificationsApi.getMyUnreadNotificationCount.mockClear();
+      notificationsApi.getMyUnreadNotificationCount.mockImplementation(() => of({ count: 4 }));
+      const changes = service.changes();
+      vi.advanceTimersByTime(500);
+      expect(notificationsApi.getMyUnreadNotificationCount).toHaveBeenCalledTimes(1);
+      expect(service.unread()).toBe(4);
+      expect(service.changes()).toBe(changes + 1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('marks one notification read with its own tenant, once, and settles the badge from the server count', () => {

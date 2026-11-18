@@ -203,9 +203,7 @@
                             </div>
                             @if (responseError(); as err) {
                               <p id="sla-response-error" role="alert" class="ops-error">
-                                {{
-                                  'settings.sla.validation.' + err | translate
-                                }}
+                                {{ 'settings.sla.validation.' + err | translate }}
                               </p>
                             }
                           </fieldset>
@@ -254,9 +252,7 @@
                             </div>
                             @if (resolutionError(); as err) {
                               <p id="sla-resolution-error" role="alert" class="ops-error">
-                                {{
-                                  'settings.sla.validation.' + err | translate
-                                }}
+                                {{ 'settings.sla.validation.' + err | translate }}
                               </p>
                             }
                           </fieldset>

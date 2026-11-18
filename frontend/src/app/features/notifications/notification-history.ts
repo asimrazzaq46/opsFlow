@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, untracked } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  computed,
+  effect,
+  inject,
+  untracked,
+} from '@angular/core';
 import { rxResource, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Params, ParamMap, Router } from '@angular/router';
 import { TranslatePipe } from '@ngx-translate/core';
@@ -101,10 +109,11 @@ export class NotificationHistory {
   protected readonly pageInfo = computed(() => ({ page: this.query().page, pages: this.pages() }));
 
   private readonly formatter = computed(
-    () => new Intl.DateTimeFormat(this.language.current(), { dateStyle: 'medium', timeStyle: 'short' }),
+    () =>
+      new Intl.DateTimeFormat(this.language.current(), { dateStyle: 'medium', timeStyle: 'short' }),
   );
 
-  private seenChanges = this.shared.readChanges();
+  private seenChanges = this.shared.changes();
 
   constructor() {
     // A page beyond the end (stale bookmark, or rows were read meanwhile under "Unread") moves to the last existing page.
@@ -113,10 +122,11 @@ export class NotificationHistory {
       const last = this.pages();
       if (r && !r.items.length && this.query().page > last) this.goTo(last, true);
     });
-    // A read action from any surface (this page or the dropdown) refreshes the current SERVER page: counts, ranges and the Unread
-    // filter then always match the persisted state without a second copy of the data.
+    // A read action from any surface, a new live notification (coalesced), a reconnect or another tab refreshes the current SERVER page
+    // with the same filter and page: counts, ranges and shifted offsets then match the persisted state without a second copy of the data.
+    // reload() keeps the shown rows until the response arrives (no flicker) and cancels a request still in flight.
     effect(() => {
-      const changes = this.shared.readChanges();
+      const changes = this.shared.changes();
       untracked(() => {
         if (changes === this.seenChanges) return;
         this.seenChanges = changes;
@@ -150,7 +160,8 @@ export class NotificationHistory {
   }
 
   protected goTo(page: number, replaceUrl = false): void {
-    if (page >= 1 && page <= this.pages()) this.navigate({ page: page === 1 ? null : page }, replaceUrl);
+    if (page >= 1 && page <= this.pages())
+      this.navigate({ page: page === 1 ? null : page }, replaceUrl);
   }
 
   private navigate(params: Params, replaceUrl = false): void {

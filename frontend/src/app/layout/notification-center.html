@@ -42,7 +42,7 @@
     @if (notifications.actionError(); as key) {
       <p role="alert" class="mt-2 text-sm text-danger">{{ key | translate }}</p>
     }
-    <div class="mt-2 max-h-96 overflow-y-auto" aria-live="polite">
+    <div class="notification-scroll mt-2 max-h-96 overflow-y-auto" aria-live="polite">
       @if (notifications.error()) {
         <p role="alert" class="text-sm text-danger">
           {{ 'notifications.error' | translate }}
@@ -79,10 +79,13 @@
                     @if (workspaceName(n); as name) {
                       <span class="inline-flex items-center gap-1">
                         <span class="ms text-[14px]" aria-hidden="true">corporate_fare</span>
-                        <span class="sr-only">{{ 'notifications.workspace' | translate }}:</span>{{ name }}
+                        <span class="sr-only">{{ 'notifications.workspace' | translate }}:</span
+                        >{{ name }}
                       </span>
                     }
-                    <time [attr.datetime]="n.createdAtUtc">{{ n.createdAtUtc | date: 'short' }}</time>
+                    <time [attr.datetime]="n.createdAtUtc">{{
+                      n.createdAtUtc | date: 'short'
+                    }}</time>
                   </span>
                 </span>
               </span>
@@ -116,7 +119,11 @@
   [title]="'notifications.switch.title' | translate"
   [message]="
     'notifications.switch.message'
-      | translate: { target: notifications.pendingSwitch()?.target ?? '', current: notifications.pendingSwitch()?.current ?? '' }
+      | translate
+        : {
+            target: notifications.pendingSwitch()?.target ?? '',
+            current: notifications.pendingSwitch()?.current ?? '',
+          }
   "
   [confirmLabel]="'notifications.switch.confirm' | translate"
   (confirmed)="confirmSwitch()"
